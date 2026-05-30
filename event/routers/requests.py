@@ -21,7 +21,7 @@ from database import generate_ref_no, get_db
 from models import (
     Budget, Customer, CustomCategory, EmailTemplate, EventType, REQUEST_STATUSES, REQUEST_TABS,
     TR_CITIES, SUPPLIER_TYPES, Service, SERVICE_CATEGORIES, Request as ReqModel, RequestModule, Team, User, Vendor,
-    _uuid, _now, REQUEST_STATUS_LABELS,
+    _uuid, _now, REQUEST_STATUS_LABELS, DeskReference,
 )
 from routers.library import log_activity
 
@@ -658,6 +658,37 @@ async def requests_create(
     )
     db.add(req)
     db.flush()
+
+    # --- miceapp suite: Her talep = referans ---
+    # Ortak references tablosuna da yaz → desk (finans) bu ref_no'yu görür,
+    # tüm finans akışları (fatura/HBF/gider/ödeme) bu tek referans ile bağlanır.
+    _ref_company_id = None
+    if customer_id:
+        _rc = db.query(Customer).filter(Customer.id == customer_id).first()
+        if _rc:
+            _ref_company_id = _rc.company_id
+
+    def _to_date(s):
+        try:
+            return date.fromisoformat(s) if s else None
+        except Exception:
+            return None
+
+    db.add(DeskReference(
+        id=_uuid(),
+        ref_no=ref_no,
+        company_id=_ref_company_id,
+        customer_id=customer_id or None,
+        title=event_name.strip(),
+        event_type=event_type_code,
+        check_in=_to_date(check_in),
+        check_out=_to_date(check_out),
+        status="aktif",
+        created_by=current_user.id,
+        owner_id=current_user.id,
+        created_at=_now(),
+    ))
+
     log_activity(
         db, req.id, "request_created",
         f"Referans oluşturuldu: {req.request_no}",

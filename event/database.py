@@ -459,7 +459,7 @@ def seed_data() -> None:
 # ---------------------------------------------------------------------------
 
 def generate_ref_no(db, event_type_code: str, customer_code: str, check_in_str: str) -> str:
-    """Talep referans numarası üretir: yi abc 010426 a"""
+    """Talep referans numarası üretir: yi-abc-010426-a (miceapp suite: tireli format)"""
     import string as _string
     try:
         check_in = date.fromisoformat(check_in_str)
@@ -469,24 +469,24 @@ def generate_ref_no(db, event_type_code: str, customer_code: str, check_in_str: 
 
     code   = (event_type_code or "yi").lower()
     mus    = (customer_code or "xxx").lower()[:3]
-    prefix = f"{code} {mus} {ddmmyy}"
+    prefix = f"{code}-{mus}-{ddmmyy}"
 
     # Find existing refs with same prefix to determine next letter
     existing = db.query(Request).filter(
-        Request.request_no.like(f"{prefix} %")
+        Request.request_no.like(f"{prefix}-%")
     ).all()
 
     used_letters = set()
     for r in existing:
-        parts = r.request_no.split(" ")
+        parts = r.request_no.split("-")
         if len(parts) == 4:
             used_letters.add(parts[3])
 
     for letter in _string.ascii_lowercase:
         if letter not in used_letters:
-            return f"{prefix} {letter}"
+            return f"{prefix}-{letter}"
 
-    return f"{prefix} z"  # fallback
+    return f"{prefix}-z"  # fallback
 
 
 # ---------------------------------------------------------------------------

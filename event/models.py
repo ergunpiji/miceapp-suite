@@ -11,7 +11,7 @@ from typing import Optional
 from uuid import uuid4
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, ForeignKey, Integer, String, Text, Float
+    Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text, Float
 )
 from sqlalchemy.orm import relationship, declarative_base
 
@@ -1828,8 +1828,16 @@ class DeskReference(Base):
     __tablename__ = "references"
     __table_args__ = {"extend_existing": True}
 
-    id         = Column(String(36), primary_key=True)
-    ref_no     = Column(String(30))
+    id         = Column(String(36), primary_key=True, default=_uuid)
+    ref_no     = Column(String(40))
     title      = Column(String(300))
     customer_id = Column(String(36))
     owner_id   = Column(String(36))
+    # --- miceapp suite: event artık referans YARATIYOR (desk okur) ---
+    company_id = Column(String(36))          # desk'in görmesi için (müşterinin company_id'si)
+    event_type = Column(String(50))
+    check_in   = Column(Date)
+    check_out  = Column(Date)
+    status     = Column(String(30), default="aktif")
+    created_by = Column(String(36))
+    created_at = Column(DateTime, default=_now)
