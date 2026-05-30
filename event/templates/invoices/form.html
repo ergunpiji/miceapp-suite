@@ -1,0 +1,1030 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+{% if edit_mode and invoice %}
+{% if invoice.request_id %}
+<a href="/requests/{{ invoice.request_id }}#tab-financial" class="btn btn-outline-secondary btn-sm">
+  <i class="bi bi-arrow-left me-1"></i> Geri
+</a>
+{% else %}
+<a href="/invoices/unlinked" class="btn btn-outline-secondary btn-sm">
+  <i class="bi bi-arrow-left me-1"></i> Geri
+</a>
+{% endif %}
+{% elif selected_req %}
+<a href="/requests/{{ selected_req.id }}#tab-financial" class="btn btn-outline-secondary btn-sm">
+  <i class="bi bi-arrow-left me-1"></i> Geri
+</a>
+{% else %}
+<a href="/requests" class="btn btn-outline-secondary btn-sm">
+  <i class="bi bi-arrow-left me-1"></i> Geri
+</a>
+{% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .lines-table th { font-size: 11px; text-transform: uppercase; letter-spacing: .4px;
+                    color: #64748b; background: #f8fafc; white-space: nowrap; }
+  .lines-table td { vertical-align: middle; padding: 6px 8px; }
+  .lines-table input, .lines-table select { font-size: 13px; }
+  .total-bar { background: #f8fafc; border-radius: 10px; padding: 14px 20px; }
+  .total-row { display: flex; justify-content: space-between; align-items: center;
+               font-size: 13px; padding: 3px 0; }
+  .total-row.grand { font-size: 15px; font-weight: 700; color: #1e293b;
+                     border-top: 1px solid #e2e8f0; margin-top: 6px; padding-top: 8px; }
+  .parse-zone { border: 2px dashed #0ea5e9; border-radius: 10px; padding: 14px 18px;
+               background: #f0f9ff; transition: border-color .2s, background .2s; }
+  .parse-zone.drag-over { border-color: #0284c7; background: #e0f2fe; }
+  .parse-btn { background: #0ea5e9; color: white; border: none; border-radius: 7px;
+               padding: 7px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .parse-btn:hover { background: #0284c7; }
+  .parse-btn:disabled { opacity: .5; cursor: default; }
+  .doc-drop { border: 2px dashed #cbd5e1; border-radius: 8px; padding: 14px 16px;
+              text-align: center; cursor: pointer; transition: border-color .2s, background .2s;
+              background: #f8fafc; }
+  .doc-drop:hover, .doc-drop.drag-over { border-color: #6366f1; background: #f5f3ff; }
+  .doc-drop input[type=file] { display: none; }
+  .doc-drop-label { font-size: 13px; color: #64748b; }
+  .doc-drop-label strong { color: #4f46e5; cursor: pointer; }
+  .doc-chosen { font-size: 12px; color: #059669; margin-top: 6px; }
+  .req-drop-item:hover { background: #f0f9ff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+    <div class="card">
+      <div class="card-body p-4">
+
+        {# ── PDF'den Otomatik Doldur ── #}
+        {% if not edit_mode %}
+        <div id="parseZone" class="parse-zone mb-4"
+             ondragover="parseDragOver(event)" ondragleave="parseDragLeave(event)" ondrop="parseDrop(event)">
+          <div class="d-flex align-items-center gap-3 flex-wrap">
+            <i class="bi bi-file-earmark-arrow-up fs-4" style="color:#0ea5e9;"></i>
+            <div>
+              <div class="fw-semibold" style="font-size:13px; color:#0c4a6e;">PDF'den Otomatik Doldur</div>
+              <div style="font-size:12px; color:#64748b;" id="parseFileName">Fatura PDF'ini buraya sürükleyin veya seçin</div>
+            </div>
+            <label class="parse-btn ms-auto mb-0" style="cursor:pointer;">
+              Dosya Seç
+              <input type="file" accept=".pdf" style="display:none;" onchange="handleParseFile(this)">
+            </label>
+            <button type="button" class="parse-btn" id="parseRunBtn" style="display:none;" onclick="runParsePdf()">
+              <i class="bi bi-magic"></i> Doldur
+            </button>
+            <span id="parseLoading" style="display:none; font-size:12px; color:#0ea5e9;">
+              <span class="spinner-border spinner-border-sm me-1"></span> Okunuyor…
+            </span>
+          </div>
+          <div id="parseError" style="display:none; font-size:12px; color:#dc2626; margin-top:6px;"></div>
+        </div>
+        {% endif %}
+
+        <form method="post"
+              action="{% if edit_mode %}/invoices/{{ invoice.id }}/edit{% else %}/invoices/new{% endif %}"
+              enctype="multipart/form-data"
+              id="invoiceForm"
+              onsubmit="syncCustomerNameToVendorName()">
+
+          {# ── Hesap Dökümü / Fatura Talebi Banner ── #}
+          {% if statement_prefill %}
+          <input type="hidden" name="from_statement" value="{{ from_statement or '' }}">
+          <div class="alert mb-3 d-flex align-items-center gap-3"
+               style="background:#f0fdf4; border:1px solid #86efac; border-radius:8px;">
+            <i class="bi bi-receipt text-success fs-5"></i>
+            <div>
+              <div class="fw-bold text-success" style="font-size:14px;">
+                {% if from_statement %}Fatura Talebi — Hesap Dökümünden Dolduruldu{% else %}Hesap Dökümünden Otomatik Dolduruldu{% endif %}
+              </div>
+              <div class="text-muted" style="font-size:12px;">
+                Müşteri adı, kalemler ve KDV oranları onaylanan hesap dökümünden aktarıldı.
+                İnceleyip gerekirse düzenleyin, ardından kaydedin — muhasebe onaylayacak.
+              </div>
+            </div>
+          </div>
+          {# PO Numarası #}
+          <div class="row g-3 mb-4">
+            <div class="col-md-5">
+              <label class="form-label fw-semibold" style="font-size:13px;">
+                PO Numarası
+                <span class="text-muted fw-normal ms-1" style="font-size:11px;">(varsa — kalem adına otomatik eklenir)</span>
+              </label>
+              <div class="input-group input-group-sm">
+                <span class="input-group-text" style="font-size:12px;">PO:</span>
+                <input type="text" id="fPoNumber" class="form-control" placeholder="örn. 2024-00123"
+                       oninput="onPoChange()" style="font-size:13px;">
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+          {# ── Referans ── #}
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Referans <span class="text-muted fw-normal" style="font-size:12px;">(opsiyonel — sonradan da atanabilir)</span></label>
+            <input type="hidden" name="req_id" id="reqIdHidden"
+                   value="{{ invoice.request_id if edit_mode else (selected_req.id if selected_req else '') }}">
+            {# Seçili referans badge #}
+            <div id="reqSelectedBadge"
+                 style="{% if not edit_mode and not selected_req %}display:none;{% endif %} margin-bottom:6px;">
+              <span class="badge d-inline-flex align-items-center gap-1 px-2 py-1"
+                    style="background:#dbeafe; color:#1d4ed8; font-size:13px; font-weight:600; border-radius:6px;">
+                <span id="reqBadgeText">
+                  {% if edit_mode %}{{ invoice.request.request_no }} — {{ invoice.request.event_name }} ({{ invoice.request.client_name }})
+                  {% elif selected_req %}{{ selected_req.request_no }} — {{ selected_req.event_name }} ({{ selected_req.client_name }})
+                  {% endif %}
+                </span>
+                {% if not edit_mode %}
+                <button type="button" onclick="clearReqSelection()"
+                        style="background:none;border:none;color:#1d4ed8;padding:0 2px;font-size:14px;line-height:1;cursor:pointer;"
+                        title="Değiştir">&times;</button>
+                {% endif %}
+              </span>
+            </div>
+            {# Arama kutusu #}
+            {% if not edit_mode %}
+            <div id="reqSearchWrap" style="{% if selected_req %}display:none;{% endif %} position:relative; max-width:520px;">
+              <input type="text" id="reqSearchInput" class="form-control"
+                     placeholder="Referans no veya etkinlik adı ara..."
+                     autocomplete="off"
+                     oninput="filterReqDropdown(this.value)"
+                     onfocus="showReqDropdown()"
+                     onblur="setTimeout(hideReqDropdown, 200)">
+              <div id="reqDropdown"
+                   style="display:none; position:absolute; top:100%; left:0; width:100%; max-height:220px;
+                          overflow-y:auto; z-index:1000; background:#fff; border:1px solid #e2e8f0;
+                          border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,.1); font-size:13px;">
+                {% for r in all_requests %}
+                <div class="req-drop-item px-3 py-2 border-bottom"
+                     style="cursor:pointer;"
+                     data-id="{{ r.id }}"
+                     data-label="{{ r.request_no }} — {{ r.event_name | e }} ({{ r.client_name | e }})"
+                     onmousedown="selectReq(this)">
+                  <span class="fw-bold text-primary">{{ r.request_no }}</span>
+                  <span class="text-dark ms-1">{{ r.event_name }}</span>
+                  {% if r.client_name %}<span class="text-muted"> — {{ r.client_name }}</span>{% endif %}
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+          </div>
+
+          {# ── Fatura Tipi + No + Tedarikçi ── #}
+          <div class="row g-3 mb-3">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Fatura Tipi <span class="text-danger">*</span></label>
+              <select name="invoice_type" id="invoiceTypeSelect" class="form-select" required
+                      onchange="onInvoiceTypeChange(this.value)">
+                <option value="">— Seçin —</option>
+                {% for t in invoice_types %}
+                <option value="{{ t.value }}"
+                  {% if invoice and invoice.invoice_type == t.value %}selected{% endif %}>
+                  {{ t.label }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4" id="colInvoiceNo">
+              <label class="form-label fw-semibold">Fatura No</label>
+              <input type="text" name="invoice_no" id="fInvoiceNo" class="form-control"
+                     value="{{ invoice.invoice_no if invoice else '' }}"
+                     placeholder="2024/00123">
+            </div>
+            <div class="col-md-4" id="colVendorName">
+              {# Tedarikçi modu (gelen/komisyon/iade) #}
+              <div id="vendorSection">
+                <label class="form-label fw-semibold">Tedarikçi</label>
+                <input type="hidden" name="vendor_id" id="fVendorId"
+                       value="{{ invoice.vendor_id if invoice and invoice.vendor_id else '' }}">
+                <input type="hidden" name="define_vendor" id="fDefineVendor" value="no">
+                <input type="hidden" name="vendor_payment_term" id="fVendorPaymentTerm" value="60">
+                <div style="position:relative;">
+                  <input type="text" name="vendor_name" id="fVendorName" class="form-control"
+                         value="{{ invoice.vendor_name if invoice else '' }}"
+                         placeholder="Firma adı"
+                         autocomplete="off"
+                         oninput="vendorSearch(this.value)"
+                         onblur="setTimeout(hideVendorDrop, 200)">
+                  <div id="vendorDropdown"
+                       style="display:none; position:absolute; top:100%; left:0; width:100%; max-height:200px;
+                              overflow-y:auto; z-index:1000; background:#fff; border:1px solid #e2e8f0;
+                              border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,.1); font-size:13px;"></div>
+                </div>
+                <div style="font-size:11px;color:#64748b;margin-top:3px;">Seçili tedarikçi varsa vade otomatik hesaplanır.</div>
+              </div>
+
+              {# Müşteri modu (kesilen/iade_kesilen) #}
+              <div id="customerSection" style="display:none;">
+                <label class="form-label fw-semibold">Müşteri</label>
+                <input type="hidden" name="customer_id" id="fCustomerId" value="">
+                <input type="hidden" name="define_customer" id="fDefineCustomer" value="no">
+                <div style="position:relative;">
+                  <input type="text" id="fCustomerName" class="form-control"
+                         value="{{ invoice.vendor_name if invoice else '' }}"
+                         placeholder="Müşteri adı ara veya yaz..."
+                         autocomplete="off"
+                         oninput="customerSearch(this.value)"
+                         onblur="setTimeout(hideCustomerDrop, 200)">
+                  <div id="customerDropdown"
+                       style="display:none; position:absolute; top:100%; left:0; width:100%; max-height:200px;
+                              overflow-y:auto; z-index:1000; background:#fff; border:1px solid #e2e8f0;
+                              border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,.1); font-size:13px;"></div>
+                </div>
+                <div style="font-size:11px;color:#64748b;margin-top:3px;">Kayıtlı müşteri seçin ya da yeni müşteri adı yazın.</div>
+              </div>
+            </div>
+          </div>
+
+          {# ── Tanımlı Tedarikçi Prompt ── #}
+          <div id="defineVendorBox" style="display:none; margin-bottom:14px;">
+            <div style="background:#fefce8; border:1px solid #fde047; border-radius:8px; padding:12px 16px;">
+              <div class="d-flex align-items-start gap-2">
+                <i class="bi bi-building-add text-warning mt-1"></i>
+                <div class="flex-grow-1">
+                  <div class="fw-semibold" style="font-size:13px; color:#713f12;">
+                    Bu tedarikçiyi tanımlı tedarikçi olarak kayıt edeyim mi?
+                  </div>
+                  <div style="font-size:12px; color:#92400e; margin-bottom:8px;">
+                    Kaydederseniz, bu tedarikçiye ait tüm faturalar otomatik ilişkilendirilir ve işlem hacmi kümülatif takip edilir.
+                  </div>
+                  <div class="d-flex align-items-center gap-3 flex-wrap">
+                    <div style="display:flex;align-items:center;gap:6px;">
+                      <label style="font-size:12px;font-weight:600;color:#713f12;">Ödeme Vadesi (gün):</label>
+                      <input type="number" id="fDefinePaymentTerm" min="1" max="365" value="60"
+                             style="width:70px; font-size:13px; padding:3px 8px; border:1px solid #fde047;
+                                    border-radius:5px; background:#fff;"
+                             oninput="onDefineTermChange(this.value)">
+                      <span id="defineVadeTarih" style="font-size:11px;color:#92400e;"></span>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-warning"
+                            onclick="confirmDefineVendor()"
+                            style="font-size:12px; font-weight:600;">
+                      <i class="bi bi-check me-1"></i> Evet, Kayıt Et
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                            onclick="dismissDefineVendor()"
+                            style="font-size:12px;">
+                      Hayır
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {# ── Yeni Müşteri Kaydet Prompt ── #}
+          <div id="defineCustomerBox" style="display:none; margin-bottom:14px;">
+            <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:8px; padding:12px 16px;">
+              <div class="d-flex align-items-start gap-2">
+                <i class="bi bi-person-plus text-success mt-1"></i>
+                <div class="flex-grow-1">
+                  <div class="fw-semibold" style="font-size:13px; color:#14532d;">
+                    "<span id="defineCustomerNameLabel"></span>" müşteri kaydı oluşturulacak.
+                  </div>
+                  <div style="font-size:12px; color:#166534; margin-bottom:8px;">
+                    Kaydederseniz müşteri listesine eklenir ve sonraki faturalarda otomatik seçilebilir.
+                  </div>
+                  <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-success"
+                            onclick="confirmDefineCustomer()"
+                            style="font-size:12px; font-weight:600;">
+                      <i class="bi bi-check me-1"></i> Evet, Kayıt Et
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                            onclick="dismissDefineCustomer()"
+                            style="font-size:12px;">
+                      Sadece Bu Fatura İçin
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3" id="rowDates">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Fatura Tarihi</label>
+              <input type="date" name="invoice_date" id="fInvoiceDate" class="form-control"
+                     value="{{ invoice.invoice_date if invoice else '' }}"
+                     onchange="autoFillDueDate()">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Vade Tarihi</label>
+              <input type="date" name="due_date" id="fDueDate" class="form-control"
+                     value="{{ invoice.due_date if invoice else '' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Genel Açıklama</label>
+              <input type="text" name="description" id="fDescription" class="form-control"
+                     value="{{ invoice.description if invoice else '' }}"
+                     placeholder="Fatura açıklaması">
+            </div>
+          </div>
+
+          {# ── Belgesiz Gelir / Gider Alanları (sadece belgesiz tipinde görünür) ── #}
+          <div id="belgesizFields" style="display:none;">
+            <div class="row g-3 mb-3">
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Tarih</label>
+                <input type="date" name="belgesiz_date" id="fBelgesizDate" class="form-control">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Tutar (₺) <span class="text-danger">*</span></label>
+                <input type="number" name="belgesiz_amount" id="fBelgesizAmount" class="form-control"
+                       min="0" step="0.01" placeholder="0,00">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Açıklama</label>
+                <input type="text" name="belgesiz_description" id="fBelgesizDescription" class="form-control"
+                       placeholder="Gelir / gider açıklaması">
+              </div>
+            </div>
+          </div>
+
+          {# ── Kalem Tablosu ── #}
+          <div class="mb-3" id="linesSection">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <label class="form-label fw-semibold mb-0">Fatura Kalemleri</label>
+              <div class="d-flex gap-2 align-items-center">
+                {% if statement_prefill %}
+                <button type="button" id="btnToggleGrouped" class="btn btn-sm btn-outline-secondary"
+                        onclick="toggleGrouped()" title="KDV grupları veya tüm kalemler ayrı ayrı">
+                  <i class="bi bi-list-ul me-1"></i>
+                  <span id="btnToggleLabel">Tüm Kalemler Ayrı Kesilsin</span>
+                </button>
+                {% endif %}
+                <button type="button" class="btn btn-outline-primary btn-sm"
+                        onclick="addLine()">
+                  <i class="bi bi-plus-lg me-1"></i> Kalem Ekle
+                </button>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="table lines-table mb-0" style="border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">
+                <thead>
+                  <tr>
+                    <th class="ps-3" style="min-width:220px;">Açıklama</th>
+                    <th style="width:130px;">Tutar (KDV Hariç) ₺</th>
+                    <th style="width:100px;">KDV %</th>
+                    <th style="width:120px;">KDV Tutarı ₺</th>
+                    <th style="width:130px;">Toplam ₺</th>
+                    <th style="width:40px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="linesBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          {# ── Toplamlar ── #}
+          <div class="total-bar mb-4" id="totalsSection">
+            <div class="total-row">
+              <span class="text-muted">KDV Hariç Toplam</span>
+              <span id="sumExcl">0,00 ₺</span>
+            </div>
+            <div class="total-row">
+              <span class="text-muted">KDV Toplamı</span>
+              <span id="sumVat">0,00 ₺</span>
+            </div>
+            <div class="total-row grand">
+              <span>GENEL TOPLAM (KDV Dahil)</span>
+              <span id="sumTotal">0,00 ₺</span>
+            </div>
+          </div>
+
+          <input type="hidden" name="lines_json" id="linesJson">
+
+          {# ── Belge Upload ── #}
+          <div class="mb-4" id="docSection">
+            <label class="form-label fw-semibold">Belge (PDF / Resim)</label>
+            {% if edit_mode and invoice and invoice.document_path %}
+            <div class="mb-2">
+              <a href="/invoices/{{ invoice.id }}/document" target="_blank"
+                 class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-file-earmark me-1"></i>
+                {{ invoice.document_name or 'Mevcut Belge' }}
+              </a>
+              <span class="text-muted ms-2" style="font-size:12px;">Yeni dosya seçerseniz eskisi değiştirilir.</span>
+            </div>
+            {% endif %}
+            <div class="doc-drop" id="docDrop"
+                 ondragover="docDragOver(event)" ondragleave="docDragLeave(event)" ondrop="docDropFile(event)"
+                 onclick="document.getElementById('docFileInput').click()">
+              <input type="file" name="document" id="docFileInput" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
+                     onchange="docChosen(this)">
+              <div class="doc-drop-label">
+                <i class="bi bi-cloud-upload fs-5 d-block mb-1" style="color:#6366f1;"></i>
+                <strong>Dosya seçin</strong> veya buraya sürükleyin
+                <div style="font-size:11px; margin-top:4px;">PDF, JPG, PNG — maks. 10 MB</div>
+              </div>
+              <div class="doc-chosen" id="docChosenName" style="display:none;"></div>
+            </div>
+          </div>
+
+          {# ── Butonlar ── #}
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary" onclick="prepareSave()">
+              <i class="bi bi-check-lg me-1"></i>
+              {% if edit_mode %}Güncelle{% elif statement_prefill %}Talebi Gönder{% else %}Kaydet{% endif %}
+            </button>
+            {% if edit_mode and invoice %}
+            {% if invoice.request_id %}
+            <a href="/requests/{{ invoice.request_id }}#tab-financial"
+               class="btn btn-outline-secondary">İptal</a>
+            {% else %}
+            <a href="/invoices/unlinked" class="btn btn-outline-secondary">İptal</a>
+            {% endif %}
+            {% elif selected_req %}
+            <a href="/requests/{{ selected_req.id }}#tab-financial"
+               class="btn btn-outline-secondary">İptal</a>
+            {% else %}
+            <a href="/requests" class="btn btn-outline-secondary">İptal</a>
+            {% endif %}
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ── Referans autocomplete ────────────────────────────────────────────────────
+function filterReqDropdown(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('.req-drop-item').forEach(el => {
+    el.style.display = (el.dataset.label || '').toLowerCase().includes(q) ? '' : 'none';
+  });
+  showReqDropdown();
+}
+function showReqDropdown() {
+  const dd = document.getElementById('reqDropdown');
+  if (dd) dd.style.display = '';
+}
+function hideReqDropdown() {
+  const dd = document.getElementById('reqDropdown');
+  if (dd) dd.style.display = 'none';
+}
+function selectReq(el) {
+  document.getElementById('reqIdHidden').value = el.dataset.id;
+  document.getElementById('reqBadgeText').textContent = el.dataset.label;
+  document.getElementById('reqSelectedBadge').style.display = '';
+  document.getElementById('reqSearchWrap').style.display = 'none';
+  document.getElementById('reqSearchInput').value = '';
+  hideReqDropdown();
+}
+function clearReqSelection() {
+  document.getElementById('reqIdHidden').value = '';
+  document.getElementById('reqSelectedBadge').style.display = 'none';
+  document.getElementById('reqSearchWrap').style.display = '';
+  document.getElementById('reqSearchInput').focus();
+  // tüm dropdown itemları tekrar göster
+  document.querySelectorAll('.req-drop-item').forEach(el => el.style.display = '');
+}
+
+// ── Çarşamba vade hesabı ────────────────────────────────────────────────────
+// days gün sonraki veya sonrasındaki ilk Çarşamba
+function nextWednesdayFrom(dateStr, days) {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + (days || 60));
+  const dow = d.getDay(); // 0=Pz, 1=Pzt, 2=Sal, 3=Çar, 4=Per, 5=Cum, 6=Cmt
+  // Çarşamba=3; perşembe/cuma/cmt/pazar → sonraki çarşamba
+  const toWed = dow <= 3 ? (3 - dow) : (10 - dow);
+  d.setDate(d.getDate() + toWed);
+  return d.toISOString().split('T')[0];
+}
+function fmtDate(iso) {
+  if (!iso) return '';
+  const [y,m,d] = iso.split('-');
+  return `${d}.${m}.${y}`;
+}
+
+// ── Tedarikçi autocomplete ───────────────────────────────────────────────────
+let _vendorPaymentTerm = null;
+let _vendorSearchTimer = null;
+let _defineVendorDismissed = false;
+
+function vendorSearch(q) {
+  clearTimeout(_vendorSearchTimer);
+  const dd = document.getElementById('vendorDropdown');
+  if (!q.trim()) {
+    dd.style.display = 'none';
+    document.getElementById('fVendorId').value = '';
+    document.getElementById('defineVendorBox').style.display = 'none';
+    _defineVendorDismissed = false;
+    return;
+  }
+  _vendorSearchTimer = setTimeout(async () => {
+    try {
+      const res = await fetch('/vendors/autocomplete?q=' + encodeURIComponent(q));
+      const data = await res.json();
+      if (!data.length) {
+        dd.style.display = 'none';
+        // Tanımlı tedarikçi yok — prompt göster (eğer daha önce kapatılmadıysa)
+        if (!_defineVendorDismissed && !document.getElementById('fVendorId').value) {
+          showDefineVendorBox();
+        }
+        return;
+      }
+      dd.innerHTML = data.map(v =>
+        `<div class="px-3 py-2 border-bottom" style="cursor:pointer;"
+              onmousedown="selectVendor('${v.id}','${v.name.replace(/'/g,"\\'")}',${v.payment_term})"
+              onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background=''">
+          <span class="fw-semibold">${v.name}</span>
+          <span class="text-muted ms-2" style="font-size:11px;">${v.payment_term} gün vade</span>
+         </div>`
+      ).join('');
+      dd.style.display = '';
+      document.getElementById('defineVendorBox').style.display = 'none';
+    } catch(e) {}
+  }, 300);
+}
+
+function selectVendor(id, name, paymentTerm) {
+  document.getElementById('fVendorId').value = id;
+  document.getElementById('fVendorName').value = name;
+  document.getElementById('vendorDropdown').style.display = 'none';
+  document.getElementById('defineVendorBox').style.display = 'none';
+  _vendorPaymentTerm = paymentTerm;
+  autoFillDueDate();
+}
+
+function hideVendorDrop() {
+  const dd = document.getElementById('vendorDropdown');
+  if (dd) dd.style.display = 'none';
+}
+
+// ── Müşteri autocomplete ─────────────────────────────────────────────────────
+let _customerSearchTimer = null;
+let _customerDismissed   = false;
+
+function customerSearch(q) {
+  clearTimeout(_customerSearchTimer);
+  syncCustomerNameToVendorName();
+  const dd = document.getElementById('customerDropdown');
+  if (!q.trim()) {
+    dd.style.display = 'none';
+    document.getElementById('fCustomerId').value = '';
+    document.getElementById('defineCustomerBox').style.display = 'none';
+    _customerDismissed = false;
+    return;
+  }
+  _customerSearchTimer = setTimeout(async () => {
+    try {
+      const res  = await fetch('/customers/autocomplete?q=' + encodeURIComponent(q));
+      const data = await res.json();
+      if (!data.length) {
+        dd.style.display = 'none';
+        if (!_customerDismissed && !document.getElementById('fCustomerId').value) {
+          showDefineCustomerBox(q);
+        }
+        return;
+      }
+      dd.innerHTML = data.map(c =>
+        `<div class="px-3 py-2 border-bottom" style="cursor:pointer;"
+              onmousedown="selectCustomer('${c.id}','${c.name.replace(/'/g,"\\'")}')"
+              onmouseover="this.style.background='#f0fdf4'" onmouseout="this.style.background=''">
+          <span class="fw-semibold">${c.name}</span>
+          ${c.code ? `<span class='text-muted ms-2' style='font-size:11px;'>${c.code.toUpperCase()}</span>` : ''}
+         </div>`
+      ).join('');
+      dd.style.display = '';
+      document.getElementById('defineCustomerBox').style.display = 'none';
+    } catch(e) {}
+  }, 300);
+}
+
+function selectCustomer(id, name) {
+  document.getElementById('fCustomerId').value   = id;
+  document.getElementById('fCustomerName').value = name;
+  document.getElementById('fVendorName').value   = name;
+  document.getElementById('customerDropdown').style.display  = 'none';
+  document.getElementById('defineCustomerBox').style.display = 'none';
+  _customerDismissed = true;
+}
+
+function hideCustomerDrop() {
+  const dd = document.getElementById('customerDropdown');
+  if (dd) dd.style.display = 'none';
+}
+
+function showDefineCustomerBox(name) {
+  const lbl = document.getElementById('defineCustomerNameLabel');
+  if (lbl) lbl.textContent = name || document.getElementById('fCustomerName').value;
+  document.getElementById('defineCustomerBox').style.display = '';
+}
+
+function confirmDefineCustomer() {
+  document.getElementById('fDefineCustomer').value = 'yes';
+  document.getElementById('defineCustomerBox').style.display = 'none';
+  _customerDismissed = true;
+}
+
+function dismissDefineCustomer() {
+  document.getElementById('fDefineCustomer').value = 'no';
+  document.getElementById('defineCustomerBox').style.display = 'none';
+  _customerDismissed = true;
+}
+
+// ── Tanımlı tedarikçi prompt ─────────────────────────────────────────────────
+function showDefineVendorBox() {
+  const box = document.getElementById('defineVendorBox');
+  box.style.display = '';
+  updateDefineVadeTarih();
+}
+
+function onDefineTermChange(val) {
+  document.getElementById('fVendorPaymentTerm').value = val || 60;
+  updateDefineVadeTarih();
+}
+
+function updateDefineVadeTarih() {
+  const dateVal = document.getElementById('fInvoiceDate').value;
+  const term = parseInt(document.getElementById('fDefinePaymentTerm').value) || 60;
+  const lbl = document.getElementById('defineVadeTarih');
+  if (dateVal) {
+    lbl.textContent = '→ ' + fmtDate(nextWednesdayFrom(dateVal, term));
+  } else {
+    lbl.textContent = '(fatura tarihi girilince hesaplanır)';
+  }
+}
+
+function confirmDefineVendor() {
+  const term = parseInt(document.getElementById('fDefinePaymentTerm').value) || 60;
+  document.getElementById('fDefineVendor').value = 'yes';
+  document.getElementById('fVendorPaymentTerm').value = term;
+  document.getElementById('defineVendorBox').style.display = 'none';
+  _vendorPaymentTerm = term;
+  autoFillDueDate();
+}
+
+function dismissDefineVendor() {
+  document.getElementById('defineVendorBox').style.display = 'none';
+  _defineVendorDismissed = true;
+}
+
+// ── Vade tarihi otomatik hesapla ─────────────────────────────────────────────
+function autoFillDueDate() {
+  const dateVal = document.getElementById('fInvoiceDate').value;
+  if (!dateVal) return;
+  const due = document.getElementById('fDueDate');
+  if (due.value) return;  // kullanıcı zaten doldurmuşsa dokunma
+  const term = _vendorPaymentTerm || 60;
+  due.value = nextWednesdayFrom(dateVal, term);
+  // define vendor box'taki tarih etiketini de güncelle
+  updateDefineVadeTarih();
+}
+
+// ── Başlangıç verileri ───────────────────────────────────────────────────────
+const VAT_RATES = [0, 1, 8, 10, 18, 20];
+let lines = [];
+{% if invoice and invoice.lines_json %}
+try { lines = {{ invoice.lines | tojson }}; } catch(e) {}
+{% endif %}
+// Eski format (lines yoksa ama amount varsa) geriye uyumluluk
+{% if invoice and not invoice.lines %}
+  {% if invoice.amount and invoice.amount > 0 %}
+  lines = [{ description: {{ (invoice.description or '') | tojson }}, amount: {{ invoice.amount }}, vat_rate: {{ invoice.vat_rate or 20 }}, vat_amount: {{ invoice.vat_amount or 0 }} }];
+  {% endif %}
+{% endif %}
+{% if statement_prefill %}
+// ── Hesap dökümünden ön doldurma ─────────────────────────────────────────────
+const PREFILL_DATA = {{ statement_prefill | tojson }};
+let detailedLines = [];
+let groupedLines  = [];
+let groupedMode   = true;   // başlangıçta gruplu
+
+(function() {
+  if (PREFILL_DATA.vendor_name) document.getElementById('fVendorName').value = PREFILL_DATA.vendor_name;
+  if (PREFILL_DATA.description) {
+    const d = document.getElementById('fDescription');
+    if (d) d.value = PREFILL_DATA.description;
+  }
+  if (PREFILL_DATA.invoice_type) {
+    const sel = document.getElementById('invoiceTypeSelect');
+    if (sel) { sel.value = PREFILL_DATA.invoice_type; sel.dispatchEvent(new Event('change')); }
+  }
+  try { detailedLines = JSON.parse(PREFILL_DATA.lines_json || '[]'); } catch(e) {}
+  try { groupedLines  = JSON.parse(PREFILL_DATA.grouped_lines_json || '[]'); } catch(e) {}
+  // Gruplu mod ile başla (ya da gruplu yoksa detaylı)
+  lines = groupedLines.length ? groupedLines.map(l => Object.assign({}, l)) : detailedLines.map(l => Object.assign({}, l));
+  if (!groupedLines.length) groupedMode = false;
+})();
+
+function getPrefixedLines(srcLines) {
+  const po = (document.getElementById('fPoNumber')?.value || '').trim();
+  if (!po) return srcLines.map(l => Object.assign({}, l));
+  return srcLines.map(l => {
+    const copy = Object.assign({}, l);
+    // PO prefix ekle — eğer zaten yoksa
+    if (!copy.description.startsWith('PO:')) {
+      copy.description = `PO: ${po} — ${copy.description}`;
+    }
+    return copy;
+  });
+}
+
+function onPoChange() {
+  // PO değişince mevcut satırların description'ını yenile
+  const base = groupedMode ? groupedLines : detailedLines;
+  lines = getPrefixedLines(base);
+  renderLines();
+}
+
+function toggleGrouped() {
+  groupedMode = !groupedMode;
+  const base = groupedMode ? groupedLines : detailedLines;
+  lines = getPrefixedLines(base);
+  document.getElementById('btnToggleLabel').textContent =
+    groupedMode ? 'Tüm Kalemler Ayrı Kesilsin' : 'KDV Gruplu Göster';
+  document.getElementById('btnToggleGrouped').classList.toggle('btn-outline-secondary', groupedMode);
+  document.getElementById('btnToggleGrouped').classList.toggle('btn-warning', !groupedMode);
+  renderLines();
+}
+{% else %}
+const groupedMode = false;
+{% endif %}
+if (lines.length === 0) addLine();
+else renderLines();
+
+// ── Satır fonksiyonları ───────────────────────────────────────────────────────
+function addLine(desc='', amount=0, vat_rate=20) {
+  lines.push({ description: desc, amount: amount, vat_rate: vat_rate, vat_amount: 0 });
+  renderLines();
+}
+
+function removeLine(i) {
+  lines.splice(i, 1);
+  if (lines.length === 0) addLine();
+  else renderLines();
+}
+
+function renderLines() {
+  const tbody = document.getElementById('linesBody');
+  let html = '';
+  lines.forEach((ln, i) => {
+    const vatOpts = VAT_RATES.map(r =>
+      `<option value="${r}" ${ln.vat_rate == r ? 'selected' : ''}>%${r}</option>`
+    ).join('');
+    const vatAmt = ((parseFloat(ln.amount)||0) * (parseFloat(ln.vat_rate)||0) / 100).toFixed(2);
+    const total  = ((parseFloat(ln.amount)||0) + parseFloat(vatAmt)).toFixed(2);
+    html += `<tr data-idx="${i}">
+      <td class="ps-3">
+        <input type="text" class="form-control form-control-sm" placeholder="Kalem açıklaması"
+               value="${escHtml(ln.description||'')}"
+               oninput="lines[${i}].description=this.value">
+      </td>
+      <td>
+        <input type="number" class="form-control form-control-sm text-end" min="0" step="0.01"
+               value="${parseFloat(ln.amount)||''}" placeholder="0,00"
+               oninput="onAmountInput(${i},this)">
+      </td>
+      <td>
+        <select class="form-select form-select-sm" onchange="lines[${i}].vat_rate=parseInt(this.value);renderLines()">
+          ${vatOpts}
+        </select>
+      </td>
+      <td class="text-end text-muted ln-vat" style="font-size:13px;">${fmt(vatAmt)}</td>
+      <td class="text-end fw-semibold ln-total" style="font-size:13px;">${fmt(total)}</td>
+      <td class="text-center">
+        ${lines.length > 1 ? `<button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="removeLine(${i})"><i class="bi bi-trash"></i></button>` : ''}
+      </td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+  updateTotals();
+}
+
+function onAmountInput(i, input) {
+  lines[i].amount = parseFloat(input.value) || 0;
+  // Sadece o satırın KDV ve toplam hücrelerini güncelle — tabloyu yeniden çizme
+  const tr = input.closest('tr');
+  const vatAmt = (lines[i].amount * (parseFloat(lines[i].vat_rate)||0) / 100);
+  const total  = lines[i].amount + vatAmt;
+  tr.querySelector('.ln-vat').textContent   = fmt(vatAmt);
+  tr.querySelector('.ln-total').textContent = fmt(total);
+  updateTotals();
+}
+
+function updateTotals() {
+  let excl = 0, vatSum = 0;
+  lines.forEach(ln => {
+    const a = parseFloat(ln.amount) || 0;
+    const v = (parseFloat(ln.vat_rate) || 0) / 100;
+    excl   += a;
+    vatSum += a * v;
+  });
+  const total = excl + vatSum;
+  document.getElementById('sumExcl').textContent  = fmt(excl)   + ' ₺';
+  document.getElementById('sumVat').textContent   = fmt(vatSum) + ' ₺';
+  document.getElementById('sumTotal').textContent = fmt(total)  + ' ₺';
+}
+
+function prepareSave() {
+  const typeVal = document.getElementById('invoiceTypeSelect').value;
+  if (BELGESIZ_TYPES.has(typeVal)) return; // belgesiz: kalem tablosu yok
+  // vat_amount'ları hesapla ve JSON'a yaz
+  lines.forEach(ln => {
+    ln.vat_amount = Math.round((parseFloat(ln.amount)||0) * (parseFloat(ln.vat_rate)||0) / 100 * 100) / 100;
+  });
+  document.getElementById('linesJson').value = JSON.stringify(lines);
+}
+
+// ── PDF Parse ────────────────────────────────────────────────────────────────
+let _parseFile = null;
+
+function handleParseFile(input) {
+  _parseFile = input.files[0];
+  if (!_parseFile) return;
+  document.getElementById('parseFileName').textContent = _parseFile.name;
+  document.getElementById('parseRunBtn').style.display = '';
+  document.getElementById('parseError').style.display  = 'none';
+}
+function parseDragOver(e) {
+  e.preventDefault(); e.stopPropagation();
+  document.getElementById('parseZone').classList.add('drag-over');
+}
+function parseDragLeave(e) {
+  e.preventDefault(); e.stopPropagation();
+  document.getElementById('parseZone').classList.remove('drag-over');
+}
+function parseDrop(e) {
+  e.preventDefault(); e.stopPropagation();
+  document.getElementById('parseZone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith('.pdf')) {
+    document.getElementById('parseError').textContent = 'Sadece PDF dosyası desteklenir.';
+    document.getElementById('parseError').style.display = '';
+    return;
+  }
+  _parseFile = file;
+  document.getElementById('parseFileName').textContent = file.name;
+  document.getElementById('parseRunBtn').style.display = '';
+  document.getElementById('parseError').style.display  = 'none';
+}
+
+async function runParsePdf() {
+  if (!_parseFile) return;
+  document.getElementById('parseRunBtn').style.display  = 'none';
+  document.getElementById('parseLoading').style.display = '';
+  document.getElementById('parseError').style.display   = 'none';
+
+  const fd = new FormData();
+  fd.append('file', _parseFile);
+
+  let res, data;
+  try {
+    res  = await fetch('/invoices/parse-pdf', { method: 'POST', body: fd });
+    data = await res.json();
+  } catch(e) {
+    _parseError('Bağlantı hatası: ' + e);
+    return;
+  }
+
+  if (!data.ok) { _parseError(data.error || 'Okunamadı'); return; }
+
+  const d = data.data;
+  if (d.invoice_no)   { const el = document.getElementById('fInvoiceNo');   if (el) el.value = d.invoice_no; }
+  if (d.invoice_date) { const el = document.getElementById('fInvoiceDate'); if (el) el.value = d.invoice_date; }
+  if (d.due_date)     { const el = document.getElementById('fDueDate');     if (el) el.value = d.due_date; }
+  if (d.vendor_name)  { const el = document.getElementById('fVendorName');  if (el) el.value = d.vendor_name; }
+  if (d.description)  { const el = document.getElementById('fDescription'); if (el) el.value = d.description; }
+
+  if (d.lines && d.lines.length > 0) {
+    lines = d.lines.map(l => ({
+      description: l.description || '',
+      amount:      parseFloat(l.amount) || 0,
+      vat_rate:    snapVat(l.vat_rate != null ? parseInt(l.vat_rate) : 20),
+      vat_amount:  0,
+    }));
+    renderLines();
+  }
+
+  // Faturayı belge olarak da ekle
+  try {
+    const docInput = document.getElementById('docFileInput');
+    if (docInput) {
+      const dt = new DataTransfer();
+      dt.items.add(_parseFile);
+      docInput.files = dt.files;
+      docChosen(docInput);
+    }
+  } catch(_) {}
+
+  document.getElementById('parseLoading').style.display = 'none';
+  document.getElementById('parseRunBtn').style.display  = '';
+  document.getElementById('parseFileName').textContent  = '✓ ' + _parseFile.name + ' — dolduruldu';
+}
+
+function _parseError(msg) {
+  document.getElementById('parseLoading').style.display = 'none';
+  document.getElementById('parseRunBtn').style.display  = '';
+  const el = document.getElementById('parseError');
+  el.textContent = msg;
+  el.style.display = '';
+}
+
+// Belge drop zone
+function docDragOver(e) {
+  e.preventDefault(); e.stopPropagation();
+  document.getElementById('docDrop').classList.add('drag-over');
+}
+function docDragLeave(e) {
+  e.preventDefault(); e.stopPropagation();
+  document.getElementById('docDrop').classList.remove('drag-over');
+}
+function docDropFile(e) {
+  e.preventDefault(); e.stopPropagation();
+  document.getElementById('docDrop').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  const inp = document.getElementById('docFileInput');
+  inp.files = dt.files;
+  docChosen(inp);
+}
+function docChosen(input) {
+  const f = input.files[0];
+  const el = document.getElementById('docChosenName');
+  if (f) { el.textContent = '✓ ' + f.name; el.style.display = ''; }
+  else   { el.style.display = 'none'; }
+}
+
+// ── Fatura Tipi Değişince ─────────────────────────────────────────────────────
+const BELGESIZ_TYPES = new Set(['belgesiz_gelir', 'belgesiz_gider']);
+const INVOICE_SECTIONS = ['colInvoiceNo','colVendorName','rowDates','linesSection','totalsSection','docSection'];
+
+const CUSTOMER_INVOICE_TYPES = new Set(['kesilen', 'iade_kesilen']);
+
+function onInvoiceTypeChange(val) {
+  const isBelgesiz = BELGESIZ_TYPES.has(val);
+  const isCustomer = CUSTOMER_INVOICE_TYPES.has(val);
+
+  INVOICE_SECTIONS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = isBelgesiz ? 'none' : '';
+  });
+  document.getElementById('belgesizFields').style.display = isBelgesiz ? '' : 'none';
+
+  // Müşteri / Tedarikçi alanını tipine göre değiştir
+  const vendorSec   = document.getElementById('vendorSection');
+  const customerSec = document.getElementById('customerSection');
+  const defineVBox  = document.getElementById('defineVendorBox');
+  const defineCBox  = document.getElementById('defineCustomerBox');
+
+  if (isCustomer) {
+    vendorSec.style.display   = 'none';
+    customerSec.style.display = '';
+    if (defineVBox) defineVBox.style.display = 'none';
+    // vendor_name için customer input'u bağla
+    syncCustomerNameToVendorName();
+  } else {
+    vendorSec.style.display   = '';
+    customerSec.style.display = 'none';
+    if (defineCBox) defineCBox.style.display = 'none';
+  }
+
+  if (isBelgesiz) {
+    const d = new Date().toISOString().slice(0,10);
+    const fd = document.getElementById('fBelgesizDate');
+    if (fd && !fd.value) fd.value = d;
+  }
+}
+
+// vendor_name hidden'a müşteri adını yansıt (form submit için)
+function syncCustomerNameToVendorName() {
+  const cn = document.getElementById('fCustomerName');
+  const vn = document.getElementById('fVendorName');
+  if (cn && vn) vn.value = cn.value;
+}
+
+// Sayfa yüklenince mevcut seçime göre uygula
+(function() {
+  const sel = document.getElementById('invoiceTypeSelect');
+  if (sel && sel.value) onInvoiceTypeChange(sel.value);
+})();
+
+// ── Yardımcılar ───────────────────────────────────────────────────────────────
+function snapVat(v) {
+  // AI'dan gelen KDV oranını desteklenen en yakın değere yuvarla
+  const valid = [0, 1, 8, 10, 18, 20];
+  if (valid.includes(v)) return v;
+  return valid.reduce((a, b) => Math.abs(b - v) < Math.abs(a - v) ? b : a);
+}
+function fmt(n) {
+  return parseFloat(n).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+{% endblock %}

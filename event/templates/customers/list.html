@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+{% if current_user.role == 'admin' %}
+<a href="/customers/new" class="btn btn-primary btn-sm">
+  <i class="bi bi-building-add me-1"></i> Yeni Müşteri
+</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th class="ps-4">Firma Adı</th>
+            <th>Kod</th>
+            <th>Takım</th>
+            <th>Sektör</th>
+            <th>Kontak Kişi</th>
+            <th>E-posta</th>
+            <th>Telefon</th>
+            <th class="text-end pe-4">İşlemler</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for customer in customers %}
+          <tr>
+            <td class="ps-4">
+              <div class="fw-semibold" style="font-size:13px;">{{ customer.name }}</div>
+              {% if customer.address %}
+              <div class="text-muted" style="font-size:11px;">{{ customer.address | truncate(50) }}</div>
+              {% endif %}
+            </td>
+            <td>
+              <span class="badge bg-secondary bg-opacity-10 text-secondary fw-semibold" style="font-size:12px; letter-spacing:.5px;">
+                {{ customer.code | upper }}
+              </span>
+            </td>
+            <td style="font-size:13px;">
+              {% if customer.team %}
+              <span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:600; font-size:11px;">
+                {{ customer.team.name }}
+              </span>
+              {% else %}
+              <span class="text-muted" style="font-size:12px;">—</span>
+              {% endif %}
+            </td>
+            <td style="font-size:13px; color:#64748b;">{{ customer.sector or '—' }}</td>
+            <td style="font-size:13px;">
+              {% set pc = customer.primary_contact %}
+              {% if pc %}
+                <div class="fw-semibold">{{ pc.name }}</div>
+                {% if pc.title %}<div class="text-muted" style="font-size:11px;">{{ pc.title }}</div>{% endif %}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td style="font-size:13px;">
+              {% if customer.email %}
+              <a href="mailto:{{ customer.email }}" class="text-decoration-none text-primary">{{ customer.email }}</a>
+              {% else %}—{% endif %}
+            </td>
+            <td style="font-size:13px; color:#64748b;">{{ customer.phone or '—' }}</td>
+            <td class="text-end pe-4">
+              <a href="/customers/{{ customer.id }}/edit" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <form method="post" action="/customers/{{ customer.id }}/delete" class="d-inline"
+                    onsubmit="return confirm('{{ customer.name }} müşterisini silmek istediğinizden emin misiniz?')">
+                <button type="submit" class="btn btn-sm btn-outline-danger">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="8" class="text-center py-5 text-muted">
+              <i class="bi bi-building" style="font-size:3rem; opacity:.3;"></i>
+              <p class="mt-2 mb-0">Henüz müşteri bulunmuyor.</p>
+              {% if current_user.role == 'admin' %}
+              <a href="/customers/new" class="btn btn-primary btn-sm mt-3">
+                <i class="bi bi-building-add me-1"></i> İlk Müşteriyi Ekle
+              </a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

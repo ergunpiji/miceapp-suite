@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block page_title %}E-Defter{% endblock %}
+
+{% block content %}
+<style>
+  .ed-balance-banner { padding: 14px 18px; border-radius: 8px; margin-bottom: 16px;
+                        font-weight: 600; }
+  .ed-balanced { background: #dcfce7; color: #166534; border-left: 4px solid #16a34a; }
+  .ed-unbalanced { background: #fee2e2; color: #991b1b; border-left: 4px solid #dc2626; }
+  .ed-account-block { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 14px; overflow:hidden; }
+  .ed-account-head { background: linear-gradient(90deg, #1A3A5C 0%, #1E5F8C 100%);
+                      color: #fff; padding: 10px 14px; font-weight: 700; }
+  .ed-account-head .meta { float: right; font-weight: 400; font-size: 12px; opacity: .85; }
+</style>
+
+<!-- Simülasyon banner -->
+<div class="alert alert-info py-2 mb-3">
+  <i class="bi bi-flask-fill"></i>
+  <strong>Simülasyon Modu:</strong> Yevmiye + büyük defter verisi otomatik üretilir.
+  GİB'e resmi gönderim mali mühür alındıktan sonra açılacak.
+</div>
+
+<!-- Dönem + tab seçici -->
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body d-flex align-items-center gap-2 flex-wrap">
+    <span class="fw-semibold">Dönem:</span>
+    <form method="get" class="d-flex gap-2 align-items-center">
+      <input type="hidden" name="view" value="{{ view }}">
+      <select name="year" class="form-select form-select-sm" style="width:auto;">
+        {% for y in range(2024, 2031) %}
+        <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+      <select name="month" class="form-select form-select-sm" style="width:auto;">
+        {% for i in range(12) %}
+        <option value="{{ i+1 }}" {% if (i+1) == month %}selected{% endif %}>{{ month_names[i] }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn-sm btn-outline-primary">Göster</button>
+    </form>
+
+    <div class="btn-group btn-group-sm ms-3" role="group">
+      <a href="?year={{ year }}&month={{ month }}&view=journal" class="btn {% if view == 'journal' %}btn-primary{% else %}btn-outline-secondary{% endif %}">Yevmiye Defteri</a>
+      <a href="?year={{ year }}&month={{ month }}&view=ledger" class="btn {% if view == 'ledger' %}btn-primary{% else %}btn-outline-secondary{% endif %}">Büyük Defter</a>
+    </div>
+
+    <a href="/edefter/export?year={{ year }}&month={{ month }}" class="btn btn-sm btn-outline-success ms-auto">
+      <i class="bi bi-file-earmark-excel"></i> Excel'e Aktar
+    </a>
+    <button class="btn btn-sm btn-secondary" disabled title="Mali mühür alındıktan sonra açılacak">
+      <i class="bi bi-cloud-arrow-up"></i> GİB'e Gönder (yakında)
+    </button>
+  </div>
+</div>
+
+<!-- Denge kontrolü -->
+<div class="ed-balance-banner {% if balance_check %}ed-balanced{% else %}ed-unbalanced{% endif %}">
+  {% if balance_check %}
+  <i class="bi bi-check-circle-fill"></i> Borç = Alacak: {{ total_debit | money }} (denge sağlanmış)
+  {% else %}
+  <i class="bi bi-exclamation-triangle-fill"></i>
+  Denge sorunu! Borç: {{ total_debit | money }} ≠ Alacak: {{ total_credit | money }}
+  (Fark: {{ (total_debit - total_credit) | money }})
+  {% endif %}
+</div>
+
+{% if view == 'journal' %}
+<!-- YEVMİYE -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-transparent fw-semibold">
+    Yevmiye Defteri — {{ month_names[month-1] }} {{ year }}
+    <span class="text-muted small ms-2">({{ journal | length }} satır)</span>
+  </div>
+  <div class="card-body p-0">
+    {% if journal %}
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Tarih</th>
+          <th>Yev. No</th>
+          <th>Açıklama</th>
+          <th class="text-center">Hesap</th>
+          <th>Hesap Adı</th>
+          <th class="text-end">Borç</th>
+          <th class="text-end">Alacak</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in journal %}
+        <tr>
+          <td class="small">{{ e.date | date_tr }}</td>
+          <td><code class="small">{{ e.doc_no }}</code></td>
+          <td class="small">{{ e.description }}</td>
+          <td class="text-center"><span class="badge bg-light text-dark">{{ e.account_code }}</span></td>
+          <td class="small">{{ e.account_name }}</td>
+          <td class="text-end {% if e.debit %}fw-semibold{% else %}text-muted{% endif %}">
+            {% if e.debit %}{{ e.debit | money }}{% else %}—{% endif %}
+          </td>
+          <td class="text-end {% if e.credit %}fw-semibold{% else %}text-muted{% endif %}">
+            {% if e.credit %}{{ e.credit | money }}{% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-light">
+        <tr class="fw-bold">
+          <td colspan="5" class="text-end">TOPLAM</td>
+          <td class="text-end" style="color:#1A3A5C">{{ total_debit | money }}</td>
+          <td class="text-end" style="color:#1A3A5C">{{ total_credit | money }}</td>
+        </tr>
+      </tfoot>
+    </table>
+    {% else %}
+    <div class="text-muted text-center py-4">Bu dönemde yevmiye girişi yok.</div>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<!-- BÜYÜK DEFTER -->
+{% if ledger %}
+{% for code, acc in ledger.items() %}
+<div class="ed-account-block">
+  <div class="ed-account-head">
+    {{ code }} — {{ acc.name }}
+    <span class="meta">
+      Borç: {{ acc.total_debit | money }} ·
+      Alacak: {{ acc.total_credit | money }} ·
+      Bakiye: <strong>{{ acc.balance | money }}</strong>
+    </span>
+  </div>
+  <table class="table table-sm mb-0">
+    <thead class="table-light">
+      <tr>
+        <th style="width:90px;">Tarih</th>
+        <th style="width:120px;">Yev. No</th>
+        <th>Açıklama</th>
+        <th class="text-end" style="width:120px;">Borç</th>
+        <th class="text-end" style="width:120px;">Alacak</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in acc.entries %}
+      <tr>
+        <td class="small">{{ e.date | date_tr }}</td>
+        <td><code class="small">{{ e.doc_no }}</code></td>
+        <td class="small">{{ e.description }}</td>
+        <td class="text-end {% if e.debit %}fw-semibold{% else %}text-muted{% endif %}">
+          {% if e.debit %}{{ e.debit | money }}{% else %}—{% endif %}
+        </td>
+        <td class="text-end {% if e.credit %}fw-semibold{% else %}text-muted{% endif %}">
+          {% if e.credit %}{{ e.credit | money }}{% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endfor %}
+{% else %}
+<div class="text-muted text-center py-4">Bu dönemde hesap hareketi yok.</div>
+{% endif %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+
+  {# ─── Mevcut Etkinlik Tipleri ─── #}
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th class="ps-4">Kod</th>
+                <th>Etiket</th>
+                <th>Sıra</th>
+                <th>Durum</th>
+                <th class="text-end pe-4">İşlemler</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for et in event_types %}
+              <tr>
+                <td class="ps-4">
+                  <span class="badge bg-primary fw-bold" style="letter-spacing:1px; font-size:13px;">{{ et.code }}</span>
+                </td>
+                <td style="font-size:13px;" class="fw-semibold">{{ et.label }}</td>
+                <td style="font-size:13px; color:#64748b;">{{ et.sort_order }}</td>
+                <td>
+                  {% if et.active %}
+                  <span class="badge" style="background:#d1fae5; color:#065f46;">Aktif</span>
+                  {% else %}
+                  <span class="badge" style="background:#fee2e2; color:#991b1b;">Pasif</span>
+                  {% endif %}
+                </td>
+                <td class="text-end pe-4">
+                  <form method="post" action="/event-types/{{ et.id }}/toggle" class="d-inline">
+                    <button type="submit" class="btn btn-sm {% if et.active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
+                      {% if et.active %}
+                        <i class="bi bi-pause-circle"></i> Pasifleştir
+                      {% else %}
+                        <i class="bi bi-play-circle"></i> Aktifleştir
+                      {% endif %}
+                    </button>
+                  </form>
+                  <form method="post" action="/event-types/{{ et.id }}/delete" class="d-inline"
+                        onsubmit="return confirm('{{ et.label }} etkinlik tipini silmek istediğinizden emin misiniz?')">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="5" class="text-center py-5 text-muted">
+                  <i class="bi bi-tag" style="font-size:3rem; opacity:.3;"></i>
+                  <p class="mt-2 mb-0">Henüz etkinlik tipi bulunmuyor.</p>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ─── Yeni Ekle ─── #}
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-body">
+        <h6 class="fw-bold mb-3">
+          <i class="bi bi-plus-circle me-2 text-primary"></i>Yeni Etkinlik Tipi
+        </h6>
+        <form method="post" action="/event-types/new">
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:13px;">
+              Kod <span class="text-danger">*</span>
+              <small class="text-muted fw-normal">(max 10 harf)</small>
+            </label>
+            <input type="text" name="code" class="form-control" required maxlength="10"
+                   placeholder="örn. yi, yd, ut" style="font-family:monospace;">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:13px;">Etiket <span class="text-danger">*</span></label>
+            <input type="text" name="label" class="form-control" required
+                   placeholder="örn. Yurtiçi Etkinlik">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:13px;">Sıra</label>
+            <input type="number" name="sort_order" class="form-control" value="10" min="0">
+          </div>
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-plus me-1"></i> Ekle
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+{% if can_edit %}
+<button type="button" class="btn btn-outline-danger btn-sm" id="btnBulkDelete" style="display:none;" onclick="confirmBulkDelete()">
+  <i class="bi bi-trash me-1"></i> Seçilenleri Sil (<span id="selCount">0</span>)
+</button>
+<a href="/venues/new" class="btn btn-primary btn-sm">
+  <i class="bi bi-building-add me-1"></i> Yeni Tedarikçi
+</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+
+{# ─── FİLTRE BARI ─── #}
+<div class="card mb-3">
+  <div class="card-body py-3">
+    <form method="get" action="/venues" class="row g-2 align-items-end">
+      <div class="col-sm-4">
+        <label class="form-label fw-semibold mb-1" style="font-size:12px;">Ara</label>
+        <input type="text" name="q" class="form-control form-control-sm"
+               placeholder="Tedarikçi adı..." value="{{ filter_q }}">
+      </div>
+      <div class="col-sm-3">
+        <label class="form-label fw-semibold mb-1" style="font-size:12px;">Şehir</label>
+        <select name="city" class="form-select form-select-sm">
+          <option value="">Tüm Şehirler</option>
+          {% for city in tr_cities %}
+          <option value="{{ city }}" {% if filter_city == city %}selected{% endif %}>{{ city }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-3">
+        <label class="form-label fw-semibold mb-1" style="font-size:12px;">Tür</label>
+        <select name="stype" class="form-select form-select-sm">
+          <option value="">Tüm Türler</option>
+          {% for st in supplier_types %}
+          <option value="{{ st.value }}" {% if filter_stype == st.value %}selected{% endif %}>{{ st.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-2">
+        <button type="submit" class="btn btn-primary btn-sm w-100">
+          <i class="bi bi-search me-1"></i> Filtrele
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ─── TABLO ─── #}
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            {% if can_edit %}
+            <th class="ps-3" style="width:36px;">
+              <input type="checkbox" id="checkAll" class="form-check-input" onchange="toggleAll(this)">
+            </th>
+            {% endif %}
+            <th class="{% if not can_edit %}ps-4{% endif %}">Ad</th>
+            <th>Şehir</th>
+            <th>Tür</th>
+            <th>Yıldız</th>
+            <th>Toplam Oda</th>
+            <th>İletişim Kişisi</th>
+            <th>Durum</th>
+            <th class="text-end pe-4">İşlemler</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for venue in venues %}
+          <tr id="row-{{ venue.id }}">
+            {% if can_edit %}
+            <td class="ps-3">
+              <input type="checkbox" class="form-check-input row-check" value="{{ venue.id }}" onchange="updateSelCount()">
+            </td>
+            {% endif %}
+            <td class="{% if not can_edit %}ps-4{% endif %}">
+              <div class="fw-semibold" style="font-size:13px;">{{ venue.name }}</div>
+              {% if venue.website %}
+              <div style="font-size:11px;">
+                <a href="{{ venue.website }}" target="_blank" class="text-muted text-decoration-none">
+                  <i class="bi bi-link-45deg"></i> {{ venue.website | truncate(40) }}
+                </a>
+              </div>
+              {% endif %}
+            </td>
+            <td style="font-size:13px;">
+              {{ venue.city or '—' }}
+              {% set extra_cities = venue.cities | reject("equalto", venue.city) | list %}
+              {% if extra_cities %}
+              <div style="font-size:11px; color:#94a3b8;">
+                +{{ extra_cities | length }} şehir
+              </div>
+              {% endif %}
+            </td>
+            <td>
+              <span class="badge bg-primary bg-opacity-10 text-primary" style="font-size:11px;">
+                {{ venue.supplier_type_label }}
+              </span>
+            </td>
+            <td style="font-size:13px;">
+              {% if venue.stars %}
+                {% for i in range(venue.stars) %}⭐{% endfor %}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td style="font-size:13px; color:#64748b;">
+              {{ venue.total_rooms if venue.total_rooms else '—' }}
+            </td>
+            <td style="font-size:13px;">
+              {% set pc = venue.primary_contact %}
+              {% if pc %}
+                <div class="fw-semibold">{{ pc.name }}</div>
+                {% if pc.phone %}<div style="font-size:11px; color:#64748b;"><i class="bi bi-telephone"></i> {{ pc.phone }}</div>{% endif %}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if venue.active %}
+                <span class="badge bg-success bg-opacity-10 text-success">
+                  <i class="bi bi-check-circle me-1"></i>Aktif
+                </span>
+              {% else %}
+                <span class="badge bg-secondary bg-opacity-10 text-secondary">
+                  <i class="bi bi-x-circle me-1"></i>Pasif
+                </span>
+              {% endif %}
+            </td>
+            <td class="text-end pe-4">
+              <a href="/venues/{{ venue.id }}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-eye"></i>
+              </a>
+              {% if can_edit %}
+              <a href="/venues/{{ venue.id }}/edit" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-pencil"></i>
+              </a>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="9" class="text-center py-5 text-muted">
+              <i class="bi bi-building" style="font-size:3rem; opacity:.3;"></i>
+              <p class="mt-2 mb-0">Henüz tedarikçi bulunmuyor.</p>
+              {% if can_edit %}
+              <a href="/venues/new" class="btn btn-primary btn-sm mt-3">
+                <i class="bi bi-building-add me-1"></i> İlk Tedarikçiyi Ekle
+              </a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{# ─── Toplu Silme Onay Modal ─── #}
+<div class="modal fade" id="bulkDeleteModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold text-danger">
+          <i class="bi bi-exclamation-triangle me-2"></i>Tedarikçileri Sil
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2"><strong id="bulkDeleteCount"></strong> tedarikçiyi silmek üzeresiniz.</p>
+        <div class="alert alert-danger py-2" style="font-size:13px;">
+          <i class="bi bi-exclamation-circle me-1"></i>
+          Bu işlem geri alınamaz. İlgili bütçe ve talep kayıtları etkilenebilir.
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+        <button type="button" class="btn btn-danger" id="btnConfirmDelete" onclick="doBulkDelete()">
+          <i class="bi bi-trash me-1"></i> Evet, Sil
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if can_edit %}
+<script>
+function updateSelCount() {
+  const checked = document.querySelectorAll('.row-check:checked');
+  const n = checked.length;
+  document.getElementById('selCount').textContent = n;
+  document.getElementById('btnBulkDelete').style.display = n > 0 ? '' : 'none';
+  const all = document.querySelectorAll('.row-check');
+  document.getElementById('checkAll').indeterminate = n > 0 && n < all.length;
+  document.getElementById('checkAll').checked = n > 0 && n === all.length;
+}
+
+function toggleAll(cb) {
+  document.querySelectorAll('.row-check').forEach(c => c.checked = cb.checked);
+  updateSelCount();
+}
+
+function confirmBulkDelete() {
+  const n = document.querySelectorAll('.row-check:checked').length;
+  document.getElementById('bulkDeleteCount').textContent = n;
+  new bootstrap.Modal(document.getElementById('bulkDeleteModal')).show();
+}
+
+async function doBulkDelete() {
+  const ids = [...document.querySelectorAll('.row-check:checked')].map(c => c.value);
+  const btn = document.getElementById('btnConfirmDelete');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Siliniyor…';
+
+  const fd = new FormData();
+  fd.append('ids_json', JSON.stringify(ids));
+  let data;
+  try {
+    const res = await fetch('/venues/bulk-delete', { method: 'POST', body: fd });
+    data = await res.json();
+  } catch(e) {
+    alert('Sunucu bağlantı hatası: ' + e);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-trash me-1"></i> Evet, Sil';
+    return;
+  }
+
+  if (data.ok) {
+    ids.forEach(id => {
+      const row = document.getElementById('row-' + id);
+      if (row) row.remove();
+    });
+    bootstrap.Modal.getInstance(document.getElementById('bulkDeleteModal')).hide();
+    document.getElementById('checkAll').checked = false;
+    updateSelCount();
+    if (data.failed > 0) {
+      setTimeout(() => alert(`${data.deleted} kayıt silindi. ${data.failed} kayıt silinemedi (ilişkili kayıt olabilir).`), 300);
+    }
+  } else {
+    alert(data.error || 'Silme hatası');
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-trash me-1"></i> Evet, Sil';
+}
+</script>
+{% endif %}
+
+{% endblock %}

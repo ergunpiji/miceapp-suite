@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-3 flex-wrap mb-3">
+
+  <!-- Dönem seçici -->
+  <form class="d-flex gap-2 align-items-center" method="get">
+    <input type="month" name="period" value="{{ period }}" class="form-control form-control-sm" style="width:160px">
+    <button type="submit" class="btn btn-outline-secondary btn-sm">Göster</button>
+  </form>
+
+  <!-- Hızlı dönem linkleri -->
+  {% if all_periods %}
+  <div class="d-flex gap-1 flex-wrap">
+    {% for p in all_periods[:8] %}
+    <a href="/reports/payroll?period={{ p }}"
+       class="btn btn-xs btn-sm py-0 px-2 {% if p == period %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+       style="font-size:11px;">{{ p }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if records %}
+  <a href="/reports/payroll/excel?period={{ period }}" class="btn btn-sm btn-outline-success ms-auto">
+    <i class="bi bi-file-earmark-excel me-1"></i>Excel
+  </a>
+  {% endif %}
+</div>
+
+{% if not records %}
+<div class="alert alert-info">
+  <i class="bi bi-info-circle me-2"></i>
+  <strong>{{ period }}</strong> döneminde onaylanmış veya ödenmiş bordro kaydı bulunamadı.
+  {% if all_periods %}
+  <br><span class="text-muted small">Kayıtlı dönemler: {{ all_periods | join(", ") }}</span>
+  {% endif %}
+</div>
+{% else %}
+
+<!-- Özet kartları -->
+<div class="row g-2 mb-3">
+  {% set cards = [
+    ("Toplam Brüt",         totals.gross,         "secondary", "bi-currency-dollar"),
+    ("Çalışan SGK/İşsizlik",totals.sgk_emp,        "warning",   "bi-shield-check"),
+    ("Gelir Vergisi",       totals.income_tax,     "danger",    "bi-receipt"),
+    ("Damga Vergisi",       totals.stamp_tax,      "danger",    "bi-stamp"),
+    ("Toplam Net (Ele Geçen)", totals.net,          "success",   "bi-wallet2"),
+    ("İşveren Maliyeti",    totals.employer_cost,  "dark",      "bi-building"),
+  ] %}
+  {% for label, val, color, icon in cards %}
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body py-2 px-3">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <i class="bi {{ icon }} text-{{ color }}" style="font-size:14px;"></i>
+          <span class="text-muted" style="font-size:10px; line-height:1.2;">{{ label }}</span>
+        </div>
+        <div class="fw-bold text-{{ color }}" style="font-size:14px;">{{ val | money }}</div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Detay tablosu -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-transparent border-0 d-flex align-items-center justify-content-between">
+    <span class="fw-semibold">{{ period }} — {{ records | length }} çalışan</span>
+    <span class="text-muted small">Onaylı ve ödenmiş bordro kayıtları</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover table-sm align-middle mb-0" style="font-size:12px;">
+      <thead style="background:#f8fafc; font-size:11px; text-transform:uppercase; letter-spacing:.4px;">
+        <tr>
+          <th>Çalışan</th>
+          <th class="text-end">Brüt</th>
+          <th class="text-end">SGK Mat.</th>
+          <th class="text-end text-danger">Çalışan SGK</th>
+          <th class="text-end text-danger">Gelir Vergisi</th>
+          <th class="text-end text-danger">Damga V.</th>
+          <th class="text-end fw-bold text-success">Net (Ele Geçen)</th>
+          <th class="text-end text-muted">İşveren SGK</th>
+          <th class="text-end text-muted">İşv. Maliyet</th>
+          <th class="text-center">Durum</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in records %}
+        <tr>
+          <td>
+            <a href="/employees/{{ r.employee.id }}" class="fw-semibold text-decoration-none text-dark">{{ r.employee.name }}</a>
+            <div class="text-muted" style="font-size:10px;">{{ r.employee.title or r.employee.department or "" }}
+              {% if r.is_retired_worker %}<span class="badge bg-secondary ms-1" style="font-size:9px;">SGDP</span>{% endif %}
+            </div>
+          </td>
+          <td class="text-end">{{ r.total_gross | money }}</td>
+          <td class="text-end text-muted">{{ r.sgk_base | money }}</td>
+          <td class="text-end text-danger">{{ ((r.sgk_employee or 0) + (r.unemployment_emp or 0)) | money }}</td>
+          <td class="text-end text-danger">{{ r.income_tax | money }}</td>
+          <td class="text-end text-danger">{{ r.stamp_tax | money }}</td>
+          <td class="text-end fw-bold text-success">{{ r.ele_gecen | money }}</td>
+          <td class="text-end text-muted">{{ ((r.sgk_employer or 0) + (r.unemployment_empl or 0)) | money }}</td>
+          <td class="text-end text-muted">{{ r.employer_cost | money }}</td>
+          <td class="text-center">
+            {% if r.status == "odendi" %}
+            <span class="badge bg-success" style="font-size:10px;">Ödendi</span>
+            {% else %}
+            <span class="badge bg-warning text-dark" style="font-size:10px;">Onaylı</span>
+            {% endif %}
+          </td>
+          <td>
+            <a href="/bordro/{{ r.id }}/print" target="_blank"
+               class="btn btn-xs btn-sm btn-outline-secondary py-0" style="font-size:10px;">
+              <i class="bi bi-printer"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot style="background:#f0f4f8; font-weight:700; font-size:12px;">
+        <tr>
+          <td>TOPLAM ({{ records | length }} kişi)</td>
+          <td class="text-end">{{ totals.gross | money }}</td>
+          <td class="text-end text-muted">—</td>
+          <td class="text-end text-danger">{{ totals.sgk_emp | money }}</td>
+          <td class="text-end text-danger">{{ totals.income_tax | money }}</td>
+          <td class="text-end text-danger">{{ totals.stamp_tax | money }}</td>
+          <td class="text-end text-success">{{ totals.net | money }}</td>
+          <td class="text-end text-muted">{{ totals.sgk_empl | money }}</td>
+          <td class="text-end text-muted">{{ totals.employer_cost | money }}</td>
+          <td colspan="2"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+
+{% endif %}
+{% endblock %}

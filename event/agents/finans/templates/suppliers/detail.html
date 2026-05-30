@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}{{ supplier.name }} — Cari{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">{{ supplier.name }}</div>
+    <div class="page-subtitle">
+      {% if supplier.tax_number %}VN: {{ supplier.tax_number }}{% endif %}
+      {% if supplier.contact_name %} &nbsp;·&nbsp; {{ supplier.contact_name }}{% endif %}
+    </div>
+  </div>
+  <div class="flex gap-2">
+    <a href="/suppliers/{{ supplier.id }}/edit" class="btn btn-outline">✏️ Düzenle</a>
+    <a href="/suppliers" class="btn btn-secondary">← Geri</a>
+  </div>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Toplam Ödenen</div>
+    <div class="stat-value positive">{{ supplier.total_paid | currency }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Bekleyen Borç</div>
+    <div class="stat-value {% if supplier.total_debt > 0 %}negative{% endif %}">{{ supplier.total_debt | currency }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Ödeme Adedi</div>
+    <div class="stat-value">{{ supplier.payments | length }}</div>
+  </div>
+</div>
+
+<div class="grid-2">
+
+  <!-- Bekleyen ödeme planları -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">📅 Bekleyen Ödemeler</span>
+      <a href="/payments" class="btn btn-sm btn-outline">Plana Git</a>
+    </div>
+    <div class="card-body" style="padding:0">
+      {% if pending_plans %}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Açıklama</th><th>Vade</th><th class="text-right">Tutar</th></tr></thead>
+          <tbody>
+            {% for p in pending_plans %}
+            <tr>
+              <td>{{ p.description }}</td>
+              <td class="nowrap {% if p.is_overdue %}amount-negative{% endif %}">{{ p.due_date | fmtdate }}</td>
+              <td class="text-right font-mono">{{ p.amount | currency }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state"><div class="empty-state-icon">✅</div><div class="empty-state-text">Bekleyen ödeme yok</div></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Yapılan ödemeler -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">💳 Yapılan Ödemeler</span>
+      <button class="btn btn-sm btn-primary" data-modal="modal-add-payment">+ Ekle</button>
+    </div>
+    <div class="card-body" style="padding:0">
+      {% if payments %}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Tarih</th><th>Açıklama</th><th>Yöntem</th><th class="text-right">Tutar</th><th></th></tr></thead>
+          <tbody>
+            {% for p in payments %}
+            <tr>
+              <td class="nowrap">{{ p.payment_date | fmtdate }}</td>
+              <td>{{ p.description or '—' }}</td>
+              <td>{{ p.method }}</td>
+              <td class="text-right font-mono amount-negative">{{ p.amount | currency }}</td>
+              <td>
+                <form method="post" action="/suppliers/{{ supplier.id }}/payments/{{ p.id }}/delete"
+                      data-confirm="Silinsin mi?">
+                  <button class="btn btn-xs btn-danger">✕</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state"><div class="empty-state-icon">💳</div><div class="empty-state-text">Ödeme kaydı yok</div></div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- Tedarikçi bilgileri -->
+<div class="card mt-6">
+  <div class="card-header"><span class="card-title">ℹ️ Firma Bilgileri</span></div>
+  <div class="card-body">
+    <div class="grid-3">
+      <div><div style="font-size:11px;color:var(--text-muted)">Vergi Dairesi</div><div>{{ supplier.tax_office or '—' }}</div></div>
+      <div><div style="font-size:11px;color:var(--text-muted)">Telefon</div><div>{{ supplier.phone or '—' }}</div></div>
+      <div><div style="font-size:11px;color:var(--text-muted)">E-posta</div><div>{{ supplier.email or '—' }}</div></div>
+      <div><div style="font-size:11px;color:var(--text-muted)">IBAN</div><div class="font-mono">{{ supplier.iban or '—' }}</div></div>
+    </div>
+    {% if supplier.notes %}
+    <div class="mt-4"><div style="font-size:11px;color:var(--text-muted)">Notlar</div><div>{{ supplier.notes }}</div></div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Modal: Ödeme ekle -->
+<div class="modal-overlay" id="modal-add-payment">
+  <div class="modal-box">
+    <div class="modal-title">💳 Ödeme Kaydet</div>
+    <form method="post" action="/suppliers/{{ supplier.id }}/payments/add">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Ödeme Tarihi *</label>
+          <input name="payment_date" type="date" required value="{{ today.isoformat() }}">
+        </div>
+        <div class="form-group">
+          <label>Tutar (₺)</label>
+          <input name="amount" type="number" step="0.01" min="0" value="0">
+        </div>
+        <div class="form-group">
+          <label>Yöntem</label>
+          <select name="method">
+            {% for m in methods %}
+            <option value="{{ m.value }}">{{ m.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Referans No</label>
+          <input name="reference_no">
+        </div>
+        <div class="form-group form-grid-full">
+          <label>Açıklama</label>
+          <input name="description">
+        </div>
+        <div class="form-group">
+          <label>Fatura No</label>
+          <input name="invoice_no">
+        </div>
+        <div class="form-group form-grid-full">
+          <label>Notlar</label>
+          <textarea name="notes" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary">Kaydet</button>
+        <button type="button" class="btn btn-secondary" data-close-modal>İptal</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

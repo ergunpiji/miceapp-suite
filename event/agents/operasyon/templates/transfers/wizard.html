@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}Transfer Sihirbazı — {{ event.name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">🚌 Transfer Sihirbazı</div>
+    <div class="page-subtitle">{{ event.name }}</div>
+  </div>
+</div>
+
+{% if not with_flight_in and not with_flight_out %}
+<div class="alert alert-warning">
+  ⚠️ Bu etkinlikte uçuş bilgisi olan katılımcı yok. Önce uçuş bilgilerini girin.
+</div>
+{% else %}
+
+<form method="post" action="{{ base_url }}/events/{{ event.id }}/transfers/wizard/generate">
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+
+    <!-- KARŞILAMA TRANSFERİ -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">↓ Karşılama Transferi</div>
+        <span style="font-size:12px; color:#64748b;">{{ with_flight_in | length }} kişi uçuşla geliyor</span>
+      </div>
+
+      {% if with_flight_in %}
+      <!-- Tümünü seç -->
+      <div style="padding:8px 0; border-bottom:1px solid #f1f5f9; margin-bottom:10px;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600; font-size:13px;">
+          <input type="checkbox" id="select-all-in" onchange="toggleAll('arrival_ids', this.checked)">
+          Tümünü Seç / Kaldır
+        </label>
+      </div>
+
+      <div style="max-height:240px; overflow-y:auto; margin-bottom:14px;">
+        {% for p in with_flight_in %}
+        {% set fi = p.flight_in %}
+        <label style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid #f9fafb; cursor:pointer;">
+          <input type="checkbox" name="arrival_ids" value="{{ p.id }}" checked>
+          <div style="flex:1;">
+            <div style="font-size:13px; font-weight:500;">{{ p.full_name }}</div>
+            <div style="font-size:11px; color:#64748b;">
+              {{ fi.flight_number or '?' }} ·
+              {{ fi.departure_airport or '?' }} → {{ fi.arrival_airport or '?' }} ·
+              {% if fi.arrival_time %}<strong>İniş: {{ fi.arrival_time }}</strong>{% endif %}
+              {% if fi.flight_date %} · {{ fi.flight_date.strftime('%d.%m') }}{% endif %}
+            </div>
+          </div>
+          {% if p.transfers | selectattr('direction','eq','in') | list %}
+          <span class="badge badge-warning" title="Zaten transfer var">⚠️</span>
+          {% endif %}
+        </label>
+        {% endfor %}
+      </div>
+
+      <div style="border-top:1px solid #f1f5f9; padding-top:14px;">
+        <div class="card-title" style="margin-bottom:10px; font-size:12px;">⚙️ Karşılama Ayarları</div>
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>İnişten kaç dakika sonra transfer?</label>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <input type="number" name="arrival_buffer" value="60" min="0" max="300" style="width:80px;">
+              <span style="color:#64748b; font-size:12px;">dakika (bekleme + gümrük süresi)</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Nereden (Havalimanı)</label>
+            <input type="text" name="arrival_from" value="{{ default_city }}" placeholder="AYT Havalimanı">
+          </div>
+          <div class="form-group">
+            <label>Nereye (Otel)</label>
+            <input type="text" name="arrival_to" value="{{ default_venue }}" placeholder="{{ default_venue or 'Rixos Premium' }}">
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="empty-state" style="padding:20px;">
+        <div class="empty-state-text">Geliş uçuşu olan katılımcı yok</div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- DÖNÜŞ TRANSFERİ -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">↑ Dönüş Transferi</div>
+        <span style="font-size:12px; color:#64748b;">{{ with_flight_out | length }} kişi uçuşla dönüyor</span>
+      </div>
+
+      {% if with_flight_out %}
+      <!-- Tümünü seç -->
+      <div style="padding:8px 0; border-bottom:1px solid #f1f5f9; margin-bottom:10px;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600; font-size:13px;">
+          <input type="checkbox" id="select-all-out" onchange="toggleAll('departure_ids', this.checked)">
+          Tümünü Seç / Kaldır
+        </label>
+      </div>
+
+      <div style="max-height:240px; overflow-y:auto; margin-bottom:14px;">
+        {% for p in with_flight_out %}
+        {% set fo = p.flight_out %}
+        <label style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid #f9fafb; cursor:pointer;">
+          <input type="checkbox" name="departure_ids" value="{{ p.id }}" checked>
+          <div style="flex:1;">
+            <div style="font-size:13px; font-weight:500;">{{ p.full_name }}</div>
+            <div style="font-size:11px; color:#64748b;">
+              {{ fo.flight_number or '?' }} ·
+              {{ fo.departure_airport or '?' }} → {{ fo.arrival_airport or '?' }} ·
+              {% if fo.departure_time %}<strong>Kalkış: {{ fo.departure_time }}</strong>{% endif %}
+              {% if fo.flight_date %} · {{ fo.flight_date.strftime('%d.%m') }}{% endif %}
+            </div>
+          </div>
+          {% if p.transfers | selectattr('direction','eq','out') | list %}
+          <span class="badge badge-warning" title="Zaten transfer var">⚠️</span>
+          {% endif %}
+        </label>
+        {% endfor %}
+      </div>
+
+      <div style="border-top:1px solid #f1f5f9; padding-top:14px;">
+        <div class="card-title" style="margin-bottom:10px; font-size:12px;">⚙️ Dönüş Ayarları</div>
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>Uçuştan kaç dakika önce otelden çıkış?</label>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <input type="number" name="departure_lead" value="120" min="30" max="480" style="width:80px;">
+              <span style="color:#64748b; font-size:12px;">dakika önce (havalimanına varış süresi dahil)</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Nereden (Otel)</label>
+            <input type="text" name="departure_from" value="{{ default_venue }}" placeholder="{{ default_venue or 'Rixos Premium' }}">
+          </div>
+          <div class="form-group">
+            <label>Nereye (Havalimanı)</label>
+            <input type="text" name="departure_to" value="{{ default_city }}" placeholder="AYT Havalimanı">
+          </div>
+          <div class="form-group full">
+            <label>Birleştirme eşiği</label>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <input type="number" name="group_threshold" value="60" min="0" max="300" style="width:80px;">
+              <span style="color:#64748b; font-size:12px;">dakika içindeki kalkışlar aynı araçta birleştirilir</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="empty-state" style="padding:20px;">
+        <div class="empty-state-text">Dönüş uçuşu olan katılımcı yok</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="alert alert-info">
+    ℹ️ Zaten transferi olan katılımcılar (⚠️ işaretli) atlanır. Sihirbaz yalnızca yeni transfer oluşturur.
+  </div>
+
+  <div class="btn-group">
+    <button type="submit" class="btn btn-primary">🚌 Transferleri Oluştur</button>
+    <a href="{{ base_url }}/events/{{ event.id }}/transfers" class="btn btn-secondary">İptal</a>
+  </div>
+
+</form>
+{% endif %}
+
+<script>
+function toggleAll(name, checked) {
+  document.querySelectorAll(`input[name="${name}"]`).forEach(cb => cb.checked = checked);
+}
+// Sayfa yüklenince "tümünü seç" kutularını işaretle
+document.getElementById('select-all-in')?.setAttribute('checked', '');
+document.getElementById('select-all-out')?.setAttribute('checked', '');
+</script>
+{% endblock %}

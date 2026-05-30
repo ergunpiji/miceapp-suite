@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+{% if current_user.is_admin %}
+<a href="/fund-pools/new" class="btn btn-primary btn-sm">
+  <i class="bi bi-plus-lg me-1"></i>Yeni Fon Havuzu
+</a>
+{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .pool-table { background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; }
+  .pool-table table { margin:0; }
+  .pool-table thead th { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#64748b; padding:10px 14px; border-bottom:2px solid #e2e8f0; white-space:nowrap; background:#fafafa; }
+  .pool-table tbody td { padding:10px 14px; border-bottom:1px solid #f1f5f9; font-size:13.5px; vertical-align:middle; }
+  .pool-table tbody tr:last-child td { border-bottom:none; }
+  .pool-table tbody tr:hover { background:#f8fafc; cursor:pointer; }
+  .bal-ok   { color:#16a34a; font-weight:700; }
+  .bal-low  { color:#d97706; font-weight:700; }
+  .bal-neg  { color:#dc2626; font-weight:700; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if not pools_data %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-wallet2" style="font-size:40px;opacity:.3"></i>
+  <div class="mt-2">Henüz fon havuzu oluşturulmamış.</div>
+  {% if current_user.is_admin %}
+  <a href="/fund-pools/new" class="btn btn-primary btn-sm mt-3">Yeni Fon Havuzu Oluştur</a>
+  {% endif %}
+</div>
+{% else %}
+<div class="pool-table">
+  <table class="table table-hover mb-0">
+    <thead>
+      <tr>
+        <th>Fon Adı</th>
+        <th>Müşteri</th>
+        <th>Yıl</th>
+        <th>Para Birimi</th>
+        <th class="text-end">Başlangıç</th>
+        <th class="text-end">Dağıtılan</th>
+        <th class="text-end">İade</th>
+        <th class="text-end">Kalan Bakiye</th>
+        <th class="text-center">Durum</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in pools_data %}
+      {% set pool = d.pool %}
+      {% set pct = (d.total_out / pool.initial_amount * 100) if pool.initial_amount else 0 %}
+      <tr onclick="location.href='/fund-pools/{{ pool.id }}'">
+        <td class="fw-semibold">
+          <i class="bi bi-wallet2 me-1 text-primary"></i>{{ pool.name }}
+        </td>
+        <td>{{ pool.customer.name if pool.customer else '—' }}</td>
+        <td>{{ pool.year or '—' }}</td>
+        <td>
+          <span class="badge bg-secondary">{{ pool.currency }}</span>
+        </td>
+        <td class="text-end">{{ pool.initial_amount | money }}</td>
+        <td class="text-end text-danger">{{ d.total_out | money }}</td>
+        <td class="text-end text-success">{{ d.total_in | money }}</td>
+        <td class="text-end">
+          <span class="{% if d.balance < 0 %}bal-neg{% elif pct > 80 %}bal-low{% else %}bal-ok{% endif %}">
+            {{ d.balance | money }}
+          </span>
+        </td>
+        <td class="text-center">
+          {% if d.balance < 0 %}
+          <span class="badge bg-danger">Aşıldı</span>
+          {% elif pct > 80 %}
+          <span class="badge bg-warning text-dark">Düşük</span>
+          {% else %}
+          <span class="badge bg-success">Aktif</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

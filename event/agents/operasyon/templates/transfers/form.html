@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Transfer — {{ participant.full_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">
+    {% if direction == 'in' %}↓ Varış{% else %}↑ Dönüş{% endif %} Transferi —
+    {{ participant.full_name }}
+  </div>
+</div>
+
+<div class="card">
+  <form method="post" action="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}/transfers/new">
+    <input type="hidden" name="direction" value="{{ direction }}">
+
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Transfer Tarihi</label>
+        <input type="date" name="transfer_date" value="{{ transfer.transfer_date if transfer else '' }}">
+      </div>
+      <div class="form-group">
+        <label>Alınış Saati</label>
+        <input type="text" name="pickup_time" value="{{ transfer.pickup_time if transfer else '' }}" placeholder="14:30">
+      </div>
+      <div class="form-group">
+        <label>Nereden</label>
+        <input type="text" name="from_location" value="{{ transfer.from_location if transfer else '' }}"
+               placeholder="{% if direction == 'in' %}AYT Havalimanı{% else %}Rixos Premium{% endif %}">
+      </div>
+      <div class="form-group">
+        <label>Nereye</label>
+        <input type="text" name="to_location" value="{{ transfer.to_location if transfer else '' }}"
+               placeholder="{% if direction == 'in' %}Rixos Premium{% else %}AYT Havalimanı{% endif %}">
+      </div>
+      <div class="form-group full">
+        <label>Araç Grubu</label>
+        <input type="text" name="vehicle_group" value="{{ transfer.vehicle_group if transfer else '' }}"
+               placeholder="Midibüs 1 (gruplamak için — aynı gruptakiler listelerde birlikte görünür)">
+        <span class="form-hint">Aynı araçta gidecek kişileri gruplamak için kullanın</span>
+      </div>
+      <div class="form-group full">
+        <label>Notlar</label>
+        <textarea name="notes">{{ transfer.notes if transfer else '' }}</textarea>
+      </div>
+    </div>
+    <br>
+    <div class="btn-group">
+      <button type="submit" class="btn btn-primary">Kaydet</button>
+      <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}" class="btn btn-secondary">İptal</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

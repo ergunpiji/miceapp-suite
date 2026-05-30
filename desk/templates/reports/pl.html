@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center mb-3">
+  <div class="col-md-4">
+    <form class="d-flex gap-2" method="get">
+      <input type="number" name="year" value="{{ year }}" class="form-control" min="2020" max="2035">
+      <button type="submit" class="btn btn-outline-secondary">Göster</button>
+    </form>
+  </div>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-md-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0">
+        <span class="fw-bold fs-5">{{ year }} Yılı Kâr / Zarar</span>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <tbody>
+            <tr class="table-light">
+              <td colspan="2" class="fw-semibold ps-3">GELİR</td>
+            </tr>
+            <tr>
+              <td class="ps-4">Kesilen / Komisyon Faturaları</td>
+              <td class="text-end pe-3 fw-semibold text-success">{{ kesilen | money }}</td>
+            </tr>
+            {% if iade_kesilen > 0 %}
+            <tr>
+              <td class="ps-4">İade - Kesilen (Vendor İadesi)</td>
+              <td class="text-end pe-3 fw-semibold text-success">{{ iade_kesilen | money }}</td>
+            </tr>
+            {% endif %}
+            <tr class="border-top">
+              <td class="ps-3 fw-semibold">Net Gelir</td>
+              <td class="text-end pe-3 fw-bold text-success fs-6">{{ net_gelir | money }}</td>
+            </tr>
+
+            <tr class="table-light">
+              <td colspan="2" class="fw-semibold ps-3 pt-3">MALİYET</td>
+            </tr>
+            <tr>
+              <td class="ps-4">Gelen Faturalar</td>
+              <td class="text-end pe-3 fw-semibold text-danger">{{ gelen | money }}</td>
+            </tr>
+            {% if iade_gelen > 0 %}
+            <tr>
+              <td class="ps-4">İade - Gelen (Müşteri İadesi)</td>
+              <td class="text-end pe-3 fw-semibold text-danger">{{ iade_gelen | money }}</td>
+            </tr>
+            {% endif %}
+            <tr class="border-top">
+              <td class="ps-3 fw-semibold">Net Maliyet</td>
+              <td class="text-end pe-3 fw-bold text-danger fs-6">{{ net_maliyet | money }}</td>
+            </tr>
+
+            <tr class="border-top border-2">
+              <td class="ps-3 fw-bold">Brüt Kâr</td>
+              <td class="text-end pe-3 fw-bold fs-5 {% if gross_profit >= 0 %}text-success{% else %}text-danger{% endif %}">{{ gross_profit | money }}</td>
+            </tr>
+
+            <tr class="table-light">
+              <td colspan="2" class="fw-semibold ps-3 pt-3">GİDERLER</td>
+            </tr>
+            <tr>
+              <td class="ps-4">Personel Giderleri</td>
+              <td class="text-end pe-3 fw-semibold text-danger">{{ personel_gider | money }}</td>
+            </tr>
+            <tr>
+              <td class="ps-4">Diğer Giderler</td>
+              <td class="text-end pe-3 fw-semibold text-danger">{{ diger_gider | money }}</td>
+            </tr>
+
+            <tr class="border-top border-2 bg-light">
+              <td class="ps-3 fw-bold fs-5">Net Kâr / Zarar</td>
+              <td class="text-end pe-3 fw-bold fs-4 {% if net_profit >= 0 %}text-success{% else %}text-danger{% endif %}">{{ net_profit | money }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

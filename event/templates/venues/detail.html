@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+{% if can_edit %}
+<a href="/venues/{{ venue.id }}/edit" class="btn btn-primary btn-sm">
+  <i class="bi bi-pencil me-1"></i> Düzenle
+</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+
+<div class="mb-3">
+  <a href="/venues" class="text-muted text-decoration-none" style="font-size:13px;">
+    <i class="bi bi-arrow-left me-1"></i> Tedarikçi Listesine Dön
+  </a>
+</div>
+
+{# ─── BAŞLIK KARTI ─── #}
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+      <div>
+        <h4 class="fw-bold mb-2">{{ venue.name }}</h4>
+        <div class="d-flex flex-wrap gap-2">
+          <span class="badge bg-primary bg-opacity-10 text-primary">{{ venue.supplier_type_label }}</span>
+          {% if venue.active %}
+            <span class="badge bg-success bg-opacity-10 text-success"><i class="bi bi-check-circle me-1"></i>Aktif</span>
+          {% else %}
+            <span class="badge bg-secondary bg-opacity-10 text-secondary"><i class="bi bi-x-circle me-1"></i>Pasif</span>
+          {% endif %}
+          {% if venue.stars %}
+            <span class="badge bg-warning bg-opacity-10 text-warning">
+              {% for i in range(venue.stars) %}⭐{% endfor %}
+            </span>
+          {% endif %}
+        </div>
+      </div>
+      {% if can_edit %}
+      <form method="post" action="/venues/{{ venue.id }}/delete"
+            onsubmit="return confirm('{{ venue.name }} tedarikçisini pasife çekmek istediğinizden emin misiniz?')">
+        <button type="submit" class="btn btn-outline-danger btn-sm">
+          <i class="bi bi-building-x me-1"></i> Pasife Al
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+
+  {# ─── TEMEL BİLGİLER ─── #}
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="fw-bold mb-3">
+          <i class="bi bi-info-circle me-2 text-primary"></i>Temel Bilgiler
+        </h6>
+        <table class="table table-sm mb-0">
+          <tbody>
+            <tr>
+              <td class="text-muted fw-semibold" style="font-size:12px; width:130px;">Birincil Şehir</td>
+              <td style="font-size:13px;">{{ venue.city or '—' }}</td>
+            </tr>
+            {% set extra_cities = venue.cities | reject("equalto", venue.city) | list %}
+            {% if extra_cities %}
+            <tr>
+              <td class="text-muted fw-semibold" style="font-size:12px;">Diğer Şehirler</td>
+              <td style="font-size:13px;">{{ extra_cities | join(', ') }}</td>
+            </tr>
+            {% endif %}
+            <tr>
+              <td class="text-muted fw-semibold" style="font-size:12px;">Adres</td>
+              <td style="font-size:13px;">{{ venue.address or '—' }}</td>
+            </tr>
+            {% if venue.website %}
+            <tr>
+              <td class="text-muted fw-semibold" style="font-size:12px;">Website</td>
+              <td style="font-size:13px;">
+                <a href="{{ venue.website }}" target="_blank" class="text-primary text-decoration-none">
+                  <i class="bi bi-link-45deg"></i> {{ venue.website | truncate(50) }}
+                </a>
+              </td>
+            </tr>
+            {% endif %}
+            {% if venue.stars %}
+            <tr>
+              <td class="text-muted fw-semibold" style="font-size:12px;">Yıldız</td>
+              <td style="font-size:13px;">{{ venue.stars }} Yıldız</td>
+            </tr>
+            {% endif %}
+            {% if venue.total_rooms %}
+            <tr>
+              <td class="text-muted fw-semibold" style="font-size:12px;">Toplam Oda</td>
+              <td style="font-size:13px;">{{ venue.total_rooms }}</td>
+            </tr>
+            {% endif %}
+          </tbody>
+        </table>
+        {% if venue.notes %}
+        <hr>
+        <p class="text-muted mb-1" style="font-size:12px; font-weight:600;">NOTLAR</p>
+        <p style="font-size:13px;" class="mb-0">{{ venue.notes }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# ─── İLETİŞİM KİŞİLERİ ─── #}
+  <div class="col-lg-7">
+    <div class="card mb-4">
+      <div class="card-body">
+        <h6 class="fw-bold mb-3">
+          <i class="bi bi-person-lines-fill me-2 text-info"></i>İletişim Kişileri
+        </h6>
+        {% set contacts = venue.contacts %}
+        {% if contacts %}
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th>Ad Soyad</th>
+                <th>Unvan</th>
+                <th>E-posta</th>
+                <th>Telefon</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for c in contacts %}
+              <tr>
+                <td class="fw-semibold" style="font-size:13px;">{{ c.name }}</td>
+                <td style="font-size:13px; color:#64748b;">{{ c.title or '—' }}</td>
+                <td style="font-size:13px;">
+                  {% if c.email %}
+                  <a href="mailto:{{ c.email }}" class="text-decoration-none">{{ c.email }}</a>
+                  {% else %}—{% endif %}
+                </td>
+                <td style="font-size:13px; color:#64748b;">{{ c.phone or '—' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0" style="font-size:13px;">Henüz iletişim kişisi eklenmemiş.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ─── SALONLAR ─── #}
+    {% set halls = venue.halls %}
+    {% if halls %}
+    <div class="card">
+      <div class="card-body">
+        <h6 class="fw-bold mb-3">
+          <i class="bi bi-door-open me-2 text-success"></i>Salonlar
+        </h6>
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th>Salon Adı</th>
+                <th>Kapasite</th>
+                <th>Alan (m²)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for h in halls %}
+              <tr>
+                <td class="fw-semibold" style="font-size:13px;">{{ h.name }}</td>
+                <td style="font-size:13px; color:#64748b;">{{ h.capacity or '—' }} kişi</td>
+                <td style="font-size:13px; color:#64748b;">{{ h.area or '—' }} m²</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+{% endblock %}

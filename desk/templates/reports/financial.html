@@ -1,0 +1,460 @@
+{% extends "base.html" %}
+{% block page_title %}{% if is_birim_mgr %}Takım Performans Raporu{% else %}Finansal Rapor{% endif %}{% endblock %}
+{% block page_title_block %}{% if is_birim_mgr %}Takım Performans Raporu{% else %}Finansal Rapor{% endif %}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/reports" class="btn btn-outline-secondary btn-sm">
+  <i class="bi bi-arrow-left me-1"></i> Raporlar
+</a>
+{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<style>
+  .fin-kpi {
+    background: white; border: 1px solid #e2e8f0; border-radius: 14px;
+    padding: 20px 22px; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  }
+  .fin-kpi-label { font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1px; color: #64748b; margin-bottom: 6px; }
+  .fin-kpi-value { font-size: 26px; font-weight: 800; line-height: 1.1; }
+  .fin-kpi-sub   { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+  .chart-wrap { background: white; border: 1px solid #e2e8f0; border-radius: 14px;
+    padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+  .chart-title { font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 14px; }
+  .filter-card { background: white; border: 1px solid #e2e8f0; border-radius: 14px;
+    padding: 16px 20px; box-shadow: 0 1px 4px rgba(0,0,0,.06); margin-bottom: 24px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── Filtre ── #}
+<div class="filter-card">
+  <form id="filterForm" method="get" action="/reports/financial"
+        class="d-flex flex-wrap gap-3 align-items-end">
+    <div>
+      <label class="form-label fw-semibold mb-1" style="font-size:12px;">Başlangıç Tarihi</label>
+      <input type="date" name="date_from" value="{{ date_from }}"
+             class="form-control form-control-sm" style="min-width:150px;">
+    </div>
+    <div>
+      <label class="form-label fw-semibold mb-1" style="font-size:12px;">Bitiş Tarihi</label>
+      <input type="date" name="date_to" value="{{ date_to }}"
+             class="form-control form-control-sm" style="min-width:150px;">
+    </div>
+    {# GM: Takım filtresi #}
+    {% if is_gm and all_teams %}
+    <div>
+      <label class="form-label fw-semibold mb-1" style="font-size:12px;">Takım</label>
+      <select name="team_id" class="form-select form-select-sm" style="min-width:200px;">
+        <option value="">— Tüm Takımlar —</option>
+        {% for t in all_teams %}
+        <option value="{{ t.id }}" {% if t.id == team_id %}selected{% endif %}>{{ t.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    {# Admin/Muhasebe: PM filtresi #}
+    {% if current_user.role not in ('yonetici', 'asistan', 'mudur') %}
+    <div>
+      <label class="form-label fw-semibold mb-1" style="font-size:12px;">Proje Yöneticisi</label>
+      <select name="manager_id" class="form-select form-select-sm" style="min-width:200px;">
+        <option value="">— Tümü —</option>
+        {% for u in pm_users %}
+        <option value="{{ u.id }}" {% if u.id == manager_id %}selected{% endif %}>{{ u.full_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <div class="d-flex gap-2">
+      <button type="submit" class="btn btn-primary btn-sm">
+        <i class="bi bi-funnel me-1"></i>Filtrele
+      </button>
+      {# Hızlı aralık butonları #}
+      <button type="button" class="btn btn-outline-secondary btn-sm"
+              onclick="setRange('this_month')">Bu Ay</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm"
+              onclick="setRange('this_year')">Bu Yıl</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm"
+              onclick="setRange('last_year')">Geçen Yıl</button>
+    </div>
+  </form>
+</div>
+
+{# ── KPI Kartları ── #}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="fin-kpi">
+      <div class="fin-kpi-label"><i class="bi bi-graph-up-arrow text-primary me-1"></i>Toplam Ciro</div>
+      <div class="fin-kpi-value text-primary">
+        ₺{{ '{:,.0f}'.format(total_ciro).replace(',', '.') }}
+      </div>
+      <div class="fin-kpi-sub">KDV Hariç · Faturalanan</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="fin-kpi">
+      <div class="fin-kpi-label">
+        <i class="bi bi-currency-dollar me-1"
+           style="color:{% if total_kar >= 0 %}#16a34a{% else %}#dc2626{% endif %};"></i>Toplam Kar
+      </div>
+      <div class="fin-kpi-value"
+           style="color:{% if total_kar >= 0 %}#16a34a{% else %}#dc2626{% endif %};">
+        ₺{{ '{:,.0f}'.format(total_kar).replace(',', '.') }}
+      </div>
+      <div class="fin-kpi-sub">Ciro − Gider</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="fin-kpi">
+      <div class="fin-kpi-label"><i class="bi bi-percent me-1"></i>Karlılık Oranı</div>
+      <div class="fin-kpi-value"
+           style="color:{% if total_karlilk and total_karlilk >= 15 %}#16a34a
+                        {% elif total_karlilk and total_karlilk >= 0 %}#d97706
+                        {% else %}#dc2626{% endif %};">
+        {% if total_karlilk is not none %}%{{ '{:.1f}'.format(total_karlilk) }}{% else %}—{% endif %}
+      </div>
+      <div class="fin-kpi-sub">{{ rows | length }} referans · {{ date_from }} → {{ date_to }}</div>
+    </div>
+  </div>
+</div>
+
+{# ── Grafikler ── #}
+{% if rows %}
+<div class="row g-4 mb-4">
+
+  {# Aylık Trend #}
+  <div class="col-lg-7">
+    <div class="chart-wrap h-100">
+      <div class="chart-title">
+        <i class="bi bi-bar-chart-line text-primary me-2"></i>Aylık Trend
+        <span class="text-muted fw-normal ms-1" style="font-size:11px;">Etkinlik başlangıç tarihine göre</span>
+      </div>
+      <canvas id="monthlyChart" style="max-height:260px;"></canvas>
+    </div>
+  </div>
+
+  {# Müşteri Bazlı Kar ─ yatay bar #}
+  <div class="col-lg-5">
+    <div class="chart-wrap h-100">
+      <div class="chart-title">
+        <i class="bi bi-buildings text-success me-2"></i>Müşteri Bazlı Ciro
+        <span class="text-muted fw-normal ms-1" style="font-size:11px;">İlk 15</span>
+      </div>
+      <canvas id="customerChart" style="max-height:260px;"></canvas>
+    </div>
+  </div>
+
+</div>
+{% endif %}
+
+{# ── TAKIM BAZLI ÖZET (Genel Müdür) ── #}
+{% if is_gm and team_totals | length > 0 %}
+<div class="chart-wrap mb-4">
+  <div class="chart-title mb-3">
+    <i class="bi bi-diagram-3 text-primary me-2"></i>Takım Bazlı Gelir / Gider Özeti
+    {% if team_id %}<span class="badge bg-primary ms-2" style="font-size:11px;">Filtreli</span>{% endif %}
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0" style="font-size:13px;">
+      <thead style="background:#1e293b; color:white;">
+        <tr>
+          <th class="ps-3">Takım</th>
+          <th class="text-end">Ciro</th>
+          <th class="text-end">Kar</th>
+          <th class="text-end pe-3">Karlılık</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tname, tt in team_totals.items() | sort(attribute='1.ciro', reverse=True) %}
+        {% set tk = (tt.kar / tt.ciro * 100) if tt.ciro > 0 else none %}
+        <tr>
+          <td class="ps-3 fw-semibold">
+            <i class="bi bi-people me-1 text-primary"></i>{{ tt.name }}
+          </td>
+          <td class="text-end" style="color:#2563eb;">₺{{ '{:,.0f}'.format(tt.ciro).replace(',', '.') }}</td>
+          <td class="text-end fw-bold" style="color:{% if tt.kar >= 0 %}#16a34a{% else %}#dc2626{% endif %};">
+            ₺{{ '{:,.0f}'.format(tt.kar).replace(',', '.') }}
+          </td>
+          <td class="text-end pe-3">
+            {% if tk is not none %}
+            <span class="badge {% if tk >= 15 %}bg-success{% elif tk >= 0 %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+              %{{ '{:.1f}'.format(tk) }}
+            </span>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── ÜYE BAZLI PERFORMANS (Birim Müdürü) ── #}
+{% if is_birim_mgr and member_totals | length > 0 %}
+<div class="chart-wrap mb-4">
+  <div class="chart-title mb-3">
+    <i class="bi bi-person-lines-fill text-success me-2"></i>Ekip Üyesi Performans Özeti
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0" style="font-size:13px;">
+      <thead style="background:#1e293b; color:white;">
+        <tr>
+          <th class="ps-3">Ekip Üyesi</th>
+          <th class="text-end">Referans Sayısı</th>
+          <th class="text-end">Ciro</th>
+          <th class="text-end">Kar</th>
+          <th class="text-end pe-3">Karlılık</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for mid, mt in member_totals.items() | sort(attribute='1.ciro', reverse=True) %}
+        {% set mk = (mt.kar / mt.ciro * 100) if mt.ciro > 0 else none %}
+        <tr>
+          <td class="ps-3 fw-semibold">
+            <i class="bi bi-person me-1 text-secondary"></i>{{ mt.name }}
+          </td>
+          <td class="text-end text-muted">{{ mt.count }}</td>
+          <td class="text-end" style="color:#2563eb;">₺{{ '{:,.0f}'.format(mt.ciro).replace(',', '.') }}</td>
+          <td class="text-end fw-bold" style="color:{% if mt.kar >= 0 %}#16a34a{% else %}#dc2626{% endif %};">
+            ₺{{ '{:,.0f}'.format(mt.kar).replace(',', '.') }}
+          </td>
+          <td class="text-end pe-3">
+            {% if mk is not none %}
+            <span class="badge {% if mk >= 15 %}bg-success{% elif mk >= 0 %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+              %{{ '{:.1f}'.format(mk) }}
+            </span>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── PM Özet (admin/muhasebe) ── #}
+{% if current_user.role not in ('yonetici', 'asistan', 'mudur') and mgr_totals | length > 1 %}
+<div class="chart-wrap mb-4">
+  <div class="chart-title mb-3">
+    <i class="bi bi-people text-primary me-2"></i>Proje Yöneticisi Bazlı Özet
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0" style="font-size:13px;">
+      <thead style="background:#f1f5f9;">
+        <tr>
+          <th class="ps-3">Proje Yöneticisi</th>
+          <th class="text-end">Ciro</th>
+          <th class="text-end">Kar</th>
+          <th class="text-end pe-3">Karlılık</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for mid, mt in mgr_totals.items() %}
+        {% set mk = (mt.kar / mt.ciro * 100) if mt.ciro > 0 else none %}
+        <tr>
+          <td class="ps-3 fw-semibold">{{ mt.name }}</td>
+          <td class="text-end">₺{{ '{:,.0f}'.format(mt.ciro).replace(',', '.') }}</td>
+          <td class="text-end fw-bold" style="color:{% if mt.kar >= 0 %}#16a34a{% else %}#dc2626{% endif %};">
+            ₺{{ '{:,.0f}'.format(mt.kar).replace(',', '.') }}
+          </td>
+          <td class="text-end pe-3">
+            {% if mk is not none %}
+            <span class="badge {% if mk >= 15 %}bg-success{% elif mk >= 0 %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+              %{{ '{:.1f}'.format(mk) }}
+            </span>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Referans Bazlı Tablo ── #}
+<div class="chart-wrap">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="chart-title mb-0">
+      <i class="bi bi-table text-success me-2"></i>Referans Bazlı Detay
+      <span class="badge bg-secondary ms-1" style="font-size:11px;">{{ rows | length }}</span>
+    </div>
+    <small class="text-muted">Sadece fatura girilen referanslar</small>
+  </div>
+
+  {% if rows %}
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0" style="font-size:12px;">
+      <thead style="background:#1e293b; color:white;">
+        <tr>
+          <th class="ps-3" style="min-width:130px;">Referans No</th>
+          <th style="min-width:160px;">Müşteri / Etkinlik</th>
+          <th style="white-space:nowrap;">Etkinlik Tarihi</th>
+          {% if is_gm and not team_id %}
+          <th>Takım</th>
+          {% endif %}
+          {% if current_user.role not in ('yonetici', 'asistan') %}
+          <th>PM</th>
+          {% endif %}
+          <th class="text-end" style="white-space:nowrap;">Ciro (KDV hariç)</th>
+          <th class="text-end" style="white-space:nowrap;">Kar</th>
+          <th class="text-end pe-3" style="white-space:nowrap;">Karlılık</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr onclick="location.href='/requests/{{ row.req.id }}#tab-financial'" style="cursor:pointer;">
+          <td class="ps-3">
+            <span class="badge bg-primary font-monospace fw-bold" style="font-size:11px;">
+              {{ row.req.request_no }}
+            </span>
+          </td>
+          <td>
+            <div class="fw-semibold" style="font-size:12px;">{{ row.req.event_name }}</div>
+            <div class="text-muted" style="font-size:11px;">{{ row.req.client_name }}</div>
+          </td>
+          <td style="white-space:nowrap; color:#64748b; font-size:11px;">
+            {{ row.req.check_in | date_tr if row.req.check_in else '—' }}
+          </td>
+          {% if is_gm and not team_id %}
+          <td style="font-size:11px; color:#7c3aed;">{{ row.team_name or '—' }}</td>
+          {% endif %}
+          {% if current_user.role not in ('yonetici', 'asistan') %}
+          <td style="color:#64748b; font-size:11px;">{{ row.manager_name }}</td>
+          {% endif %}
+          <td class="text-end fw-semibold" style="color:#2563eb;">
+            {% if row.ciro %}₺{{ '{:,.0f}'.format(row.ciro).replace(',', '.') }}{% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td class="text-end fw-bold"
+              style="color:{% if row.kar > 0 %}#16a34a{% elif row.kar < 0 %}#dc2626{% else %}#94a3b8{% endif %};">
+            {% if row.ciro or row.maliyet %}
+              ₺{{ '{:,.0f}'.format(row.kar).replace(',', '.') }}
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td class="text-end pe-3">
+            {% if row.karlilk is not none %}
+            <span class="badge {% if row.karlilk >= 15 %}bg-success{% elif row.karlilk >= 0 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
+                  style="font-size:10px;">%{{ '{:.1f}'.format(row.karlilk) }}</span>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot style="background:#f8fafc; font-weight:700; border-top:2px solid #e2e8f0;">
+        <tr>
+          <td colspan="{% if current_user.role not in ('yonetici', 'asistan') %}{% if is_gm and not team_id %}5{% else %}4{% endif %}{% else %}3{% endif %}"
+              class="ps-3 text-end">TOPLAM</td>
+          <td class="text-end" style="color:#2563eb;">
+            ₺{{ '{:,.0f}'.format(total_ciro).replace(',', '.') }}
+          </td>
+          <td class="text-end"
+              style="color:{% if total_kar >= 0 %}#16a34a{% else %}#dc2626{% endif %};">
+            ₺{{ '{:,.0f}'.format(total_kar).replace(',', '.') }}
+          </td>
+          <td class="text-end pe-3">
+            {% if total_karlilk is not none %}
+            <span class="badge {% if total_karlilk >= 15 %}bg-success{% elif total_karlilk >= 0 %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+              %{{ '{:.1f}'.format(total_karlilk) }}
+            </span>
+            {% endif %}
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% else %}
+  <div class="text-center py-5 text-muted">
+    <i class="bi bi-receipt" style="font-size:3rem; opacity:.2;"></i>
+    <p class="mt-2 mb-1">Seçili tarih aralığında onaylı fatura bulunamadı.</p>
+    <small>{{ date_from }} — {{ date_to }}</small>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+  const monthly  = {{ chart_monthly  | safe }};
+  const customer = {{ chart_customer | safe }};
+
+  const numFmt = v => '₺' + new Intl.NumberFormat('tr-TR', {notation:'compact', maximumFractionDigits:1}).format(v);
+  const tooltipFmt = v => ' ₺' + new Intl.NumberFormat('tr-TR').format(Math.round(v));
+
+  // ── Aylık trend bar chart ──
+  const mCtx = document.getElementById('monthlyChart');
+  if (mCtx && monthly.labels && monthly.labels.length) {
+    new Chart(mCtx, {
+      type: 'bar',
+      data: {
+        labels: monthly.labels,
+        datasets: [
+          { label: 'Ciro', data: monthly.ciro, backgroundColor: 'rgba(37,99,235,.75)', borderRadius: 4, order: 2 },
+          { label: 'Kar',  data: monthly.kar,  backgroundColor: 'rgba(22,163,74,.8)',  borderRadius: 4, order: 1 },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 11 } } },
+          tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${tooltipFmt(ctx.parsed.y)}` } }
+        },
+        scales: {
+          x: { ticks: { font: { size: 10 } }, grid: { display: false } },
+          y: { ticks: { font: { size: 10 }, callback: numFmt } }
+        }
+      }
+    });
+  }
+
+  // ── Müşteri dikey bar chart ──
+  const cCtx = document.getElementById('customerChart');
+  if (cCtx && customer.labels && customer.labels.length) {
+    new Chart(cCtx, {
+      type: 'bar',
+      data: {
+        labels: customer.labels,
+        datasets: [
+          { label: 'Ciro', data: customer.ciro, backgroundColor: 'rgba(37,99,235,.7)', borderRadius: 4 },
+          { label: 'Kar',  data: customer.kar,  backgroundColor: 'rgba(22,163,74,.7)', borderRadius: 4 },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 11 } } },
+          tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${tooltipFmt(ctx.parsed.y)}` } }
+        },
+        scales: {
+          x: { ticks: { font: { size: 10 }, maxRotation: 35 }, grid: { display: false } },
+          y: { ticks: { font: { size: 10 }, callback: numFmt } }
+        }
+      }
+    });
+  }
+
+  // ── Hızlı tarih aralığı butonları ──
+  window.setRange = function(type) {
+    const today = new Date();
+    let from, to = today.toISOString().slice(0,10);
+    if (type === 'this_month') {
+      from = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0,10);
+    } else if (type === 'this_year') {
+      from = today.getFullYear() + '-01-01';
+    } else if (type === 'last_year') {
+      const y = today.getFullYear() - 1;
+      from = y + '-01-01'; to = y + '-12-31';
+    }
+    const f = document.getElementById('filterForm');
+    f.querySelector('input[name=date_from]').value = from;
+    f.querySelector('input[name=date_to]').value   = to;
+    f.submit();
+  };
+})();
+</script>
+{% endblock %}

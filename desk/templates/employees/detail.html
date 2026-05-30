@@ -1,0 +1,1310 @@
+{% extends "base.html" %}
+{% block page_title %}{{ employee.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .emp-avatar {
+    width: 72px; height: 72px; border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff; font-size: 26px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 12px rgba(99,102,241,.35);
+  }
+  .nav-tabs .nav-link { font-size: 13px; padding: 8px 16px; }
+  .nav-tabs .nav-link.active { font-weight: 600; }
+  .tab-section { font-size: 13px; }
+  .career-timeline { border-left: 3px solid #e2e8f0; padding-left: 20px; }
+  .career-dot {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 15px; margin-left: -31px; float: left;
+    background: #fff; border: 2px solid #e2e8f0; margin-right: 12px;
+  }
+  .career-item { margin-bottom: 20px; padding-left: 44px; position: relative; }
+  .career-item:last-child { margin-bottom: 0; }
+  .info-label { font-size: 11px; color: #6c757d; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .info-value { font-size: 13px; color: #1e293b; }
+  .asset-icon { font-size: 20px; }
+  .status-badge-zimmetli  { background: #d1fae5; color: #065f46; }
+  .status-badge-iade { background: #f1f5f9; color: #475569; }
+  table.tab-table { font-size: 13px; }
+  .section-card { background: #fff; border-radius: 10px; border: 1px solid #e9ecef; padding: 20px; margin-bottom: 16px; }
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+{% if current_user.is_admin %}
+<a href="/employees/{{ employee.id }}/edit" class="btn btn-sm btn-outline-secondary">
+  <i class="bi bi-pencil me-1"></i>Düzenle
+</a>
+<form method="post" action="/employees/{{ employee.id }}/delete" class="d-inline"
+      onsubmit="return confirm('{{ employee.name }} adlı çalışanı silmek istediğinizden emin misiniz?');">
+  <button type="submit" class="btn btn-sm btn-outline-danger">
+    <i class="bi bi-trash me-1"></i>Sil
+  </button>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+
+{# ── Üst başlık ── #}
+<div class="section-card d-flex flex-wrap align-items-center gap-4 mb-3">
+  <div class="emp-avatar flex-shrink-0">
+    {{ employee.name[:2] | upper }}
+  </div>
+  <div class="flex-grow-1">
+    <h5 class="mb-0 fw-bold">{{ employee.name }}</h5>
+    <div class="text-muted small">{{ employee.title or "—" }}{% if employee.department %} · {{ employee.department }}{% endif %}</div>
+    <div class="mt-1 d-flex flex-wrap gap-1">
+      <span class="badge {% if employee.active %}bg-success{% else %}bg-secondary{% endif %}">
+        {{ "Aktif" if employee.active else "Pasif" }}
+      </span>
+      {% if employee.is_retired %}
+      <span class="badge bg-warning text-dark">Emekli</span>
+      {% endif %}
+      {% if employee.end_date %}
+      <span class="badge bg-danger">Ayrıldı: {{ employee.end_date | date_tr }}</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="text-end text-nowrap">
+    <div class="small text-muted">Net Maaş</div>
+    <div class="fs-5 fw-bold text-success">{{ employee.net_salary | money }}</div>
+    <div class="small text-muted">Brüt: {{ employee.gross_salary | money }}</div>
+  </div>
+</div>
+
+{# ── Sekme navigasyonu ── #}
+<ul class="nav nav-tabs mb-3" id="empTabs">
+  {% set tabs = [
+    ("profil",   "bi-person-circle",    "Profil"),
+    ("kisisel",  "bi-card-list",        "Kişisel Bilgiler"),
+    ("kariyer",  "bi-graph-up-arrow",   "Kariyer"),
+    ("belgeler", "bi-folder2-open",     "Belgeler"),
+    ("zimmet",   "bi-laptop",           "Zimmet"),
+    ("bordro",   "bi-receipt",          "Bordro"),
+    ("izinler",  "bi-calendar-check",   "İzinler"),
+  ] %}
+  {% for t_key, t_icon, t_label in tabs %}
+  <li class="nav-item">
+    <a class="nav-link {% if tab == t_key %}active{% endif %}"
+       href="#" data-tab="{{ t_key }}"
+       onclick="switchTab('{{ t_key }}'); return false;">
+      <i class="bi {{ t_icon }} me-1"></i>{{ t_label }}
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+
+{# ═══════════════════════════════════════════════════════════
+   TAB: PROFİL
+═══════════════════════════════════════════════════════════ #}
+<div id="tab-profil" class="tab-section" {% if tab != 'profil' %}style="display:none"{% endif %}>
+  <div class="row g-3">
+
+    {# Sol: Özet bilgi kartı #}
+    <div class="col-md-4">
+      <div class="section-card h-100">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-info-circle me-1 text-primary"></i>Genel Bilgiler</h6>
+        <table class="table table-sm table-borderless mb-0 tab-table">
+          <tr>
+            <td class="text-muted" style="width:42%">Departman</td>
+            <td>{{ employee.department or "—" }}</td>
+          </tr>
+          <tr>
+            <td class="text-muted">İşe Giriş</td>
+            <td>{{ employee.start_date | date_tr }}</td>
+          </tr>
+          {% if employee.end_date %}
+          <tr>
+            <td class="text-muted">Ayrılış</td>
+            <td>{{ employee.end_date | date_tr }}</td>
+          </tr>
+          {% endif %}
+          <tr>
+            <td class="text-muted">Brüt Maaş</td>
+            <td>{{ employee.gross_salary | money }}</td>
+          </tr>
+          <tr>
+            <td class="text-muted">Net Maaş</td>
+            <td class="fw-semibold text-success">{{ employee.net_salary | money }}</td>
+          </tr>
+          {% if employee.iban %}
+          <tr>
+            <td class="text-muted">IBAN</td>
+            <td class="small font-monospace">{{ employee.iban }}</td>
+          </tr>
+          {% endif %}
+        </table>
+        {% if employee.notes %}
+        <div class="mt-3 p-2 bg-light rounded small text-muted">
+          <i class="bi bi-sticky me-1"></i>{{ employee.notes }}
+        </div>
+        {% endif %}
+
+        {# Son ödemeler özeti #}
+        {% if salary_payments %}
+        <hr class="my-3">
+        <h6 class="fw-semibold mb-2 small text-muted text-uppercase" style="letter-spacing:.05em">Son Ödemeler</h6>
+        {% for sp in salary_payments[:3] %}
+        <div class="d-flex justify-content-between align-items-center py-1 border-bottom">
+          <span class="small text-muted">{{ sp.period }}</span>
+          <span class="fw-semibold small text-success">{{ sp.net_amount | money }}</span>
+        </div>
+        {% endfor %}
+        {% if salary_payments | length > 3 %}
+        <div class="small text-muted mt-1">+{{ salary_payments | length - 3 }} daha…</div>
+        {% endif %}
+        {% endif %}
+      </div>
+    </div>
+
+    {# Sağ: İşlemler #}
+    <div class="col-md-8">
+
+      {# ── Maaş Öde ── #}
+      <div class="section-card mb-3">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-cash-coin me-1 text-success"></i>Maaş Öde</h6>
+        <form method="post" action="/employees/{{ employee.id }}/salary" class="row g-2 align-items-end">
+          <div class="col-auto">
+            <label class="form-label small">Dönem</label>
+            <input type="month" name="period" class="form-control form-control-sm" required>
+          </div>
+          <div class="col-auto">
+            <label class="form-label small">Brüt</label>
+            <input type="number" name="gross_amount" step="0.01" class="form-control form-control-sm"
+                   value="{{ employee.gross_salary }}" required style="width:110px">
+          </div>
+          <div class="col-auto">
+            <label class="form-label small">Net</label>
+            <input type="number" name="net_amount" step="0.01" class="form-control form-control-sm"
+                   value="{{ employee.net_salary }}" required style="width:110px">
+          </div>
+          <div class="col-auto">
+            <label class="form-label small">Ödeme</label>
+            <select name="payment_method" class="form-select form-select-sm" id="salaryPayMethod">
+              <option value="banka">Banka</option>
+              <option value="nakit">Nakit</option>
+            </select>
+          </div>
+          <div class="col-auto" id="salaryBankDiv">
+            <label class="form-label small">Banka Hesabı</label>
+            <select name="bank_account_id" class="form-select form-select-sm">
+              <option value="">—</option>
+              {% for ba in bank_accounts %}<option value="{{ ba.id }}">{{ ba.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-auto">
+            <label class="form-label small">Not</label>
+            <input type="text" name="notes" class="form-control form-control-sm" placeholder="Opsiyonel">
+          </div>
+          <div class="col-auto">
+            <button type="submit" class="btn btn-sm btn-success">Öde</button>
+          </div>
+        </form>
+      </div>
+
+      {# ── Maaş Geçmişi ── #}
+      <div class="section-card mb-3">
+        <h6 class="fw-semibold mb-2"><i class="bi bi-clock-history me-1 text-secondary"></i>Maaş Geçmişi</h6>
+        <div class="table-responsive">
+          <table class="table table-sm tab-table mb-0">
+            <thead class="table-light">
+              <tr><th>Dönem</th><th class="text-end">Brüt</th><th class="text-end">Net</th><th>Ödeme</th><th>Tarih</th></tr>
+            </thead>
+            <tbody>
+              {% for sp in salary_payments %}
+              <tr>
+                <td>{{ sp.period }}</td>
+                <td class="text-end">{{ sp.gross_amount | money }}</td>
+                <td class="text-end fw-semibold text-success">{{ sp.net_amount | money }}</td>
+                <td>{{ sp.payment_method }}</td>
+                <td class="small text-muted">{{ sp.paid_at.strftime('%d.%m.%Y') if sp.paid_at else '—' }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="5" class="text-center text-muted py-3">Maaş kaydı yok.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {# ── Yan Hak Ekle ── #}
+      <div class="section-card mb-3">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-gift me-1 text-info"></i>Yan Hak Ekle</h6>
+        <form method="post" action="/employees/{{ employee.id }}/benefit" class="row g-2 align-items-end">
+          <div class="col-auto">
+            <label class="form-label small">Tür</label>
+            <select name="benefit_type" class="form-select form-select-sm">
+              <option value="yemek">Yemek</option>
+              <option value="ulasim">Ulaşım</option>
+              <option value="saglik">Sağlık</option>
+              <option value="diger">Diğer</option>
+            </select>
+          </div>
+          <div class="col-auto">
+            <label class="form-label small">Dönem</label>
+            <input type="month" name="period" class="form-control form-control-sm" required>
+          </div>
+          <div class="col-auto">
+            <label class="form-label small">Tutar</label>
+            <input type="number" name="amount" step="0.01" class="form-control form-control-sm"
+                   required style="width:110px">
+          </div>
+          <div class="col-auto">
+            <label class="form-label small">Ödeme</label>
+            <select name="payment_method" class="form-select form-select-sm">
+              <option value="banka">Banka</option>
+              <option value="nakit">Nakit</option>
+            </select>
+          </div>
+          <div class="col-auto">
+            <button type="submit" class="btn btn-sm btn-outline-primary">Ekle</button>
+          </div>
+        </form>
+
+        {# Yan Haklar Listesi #}
+        {% if benefits %}
+        <div class="table-responsive mt-3">
+          <table class="table table-sm tab-table mb-0">
+            <thead class="table-light">
+              <tr><th>Dönem</th><th>Tür</th><th class="text-end">Tutar</th><th>Ödeme</th></tr>
+            </thead>
+            <tbody>
+              {% for b in benefits %}
+              <tr>
+                <td>{{ b.period }}</td>
+                <td>{{ b.benefit_type }}</td>
+                <td class="text-end">{{ b.amount | money }}</td>
+                <td>{{ b.payment_method }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </div>
+
+      {# ── Avans Ver ── #}
+      <div class="section-card mb-3">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-wallet2 me-1 text-warning"></i>Avans Ver</h6>
+        <form method="post" action="/employees/{{ employee.id }}/advance">
+          <div class="row g-2 align-items-end">
+            <div class="col-auto">
+              <label class="form-label small">Avans Türü</label>
+              <select name="advance_type" class="form-select form-select-sm" id="advType" onchange="toggleAdvType()">
+                <option value="maas">Maaş Avansı</option>
+                <option value="is">İş Avansı</option>
+              </select>
+            </div>
+            <div class="col-auto d-none" id="advRefDiv">
+              <label class="form-label small">Referans <span class="text-danger">*</span></label>
+              <select name="ref_id" class="form-select form-select-sm" id="advRefSel">
+                <option value="">— Seçiniz —</option>
+                {% for ref in references %}<option value="{{ ref.id }}">{{ ref.ref_no }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-auto">
+              <label class="form-label small">Tarih</label>
+              <input type="date" name="advance_date" class="form-control form-control-sm" required value="{{ today }}">
+            </div>
+            <div class="col-auto">
+              <label class="form-label small">Tutar</label>
+              <input type="number" name="amount" step="0.01" class="form-control form-control-sm"
+                     required style="width:110px">
+            </div>
+            <div class="col-auto">
+              <label class="form-label small">Ödeme</label>
+              <select name="payment_method" class="form-select form-select-sm" id="advPayMethod">
+                <option value="nakit">Nakit</option>
+                <option value="banka">Banka</option>
+              </select>
+            </div>
+            <div class="col-auto d-none" id="advBankDiv">
+              <label class="form-label small">Banka Hesabı</label>
+              <select name="bank_account_id" class="form-select form-select-sm">
+                <option value="">—</option>
+                {% for ba in bank_accounts %}<option value="{{ ba.id }}">{{ ba.name }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-auto">
+              <label class="form-label small">Neden</label>
+              <input type="text" name="reason" class="form-control form-control-sm" placeholder="Opsiyonel">
+            </div>
+            <div class="col-auto">
+              <button type="submit" class="btn btn-sm btn-warning">Ver</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      {# ── Avanslar Listesi ── #}
+      {% if advances %}
+      <div class="section-card">
+        <h6 class="fw-semibold mb-2"><i class="bi bi-list-ul me-1 text-secondary"></i>Avanslar</h6>
+        <div class="table-responsive">
+          <table class="table table-sm tab-table mb-0">
+            <thead class="table-light">
+              <tr><th>Tarih</th><th>Tür</th><th>Referans / Neden</th><th class="text-end">Tutar</th><th>Durum</th><th></th></tr>
+            </thead>
+            <tbody>
+              {% for adv in advances %}
+              <tr>
+                <td>{{ adv.advance_date | date_tr }}</td>
+                <td>
+                  <span class="badge {% if adv.advance_type == 'is' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+                    {{ "İş" if adv.advance_type == "is" else "Maaş" }}
+                  </span>
+                </td>
+                <td>
+                  {% if adv.reference %}
+                  <a href="/references/{{ adv.reference.id }}" class="small">{{ adv.reference.ref_no }}</a>
+                  {% elif adv.reason %}{{ adv.reason }}{% else %}—{% endif %}
+                </td>
+                <td class="text-end">
+                  <div class="fw-semibold">{{ adv.amount | money }}</div>
+                  {% if adv.repaid_amount %}
+                  <div class="small text-muted">Kalan: {{ (adv.amount - adv.repaid_amount) | money }}</div>
+                  {% endif %}
+                </td>
+                <td>
+                  <span class="badge {% if adv.status == 'closed' %}bg-success{% elif adv.status == 'partial' %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                    {{ {"open":"Açık","partial":"Kısmi","closed":"Kapalı"}.get(adv.status, adv.status) }}
+                  </span>
+                </td>
+                <td>
+                  {% if adv.status != 'closed' %}
+                    {% if adv.advance_type == 'is' and current_user.is_admin %}
+                    <button class="btn btn-sm btn-outline-warning py-0 mb-1" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#closeIs{{ adv.id }}">Kapat</button>
+                    <div class="collapse mt-2" id="closeIs{{ adv.id }}">
+                      <div class="border rounded p-2 bg-light">
+                        <div class="small fw-semibold mb-2">İş Avansı Kapatma — Toplam: {{ adv.amount | money }}</div>
+                        <form method="post" action="/employees/{{ employee.id }}/advance/{{ adv.id }}/close-is">
+                          <div class="mb-2">
+                            <label class="form-label small">Kapatma Tarihi</label>
+                            <input type="date" name="close_date" class="form-control form-control-sm" required value="{{ today }}">
+                          </div>
+                          <div class="mb-2">
+                            <label class="form-label small">Harcama Kalemleri</label>
+                            <table class="table table-sm mb-1" id="closeItems{{ adv.id }}">
+                              <thead class="table-light"><tr><th>Açıklama</th><th class="text-end">Tutar</th><th></th></tr></thead>
+                              <tbody></tbody>
+                            </table>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0"
+                              onclick="addCloseItem({{ adv.id }})"><i class="bi bi-plus"></i> Satır Ekle</button>
+                            <input type="hidden" name="expense_items_json" id="closeItemsJson{{ adv.id }}">
+                          </div>
+                          <div class="mb-2">
+                            <label class="form-label small">Nakit İade (₺)</label>
+                            <input type="number" name="cash_return" step="0.01" class="form-control form-control-sm"
+                                   value="0" id="cashRet{{ adv.id }}">
+                          </div>
+                          <div class="mb-2">
+                            <label class="form-label small">Kasa</label>
+                            <select name="cash_book_id" class="form-select form-select-sm">
+                              <option value="">—</option>
+                              {% for cb in cash_books %}<option value="{{ cb.id }}">{{ cb.name }}</option>{% endfor %}
+                            </select>
+                          </div>
+                          <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-sm btn-success"
+                              onclick="prepareCloseItems({{ adv.id }}); return true;">Kaydet & Kapat</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                              data-bs-toggle="collapse" data-bs-target="#closeIs{{ adv.id }}">İptal</button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                    {% else %}
+                    <button class="btn btn-sm btn-outline-secondary py-0" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#repay{{ adv.id }}">Geri Al</button>
+                    <div class="collapse mt-2" id="repay{{ adv.id }}">
+                      <form method="post" action="/employees/{{ employee.id }}/advance/{{ adv.id }}/repay" class="row g-1">
+                        <div class="col-auto">
+                          <input type="date" name="repay_date" class="form-control form-control-sm" required value="{{ today }}">
+                        </div>
+                        <div class="col-auto">
+                          <input type="number" name="repay_amount" step="0.01" class="form-control form-control-sm"
+                                 placeholder="Tutar" required style="width:100px">
+                        </div>
+                        <div class="col-auto">
+                          <select name="payment_method" class="form-select form-select-sm">
+                            <option value="maas_kesintisi">Maaştan Düş</option>
+                            <option value="nakit">Nakit</option>
+                            <option value="banka">Banka</option>
+                          </select>
+                        </div>
+                        <div class="col-auto">
+                          <select name="bank_account_id" class="form-select form-select-sm">
+                            <option value="">—</option>
+                            {% for ba in bank_accounts %}<option value="{{ ba.id }}">{{ ba.name }}</option>{% endfor %}
+                          </select>
+                        </div>
+                        <div class="col-auto">
+                          <button type="submit" class="btn btn-sm btn-success">Kaydet</button>
+                        </div>
+                      </form>
+                    </div>
+                    {% endif %}
+                  {% else %}
+                    {% if adv.advance_type == 'is' and adv.expense_items_json %}
+                    <button class="btn btn-sm btn-outline-secondary py-0" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#viewItems{{ adv.id }}">Detay</button>
+                    <div class="collapse mt-1" id="viewItems{{ adv.id }}">
+                      <div class="small p-2 bg-light rounded">
+                        {% set exp_items = adv.expense_items_json | fromjson %}
+                        {% for item in exp_items %}
+                        <div>{{ item.description }} — {{ item.amount | money }}</div>
+                        {% endfor %}
+                        {% if adv.cash_return_amount %}
+                        <div class="text-success">Nakit iade: {{ adv.cash_return_amount | money }}</div>
+                        {% endif %}
+                      </div>
+                    </div>
+                    {% endif %}
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+    </div>{# /col-md-8 #}
+  </div>{# /row #}
+</div>{# /tab-profil #}
+
+
+{# ═══════════════════════════════════════════════════════════
+   TAB: KİŞİSEL BİLGİLER
+═══════════════════════════════════════════════════════════ #}
+<div id="tab-kisisel" class="tab-section" {% if tab != 'kisisel' %}style="display:none"{% endif %}>
+  {% set pi = employee.personal_info %}
+
+  {% if current_user.is_admin %}
+  {# Düzenlenebilir form #}
+  <form method="post" action="/employees/{{ employee.id }}/personal-info">
+    <div class="row g-3">
+      <div class="col-12">
+        <div class="section-card">
+          <h6 class="fw-semibold mb-3"><i class="bi bi-person-vcard me-1 text-primary"></i>Kimlik Bilgileri</h6>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">TC Kimlik No</label>
+              <input type="text" name="tc_kimlik_no" class="form-control form-control-sm"
+                     maxlength="11" value="{{ pi.tc_kimlik_no if pi and pi.tc_kimlik_no else '' }}"
+                     placeholder="11 haneli TC no">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">Doğum Tarihi</label>
+              <input type="date" name="birth_date" class="form-control form-control-sm"
+                     value="{{ pi.birth_date.isoformat() if pi and pi.birth_date else '' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">Doğum Yeri</label>
+              <input type="text" name="birth_place" class="form-control form-control-sm"
+                     value="{{ pi.birth_place if pi and pi.birth_place else '' }}"
+                     placeholder="İl/ilçe">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">Uyruk</label>
+              <input type="text" name="nationality" class="form-control form-control-sm"
+                     value="{{ pi.nationality if pi and pi.nationality else 'TC' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">Cinsiyet</label>
+              <select name="gender" class="form-select form-select-sm">
+                <option value="">— Seçiniz —</option>
+                <option value="erkek" {% if pi and pi.gender == 'erkek' %}selected{% endif %}>Erkek</option>
+                <option value="kadin" {% if pi and pi.gender == 'kadin' %}selected{% endif %}>Kadın</option>
+                <option value="belirtmek_istemiyorum" {% if pi and pi.gender == 'belirtmek_istemiyorum' %}selected{% endif %}>Belirtmek İstemiyorum</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">Medeni Durum</label>
+              <select name="marital_status" class="form-select form-select-sm">
+                <option value="">— Seçiniz —</option>
+                <option value="bekar"     {% if pi and pi.marital_status == 'bekar' %}selected{% endif %}>Bekar</option>
+                <option value="evli"      {% if pi and pi.marital_status == 'evli' %}selected{% endif %}>Evli</option>
+                <option value="bosanmis"  {% if pi and pi.marital_status == 'bosanmis' %}selected{% endif %}>Boşanmış</option>
+                <option value="dul"       {% if pi and pi.marital_status == 'dul' %}selected{% endif %}>Dul</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold">Çocuk Sayısı</label>
+              <input type="number" name="num_children" class="form-control form-control-sm"
+                     min="0" value="{{ pi.num_children if pi else 0 }}">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold">Kan Grubu</label>
+              <select name="blood_type" class="form-select form-select-sm">
+                <option value="">—</option>
+                {% for bt in ['A+','A-','B+','B-','AB+','AB-','0+','0-'] %}
+                <option value="{{ bt }}" {% if pi and pi.blood_type == bt %}selected{% endif %}>{{ bt }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold">Beden</label>
+              <select name="clothing_size" class="form-select form-select-sm">
+                <option value="">—</option>
+                {% for sz in ['XS','S','M','L','XL','XXL','XXXL'] %}
+                <option value="{{ sz }}" {% if pi and pi.clothing_size == sz %}selected{% endif %}>{{ sz }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold">Eğitim Durumu</label>
+              <select name="education_level" class="form-select form-select-sm">
+                <option value="">—</option>
+                {% for ed in [('ilkokul','İlkokul'),('ortaokul','Ortaokul'),('lise','Lise'),
+                               ('onlisans','Ön Lisans'),('lisans','Lisans'),
+                               ('yukseklisans','Yüksek Lisans'),('doktora','Doktora')] %}
+                <option value="{{ ed[0] }}" {% if pi and pi.education_level == ed[0] %}selected{% endif %}>{{ ed[1] }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold">Askerlik Durumu</label>
+              <select name="military_status" class="form-select form-select-sm">
+                <option value="">—</option>
+                <option value="muaf"        {% if pi and pi.military_status == 'muaf' %}selected{% endif %}>Muaf</option>
+                <option value="tamamlandi"  {% if pi and pi.military_status == 'tamamlandi' %}selected{% endif %}>Tamamlandı</option>
+                <option value="ertelendi"   {% if pi and pi.military_status == 'ertelendi' %}selected{% endif %}>Ertelendi</option>
+                <option value="tecilli"     {% if pi and pi.military_status == 'tecilli' %}selected{% endif %}>Tecilli</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold">Engel Derecesi</label>
+              <select name="disability_degree" class="form-select form-select-sm">
+                <option value="0" {% if not pi or pi.disability_degree == 0 %}selected{% endif %}>0 — Yok</option>
+                <option value="1" {% if pi and pi.disability_degree == 1 %}selected{% endif %}>1. Derece</option>
+                <option value="2" {% if pi and pi.disability_degree == 2 %}selected{% endif %}>2. Derece</option>
+                <option value="3" {% if pi and pi.disability_degree == 3 %}selected{% endif %}>3. Derece</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label small fw-semibold">Adres</label>
+              <textarea name="address" class="form-control form-control-sm" rows="2"
+                        placeholder="Tam ikamet adresi">{{ pi.address if pi and pi.address else '' }}</textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12">
+        <div class="section-card">
+          <h6 class="fw-semibold mb-3"><i class="bi bi-telephone-fill me-1 text-danger"></i>Acil İletişim</h6>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">Ad Soyad</label>
+              <input type="text" name="emergency_contact_name" class="form-control form-control-sm"
+                     value="{{ pi.emergency_contact_name if pi and pi.emergency_contact_name else '' }}"
+                     placeholder="Yakının adı soyadı">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">Telefon</label>
+              <input type="text" name="emergency_contact_phone" class="form-control form-control-sm"
+                     value="{{ pi.emergency_contact_phone if pi and pi.emergency_contact_phone else '' }}"
+                     placeholder="05XX XXX XX XX">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">Yakınlık Derecesi</label>
+              <input type="text" name="emergency_contact_relation" class="form-control form-control-sm"
+                     value="{{ pi.emergency_contact_relation if pi and pi.emergency_contact_relation else '' }}"
+                     placeholder="Eş, anne, baba…">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Kaydet</button>
+        <a href="/employees/{{ employee.id }}?tab=kisisel" class="btn btn-outline-secondary ms-2">İptal</a>
+      </div>
+    </div>
+  </form>
+
+  {% else %}
+  {# Salt okunur görünüm #}
+  {% if pi %}
+  <div class="row g-3">
+    <div class="col-md-6">
+      <div class="section-card">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-person-vcard me-1 text-primary"></i>Kimlik Bilgileri</h6>
+        {% macro rofield(label, val) %}
+        <div class="mb-2">
+          <div class="info-label">{{ label }}</div>
+          <div class="info-value">{{ val if val else '—' }}</div>
+        </div>
+        {% endmacro %}
+        {{ rofield('TC Kimlik No', pi.tc_kimlik_no) }}
+        {{ rofield('Doğum Tarihi', pi.birth_date | date_tr if pi.birth_date else None) }}
+        {{ rofield('Doğum Yeri', pi.birth_place) }}
+        {{ rofield('Uyruk', pi.nationality) }}
+        {{ rofield('Cinsiyet', {'erkek':'Erkek','kadin':'Kadın','belirtmek_istemiyorum':'Belirtmek İstemiyorum'}.get(pi.gender, pi.gender) if pi.gender else None) }}
+        {{ rofield('Medeni Durum', {'bekar':'Bekar','evli':'Evli','bosanmis':'Boşanmış','dul':'Dul'}.get(pi.marital_status, pi.marital_status) if pi.marital_status else None) }}
+        {{ rofield('Çocuk Sayısı', pi.num_children) }}
+        {{ rofield('Kan Grubu', pi.blood_type) }}
+        {{ rofield('Beden', pi.clothing_size) }}
+        {{ rofield('Eğitim', {'ilkokul':'İlkokul','ortaokul':'Ortaokul','lise':'Lise','onlisans':'Ön Lisans','lisans':'Lisans','yukseklisans':'Yüksek Lisans','doktora':'Doktora'}.get(pi.education_level, pi.education_level) if pi.education_level else None) }}
+        {{ rofield('Askerlik', pi.military_status) }}
+        {% if pi.disability_degree %}
+        {{ rofield('Engel Derecesi', pi.disability_degree ~ '. Derece') }}
+        {% endif %}
+        {% if pi.address %}
+        <div class="mb-2">
+          <div class="info-label">Adres</div>
+          <div class="info-value small">{{ pi.address }}</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="section-card">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-telephone-fill me-1 text-danger"></i>Acil İletişim</h6>
+        {% if pi.emergency_contact_name or pi.emergency_contact_phone %}
+        <div class="mb-2">
+          <div class="info-label">Ad Soyad</div>
+          <div class="info-value">{{ pi.emergency_contact_name or '—' }}</div>
+        </div>
+        <div class="mb-2">
+          <div class="info-label">Telefon</div>
+          <div class="info-value">{{ pi.emergency_contact_phone or '—' }}</div>
+        </div>
+        <div class="mb-2">
+          <div class="info-label">Yakınlık</div>
+          <div class="info-value">{{ pi.emergency_contact_relation or '—' }}</div>
+        </div>
+        {% else %}
+        <div class="text-muted small">Acil iletişim bilgisi girilmemiş.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="text-muted small py-4 text-center">Kişisel bilgi henüz girilmemiş.</div>
+  {% endif %}
+  {% endif %}
+</div>{# /tab-kisisel #}
+
+
+{# ═══════════════════════════════════════════════════════════
+   TAB: KARİYER
+═══════════════════════════════════════════════════════════ #}
+<div id="tab-kariyer" class="tab-section" {% if tab != 'kariyer' %}style="display:none"{% endif %}>
+  <div class="row g-3">
+
+    {# Sol: Timeline #}
+    <div class="col-md-8">
+      <div class="section-card">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-graph-up-arrow me-1 text-primary"></i>Kariyer Geçmişi</h6>
+        {% if career_events %}
+        <div class="career-timeline">
+          {% for ev in career_events %}
+          {% set ev_icons = {
+            'ise_giris': ('🏁', 'bg-success'),
+            'unvan':     ('🏷️', 'bg-primary'),
+            'maas':      ('💰', 'bg-warning'),
+            'departman': ('🏢', 'bg-info'),
+            'terfi':     ('⭐', 'bg-warning'),
+            'ayrilis':   ('🚪', 'bg-danger'),
+            'diger':     ('📌', 'bg-secondary'),
+          } %}
+          {% set ev_icon = ev_icons.get(ev.event_type, ('📌','bg-secondary')) %}
+          {% set ev_type_labels = {
+            'ise_giris':'İşe Giriş','unvan':'Unvan Değişikliği','maas':'Maaş Güncelleme',
+            'departman':'Departman Değişikliği','terfi':'Terfi','ayrilis':'Ayrılış','diger':'Diğer'
+          } %}
+          <div class="career-item">
+            <div class="career-dot bg-white border">{{ ev_icon[0] }}</div>
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <span class="badge bg-opacity-75 {{ ev_icon[1] }} text-dark" style="font-size:11px">
+                  {{ ev_type_labels.get(ev.event_type, ev.event_type) }}
+                </span>
+                <span class="small text-muted ms-2">{{ ev.event_date | date_tr }}</span>
+                {% if ev.old_value and ev.new_value %}
+                <div class="small mt-1">
+                  <span class="text-muted">{{ ev.old_value }}</span>
+                  <i class="bi bi-arrow-right text-muted mx-1"></i>
+                  <span class="fw-semibold">{{ ev.new_value }}</span>
+                </div>
+                {% elif ev.new_value %}
+                <div class="small mt-1 fw-semibold">{{ ev.new_value }}</div>
+                {% endif %}
+                {% if ev.description %}
+                <div class="small text-muted mt-1">{{ ev.description }}</div>
+                {% endif %}
+              </div>
+              {% if current_user.is_admin %}
+              <form method="post" action="/employees/{{ employee.id }}/career/{{ ev.id }}/delete"
+                    onsubmit="return confirm('Bu kariyer kaydını silmek istediğinizden emin misiniz?');"
+                    class="ms-2 flex-shrink-0">
+                <button type="submit" class="btn btn-sm btn-link text-danger p-0" title="Sil">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-muted small py-4 text-center">Henüz kariyer kaydı yok.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Sağ: Ekle formu (sadece admin) #}
+    {% if current_user.is_admin %}
+    <div class="col-md-4">
+      <div class="section-card">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-plus-circle me-1 text-success"></i>Yeni Kariyer Kaydı</h6>
+        <form method="post" action="/employees/{{ employee.id }}/career">
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Tarih <span class="text-danger">*</span></label>
+            <input type="date" name="event_date" class="form-control form-control-sm" required value="{{ today }}">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Olay Türü <span class="text-danger">*</span></label>
+            <select name="event_type" class="form-select form-select-sm" required>
+              <option value="">— Seçiniz —</option>
+              <option value="ise_giris">🏁 İşe Giriş</option>
+              <option value="unvan">🏷️ Unvan Değişikliği</option>
+              <option value="maas">💰 Maaş Güncelleme</option>
+              <option value="departman">🏢 Departman Değişikliği</option>
+              <option value="terfi">⭐ Terfi</option>
+              <option value="ayrilis">🚪 Ayrılış</option>
+              <option value="diger">📌 Diğer</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Eski Değer</label>
+            <input type="text" name="old_value" class="form-control form-control-sm" placeholder="Önceki unvan/maaş…">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Yeni Değer</label>
+            <input type="text" name="new_value" class="form-control form-control-sm" placeholder="Yeni unvan/maaş…">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Açıklama</label>
+            <textarea name="description" class="form-control form-control-sm" rows="2"
+                      placeholder="Ek açıklama…"></textarea>
+          </div>
+          <button type="submit" class="btn btn-sm btn-success w-100">
+            <i class="bi bi-plus-lg me-1"></i>Ekle
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>{# /tab-kariyer #}
+
+
+{# ═══════════════════════════════════════════════════════════
+   TAB: BELGELER
+═══════════════════════════════════════════════════════════ #}
+<div id="tab-belgeler" class="tab-section" {% if tab != 'belgeler' %}style="display:none"{% endif %}>
+  <div class="row g-3">
+
+    {# Sol: Belge listesi #}
+    <div class="col-md-8">
+      <div class="section-card">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-folder2-open me-1 text-primary"></i>Belgeler</h6>
+        {% if employee.documents %}
+        <div class="table-responsive">
+          <table class="table table-sm tab-table mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Başlık</th>
+                <th>Tür</th>
+                <th>Dosya</th>
+                <th class="text-end">Boyut</th>
+                <th>Yüklenme</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for doc in employee.documents | sort(attribute='uploaded_at', reverse=True) %}
+              {% set doc_type_labels = {
+                'sozlesme':'Sözleşme','kimlik':'Kimlik','diploma':'Diploma',
+                'sertifika':'Sertifika','diger':'Diğer'
+              } %}
+              {% set doc_icons = {
+                'sozlesme':'bi-file-earmark-text','kimlik':'bi-person-badge',
+                'diploma':'bi-mortarboard','sertifika':'bi-award','diger':'bi-paperclip'
+              } %}
+              <tr>
+                <td class="fw-semibold">{{ doc.title }}</td>
+                <td>
+                  <span class="badge bg-light text-dark border">
+                    <i class="bi {{ doc_icons.get(doc.doc_type, 'bi-paperclip') }} me-1"></i>
+                    {{ doc_type_labels.get(doc.doc_type, doc.doc_type) }}
+                  </span>
+                </td>
+                <td class="small text-muted text-truncate" style="max-width:160px">
+                  {{ doc.file_name or '—' }}
+                </td>
+                <td class="text-end small text-muted">
+                  {% if doc.file_size %}
+                    {% if doc.file_size < 1024 %}
+                      {{ doc.file_size }} B
+                    {% elif doc.file_size < 1048576 %}
+                      {{ (doc.file_size / 1024) | round(1) }} KB
+                    {% else %}
+                      {{ (doc.file_size / 1048576) | round(1) }} MB
+                    {% endif %}
+                  {% else %}—{% endif %}
+                </td>
+                <td class="small text-muted">
+                  {{ doc.uploaded_at.strftime('%d.%m.%Y') if doc.uploaded_at else '—' }}
+                </td>
+                <td class="text-end text-nowrap">
+                  <a href="/employees/{{ employee.id }}/documents/{{ doc.id }}/download"
+                     class="btn btn-xs btn-sm btn-outline-primary py-0 me-1" title="İndir">
+                    <i class="bi bi-download"></i>
+                  </a>
+                  {% if current_user.is_admin %}
+                  <form method="post" action="/employees/{{ employee.id }}/documents/{{ doc.id }}/delete"
+                        class="d-inline"
+                        onsubmit="return confirm('{{ doc.title }} belgesini silmek istediğinizden emin misiniz?');">
+                    <button type="submit" class="btn btn-xs btn-sm btn-outline-danger py-0" title="Sil">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-muted small py-4 text-center">Henüz belge yüklenmemiş.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Sağ: Yükleme formu (admin) #}
+    {% if current_user.is_admin %}
+    <div class="col-md-4">
+      <div class="section-card">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-cloud-upload me-1 text-success"></i>Belge Yükle</h6>
+        <form method="post" action="/employees/{{ employee.id }}/documents" enctype="multipart/form-data">
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Başlık <span class="text-danger">*</span></label>
+            <input type="text" name="title" class="form-control form-control-sm" required
+                   placeholder="Belge başlığı">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Tür</label>
+            <select name="doc_type" class="form-select form-select-sm">
+              <option value="sozlesme">Sözleşme</option>
+              <option value="kimlik">Kimlik</option>
+              <option value="diploma">Diploma</option>
+              <option value="sertifika">Sertifika</option>
+              <option value="diger" selected>Diğer</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Not</label>
+            <input type="text" name="notes" class="form-control form-control-sm" placeholder="Opsiyonel">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Dosya <span class="text-danger">*</span></label>
+            <input type="file" name="file" class="form-control form-control-sm" required>
+          </div>
+          <button type="submit" class="btn btn-sm btn-success w-100">
+            <i class="bi bi-upload me-1"></i>Yükle
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>{# /tab-belgeler #}
+
+
+{# ═══════════════════════════════════════════════════════════
+   TAB: ZİMMET
+═══════════════════════════════════════════════════════════ #}
+<div id="tab-zimmet" class="tab-section" {% if tab != 'zimmet' %}style="display:none"{% endif %}>
+  <div class="row g-3">
+
+    {# Sol: Zimmet listesi #}
+    <div class="col-md-8">
+      <div class="section-card">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-laptop me-1 text-primary"></i>Zimmetler</h6>
+        {% if employee.assets %}
+        <div class="table-responsive">
+          <table class="table table-sm tab-table mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Tür</th>
+                <th>Marka / Model</th>
+                <th>Seri No</th>
+                <th>Tarih</th>
+                <th>Durum</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for asset in employee.assets | sort(attribute='zimmet_date', reverse=True) %}
+              {% set asset_icons = {
+                'laptop':'💻','telefon':'📱','arac':'🚗','tablet':'📟',
+                'yazilim':'💿','diger':'📦'
+              } %}
+              {% set asset_type_labels = {
+                'laptop':'Laptop','telefon':'Telefon','arac':'Araç',
+                'tablet':'Tablet','yazilim':'Yazılım','diger':'Diğer'
+              } %}
+              <tr>
+                <td>
+                  <span class="asset-icon">{{ asset_icons.get(asset.asset_type, '📦') }}</span>
+                  <span class="small ms-1">{{ asset_type_labels.get(asset.asset_type, asset.asset_type) }}</span>
+                </td>
+                <td>
+                  <div>{{ asset.brand or '—' }}</div>
+                  <div class="small text-muted">{{ asset.model_name or '' }}</div>
+                </td>
+                <td class="small font-monospace">{{ asset.serial_no or '—' }}</td>
+                <td class="small">{{ asset.zimmet_date | date_tr }}</td>
+                <td>
+                  {% if asset.status == 'zimmetli' %}
+                  <span class="badge status-badge-zimmetli">Zimmetli</span>
+                  {% else %}
+                  <span class="badge status-badge-iade">
+                    İade Edildi
+                    {% if asset.return_date %}
+                    <span class="ms-1 fw-normal opacity-75">({{ asset.return_date | date_tr }})</span>
+                    {% endif %}
+                  </span>
+                  {% endif %}
+                </td>
+                <td class="text-end text-nowrap">
+                  {% if current_user.is_admin %}
+                    {% if asset.status == 'zimmetli' %}
+                    <button class="btn btn-xs btn-sm btn-outline-warning py-0 me-1" type="button"
+                      data-bs-toggle="modal" data-bs-target="#returnModal{{ asset.id }}"
+                      title="İade Al">
+                      <i class="bi bi-box-arrow-in-left"></i>
+                    </button>
+                    {% endif %}
+                    <form method="post" action="/employees/{{ employee.id }}/zimmet/{{ asset.id }}/delete"
+                          class="d-inline"
+                          onsubmit="return confirm('Bu zimmeti silmek istediğinizden emin misiniz?');">
+                      <button type="submit" class="btn btn-xs btn-sm btn-outline-danger py-0" title="Sil">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </form>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-muted small py-4 text-center">Kayıtlı zimmet yok.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Sağ: Zimmet ekle formu (admin) #}
+    {% if current_user.is_admin %}
+    <div class="col-md-4">
+      <div class="section-card">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-plus-circle me-1 text-success"></i>Zimmet Ekle</h6>
+        <form method="post" action="/employees/{{ employee.id }}/zimmet">
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Tür <span class="text-danger">*</span></label>
+            <select name="asset_type" class="form-select form-select-sm" required>
+              <option value="">— Seçiniz —</option>
+              <option value="laptop">💻 Laptop</option>
+              <option value="telefon">📱 Telefon</option>
+              <option value="arac">🚗 Araç</option>
+              <option value="tablet">📟 Tablet</option>
+              <option value="yazilim">💿 Yazılım</option>
+              <option value="diger">📦 Diğer</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Marka</label>
+            <input type="text" name="brand" class="form-control form-control-sm" placeholder="Apple, Dell…">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Model</label>
+            <input type="text" name="model_name" class="form-control form-control-sm" placeholder="MacBook Pro…">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Seri No</label>
+            <input type="text" name="serial_no" class="form-control form-control-sm" placeholder="Seri numarası">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Zimmet Tarihi <span class="text-danger">*</span></label>
+            <input type="date" name="zimmet_date" class="form-control form-control-sm" required value="{{ today }}">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Açıklama</label>
+            <input type="text" name="description" class="form-control form-control-sm" placeholder="Opsiyonel">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Notlar</label>
+            <textarea name="notes" class="form-control form-control-sm" rows="2"
+                      placeholder="Ekstra bilgi…"></textarea>
+          </div>
+          <button type="submit" class="btn btn-sm btn-success w-100">
+            <i class="bi bi-plus-lg me-1"></i>Zimmet Ekle
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# İade modalleri #}
+  {% if current_user.is_admin %}
+  {% for asset in employee.assets %}
+  {% if asset.status == 'zimmetli' %}
+  <div class="modal fade" id="returnModal{{ asset.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-content">
+        <div class="modal-header border-0 pb-0">
+          <h6 class="modal-title fw-semibold">İade Al — {{ asset.brand or '' }} {{ asset.model_name or '' }}</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <form method="post" action="/employees/{{ employee.id }}/zimmet/{{ asset.id }}/return">
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label small fw-semibold">İade Tarihi <span class="text-danger">*</span></label>
+              <input type="date" name="return_date" class="form-control form-control-sm" required value="{{ today }}">
+            </div>
+            <div class="mb-2">
+              <label class="form-label small fw-semibold">Not</label>
+              <input type="text" name="notes" class="form-control form-control-sm" placeholder="İade notu…">
+            </div>
+          </div>
+          <div class="modal-footer border-0 pt-0">
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">İptal</button>
+            <button type="submit" class="btn btn-sm btn-warning">İade Al</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% endfor %}
+  {% endif %}
+</div>{# /tab-zimmet #}
+
+
+{# ═══════════════════════════════════════════════════════════
+   TAB: BORDRO
+═══════════════════════════════════════════════════════════ #}
+<div id="tab-bordro" class="tab-section" {% if tab != 'bordro' %}style="display:none"{% endif %}>
+  <div class="section-card">
+    <h6 class="fw-semibold mb-3"><i class="bi bi-receipt me-1 text-primary"></i>Bordro Geçmişi</h6>
+    {% if payroll_records %}
+    <div class="table-responsive">
+      <table class="table table-sm tab-table mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Dönem</th>
+            <th class="text-end">Brüt Gelir</th>
+            <th class="text-end">Ele Geçen (Net)</th>
+            <th>Durum</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for pr in payroll_records %}
+          {% set pr_badge = {
+            'taslak':    ('secondary','Taslak'),
+            'onaylandi': ('warning','Onaylandı'),
+            'odendi':    ('success','Ödendi'),
+          }.get(pr.status, ('secondary', pr.status)) %}
+          <tr>
+            <td class="fw-semibold">{{ pr.period }}</td>
+            <td class="text-end">{{ pr.total_gross | money }}</td>
+            <td class="text-end fw-semibold text-success">{{ pr.ele_gecen | money }}</td>
+            <td>
+              <span class="badge bg-{{ pr_badge[0] }}{% if pr.status == 'onaylandi' %} text-dark{% endif %}">
+                {{ pr_badge[1] }}
+              </span>
+            </td>
+            <td class="text-end">
+              <a href="/bordro/{{ pr.id }}/print" target="_blank"
+                 class="btn btn-xs btn-sm btn-outline-secondary py-0" title="Bordro Baskı">
+                <i class="bi bi-printer"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-muted small py-4 text-center">
+      <i class="bi bi-receipt fs-3 d-block mb-2 opacity-25"></i>
+      Bordro kaydı bulunamadı.
+    </div>
+    {% endif %}
+  </div>
+</div>{# /tab-bordro #}
+
+
+{# ═══════════════════════════════════════════════════════════
+   TAB: İZİNLER
+═══════════════════════════════════════════════════════════ #}
+<div id="tab-izinler" class="tab-section" {% if tab != 'izinler' %}style="display:none"{% endif %}>
+
+  {# İzin bakiye kartları #}
+  {% if employee.leave_balances %}
+  <div class="row g-2 mb-3">
+    {% for lb in employee.leave_balances %}
+    <div class="col-md-3 col-sm-6">
+      <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid {{ lb.leave_type.color or '#6366f1' }} !important; border-radius: 8px;">
+        <div class="card-body py-2 px-3">
+          <div class="small text-muted fw-semibold text-truncate">{{ lb.leave_type.name }}</div>
+          <div class="d-flex align-items-end gap-2 mt-1">
+            <span class="fs-5 fw-bold" style="color: {{ lb.leave_type.color or '#6366f1' }}">
+              {{ lb.remaining_days }}
+            </span>
+            <span class="small text-muted mb-0">/ {{ lb.entitled_days + lb.carried_over_days }} gün</span>
+          </div>
+          <div class="small text-muted">Kullanılan: {{ lb.used_days }} gün</div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# İzin talepleri tablosu #}
+  <div class="section-card">
+    <h6 class="fw-semibold mb-3"><i class="bi bi-calendar-check me-1 text-primary"></i>İzin Geçmişi</h6>
+    {% if leave_requests %}
+    <div class="table-responsive">
+      <table class="table table-sm tab-table mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>İzin Türü</th>
+            <th>Başlangıç</th>
+            <th>Bitiş</th>
+            <th class="text-center">Gün</th>
+            <th>Durum</th>
+            <th>Not</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for lr in leave_requests %}
+          {% set lr_badge = {
+            'talep':           ('warning','Talep Edildi'),
+            'mudur_onayladi':  ('primary','Müdür Onayladı'),
+            'onaylandi':       ('success','Onaylandı'),
+            'reddedildi':      ('danger','Reddedildi'),
+            'iptal':           ('secondary','İptal'),
+          }.get(lr.status, ('secondary', lr.status)) %}
+          <tr>
+            <td>{{ lr.leave_type.name if lr.leave_type else '—' }}</td>
+            <td>{{ lr.start_date | date_tr }}</td>
+            <td>{{ lr.end_date | date_tr }}</td>
+            <td class="text-center fw-semibold">{{ lr.total_days }}</td>
+            <td>
+              <span class="badge bg-{{ lr_badge[0] }}{% if lr.status in ['talep','mudur_onayladi'] %} text-dark{% endif %}">
+                {{ lr_badge[1] }}
+              </span>
+            </td>
+            <td class="small text-muted">{{ lr.rejection_note or '' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-muted small py-4 text-center">
+      <i class="bi bi-calendar-x fs-3 d-block mb-2 opacity-25"></i>
+      İzin kaydı bulunamadı.
+    </div>
+    {% endif %}
+  </div>
+</div>{# /tab-izinler #}
+
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+// ── Sekme görünürlüğü ──
+function switchTab(key) {
+  document.querySelectorAll('.tab-section').forEach(el => {
+    el.style.display = el.id === 'tab-' + key ? '' : 'none';
+  });
+  document.querySelectorAll('#empTabs .nav-link').forEach(a => {
+    a.classList.toggle('active', a.dataset.tab === key);
+  });
+  // history'e yeni entry ekleme — sadece URL'yi güncelle
+  history.replaceState(null, '', '/employees/{{ employee.id }}?tab=' + key);
+}
+document.addEventListener('DOMContentLoaded', function() {
+  const activeTab = '{{ tab }}';
+  document.querySelectorAll('.tab-section').forEach(el => {
+    el.style.display = (el.id === 'tab-' + activeTab) ? '' : 'none';
+  });
+});
+
+// ── Maaş ödeme yöntemi ──
+const salaryPayMethod = document.getElementById('salaryPayMethod');
+const salaryBankDiv   = document.getElementById('salaryBankDiv');
+if (salaryPayMethod) {
+  salaryPayMethod.addEventListener('change', function() {
+    salaryBankDiv.style.display = this.value === 'banka' ? '' : 'none';
+  });
+  salaryBankDiv.style.display = salaryPayMethod.value === 'banka' ? '' : 'none';
+}
+
+// ── Avans ödeme yöntemi ──
+const advPayMethod = document.getElementById('advPayMethod');
+const advBankDiv   = document.getElementById('advBankDiv');
+if (advPayMethod) {
+  advPayMethod.addEventListener('change', function() {
+    advBankDiv.classList.toggle('d-none', this.value !== 'banka');
+  });
+}
+
+// ── Avans türü ──
+function toggleAdvType() {
+  const isIs = document.getElementById('advType').value === 'is';
+  document.getElementById('advRefDiv').classList.toggle('d-none', !isIs);
+}
+
+// ── İş Avansı Kapatma: satır ekle ──
+function addCloseItem(advId) {
+  const tbody = document.querySelector('#closeItems' + advId + ' tbody');
+  const tr = document.createElement('tr');
+  tr.innerHTML =
+    '<td><input type="text" class="form-control form-control-sm ci-desc" placeholder="Açıklama"></td>' +
+    '<td><input type="number" step="0.01" class="form-control form-control-sm ci-amt" placeholder="0.00"></td>' +
+    '<td><button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="this.closest(\'tr\').remove()">' +
+    '<i class="bi bi-x"></i></button></td>';
+  tbody.appendChild(tr);
+}
+
+// ── İş Avansı Kapatma: JSON hazırla ──
+function prepareCloseItems(advId) {
+  const rows  = document.querySelectorAll('#closeItems' + advId + ' tbody tr');
+  const items = [];
+  rows.forEach(function(tr) {
+    const desc = tr.querySelector('.ci-desc').value;
+    const amt  = parseFloat(tr.querySelector('.ci-amt').value) || 0;
+    if (desc || amt) items.push({ description: desc, amount: amt });
+  });
+  document.getElementById('closeItemsJson' + advId).value = JSON.stringify(items);
+}
+</script>
+{% endblock %}

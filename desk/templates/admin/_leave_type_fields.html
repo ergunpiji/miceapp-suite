@@ -1,0 +1,38 @@
+<div class="mb-3">
+  <label class="form-label fw-semibold">Ad <span class="text-danger">*</span></label>
+  <input type="text" name="name" class="form-control" required placeholder="ör. Yıllık İzin">
+</div>
+<div class="row g-2 mb-3">
+  <div class="col-4">
+    <label class="form-label fw-semibold">Renk</label>
+    <input type="color" name="color" class="form-control form-control-color" value="#3b82f6">
+  </div>
+  <div class="col-4">
+    <label class="form-label fw-semibold">Sıra</label>
+    <input type="number" name="sort_order" class="form-control" value="99">
+  </div>
+  <div class="col-4">
+    <label class="form-label fw-semibold">Varsayılan Gün</label>
+    <input type="number" name="default_days" class="form-control" step="0.5" placeholder="ör. 14">
+  </div>
+</div>
+<div class="row g-2">
+  <div class="col-6">
+    <div class="form-check form-switch">
+      <input class="form-check-input" type="checkbox" name="is_paid" value="1" id="np_paid" checked>
+      <label class="form-check-label" for="np_paid">Ücretli</label>
+    </div>
+  </div>
+  <div class="col-6">
+    <div class="form-check form-switch">
+      <input class="form-check-input" type="checkbox" name="requires_balance" value="1" id="np_bal" checked>
+      <label class="form-check-label" for="np_bal">Bakiyeden Düşer</label>
+    </div>
+  </div>
+  <div class="col-6 mt-2">
+    <div class="form-check form-switch">
+      <input class="form-check-input" type="checkbox" name="requires_report" value="1" id="np_rep">
+      <label class="form-check-label" for="np_rep">Rapor Zorunlu</label>
+    </div>
+  </div>
+</div>

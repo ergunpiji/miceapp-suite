@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block page_title %}{{ card.name }}{% endblock %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body">
+        <h6 class="fw-bold">Kart Bilgileri</h6>
+        <table class="table table-sm mb-0">
+          <tr><th class="text-muted fw-normal">Banka</th><td>{{ card.bank_name or "—" }}</td></tr>
+          <tr><th class="text-muted fw-normal">Son 4</th><td>*{{ card.last4 or "—" }}</td></tr>
+          <tr><th class="text-muted fw-normal">Limit</th><td class="fw-semibold">{{ card.credit_limit | money }}</td></tr>
+          <tr><th class="text-muted fw-normal">Kullanılan</th><td class="text-danger fw-semibold">{{ used | money }}</td></tr>
+          <tr><th class="text-muted fw-normal">Kalan</th><td class="text-success fw-semibold">{{ available | money }}</td></tr>
+          <tr><th class="text-muted fw-normal">Ekstre Günü</th><td>Her ayın {{ card.statement_day }}. günü</td></tr>
+          <tr><th class="text-muted fw-normal">Sonraki Son Ödeme</th><td>{{ next_due_date | date_tr }}</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body">
+        <h6 class="fw-bold mb-2">İşlem Ekle</h6>
+        <form method="post" action="/credit-cards/{{ card.id }}/txn">
+          <div class="mb-2"><input type="date" name="txn_date" class="form-control form-control-sm" required></div>
+          <div class="mb-2"><input type="number" name="amount" step="0.01" class="form-control form-control-sm" placeholder="Tutar" required></div>
+          <div class="mb-2"><input type="text" name="description" class="form-control form-control-sm" placeholder="Açıklama"></div>
+          <div class="mb-2">
+            <label class="form-check-label small"><input type="checkbox" name="is_refund" value="1" class="form-check-input me-1">İade</label>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm w-100">Ekle</button>
+        </form>
+      </div>
+    </div>
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <h6 class="fw-bold mb-2">Ekstre Kapat</h6>
+        <form method="post" action="/credit-cards/{{ card.id }}/statement">
+          <div class="mb-2"><label class="form-label small">Ekstre Tarihi</label><input type="date" name="statement_date" class="form-control form-control-sm" required></div>
+          <div class="mb-2"><label class="form-label small">Son Ödeme</label><input type="date" name="due_date" class="form-control form-control-sm" required value="{{ next_due_date.isoformat() }}"></div>
+          <button type="submit" class="btn btn-warning btn-sm w-100" onclick="return confirm('Ekstre kapatılsın mı?')">Ekstre Kapat</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-8">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-transparent border-0"><span class="fw-semibold">Ekstreler</span></div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light"><tr><th>Ekstre Tarihi</th><th>Son Ödeme</th><th class="text-end">Tutar</th><th>Durum</th><th></th></tr></thead>
+          <tbody>
+            {% for s in statements %}
+            <tr>
+              <td>{{ s.statement_date | date_tr }}</td>
+              <td>{{ s.due_date | date_tr }}</td>
+              <td class="text-end fw-semibold">{{ s.total_amount | money }}</td>
+              <td><span class="badge {% if s.status == 'paid' %}bg-success{% else %}bg-warning text-dark{% endif %}">{{ s.status }}</span></td>
+              <td>
+                {% if s.status == 'unpaid' %}
+                <button class="btn btn-xs btn-success btn-sm py-0"
+                        onclick="openPayModal({{ s.id }}, '{{ s.due_date.isoformat() }}', {{ s.total_amount }})">
+                  Öde
+                </button>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="text-center text-muted py-3">Ekstre yok.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0"><span class="fw-semibold">Ekstreye Atanmamış İşlemler</span></div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light"><tr><th>Tarih</th><th>Açıklama</th><th class="text-end">Tutar</th></tr></thead>
+          <tbody>
+            {% for t in unassigned_txns %}
+            <tr>
+              <td>{{ t.txn_date | date_tr }}</td>
+              <td>{{ t.description or "—" }}{% if t.is_refund %} <span class="badge bg-info text-dark">İade</span>{% endif %}</td>
+              <td class="text-end {% if t.is_refund %}text-success{% else %}text-danger{% endif %}">{{ t.amount | money }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-center text-muted py-3">Atanmamış işlem yok.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Ekstre Ödeme Modal -->
+<div class="modal fade" id="payModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header" style="background:linear-gradient(135deg,#1a3a5c,#1e5f8c);color:#fff">
+        <h6 class="modal-title"><i class="bi bi-credit-card me-2"></i>Ekstre Öde</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="payForm" method="post">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Ödeme Tarihi</label>
+            <input type="date" name="pay_date" id="pay_date" class="form-control form-control-sm" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Ödeme Yöntemi</label>
+            <select name="payment_method" id="pay_method" class="form-select form-select-sm" onchange="togglePayFields()">
+              <option value="banka">Banka Havalesi</option>
+              <option value="nakit">Nakit Kasa</option>
+            </select>
+          </div>
+          <div id="bankField" class="mb-3">
+            <label class="form-label fw-semibold small">Banka Hesabı <span class="text-danger">*</span></label>
+            <select name="bank_account_id" class="form-select form-select-sm">
+              <option value="">— Seçiniz —</option>
+              {% for ba in bank_accounts %}
+              <option value="{{ ba.id }}">{{ ba.name }}{% if ba.bank_name %} — {{ ba.bank_name }}{% endif %}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div id="cashField" class="mb-3 d-none">
+            <label class="form-label fw-semibold small">Kasa <span class="text-danger">*</span></label>
+            <select name="cash_book_id" class="form-select form-select-sm">
+              <option value="">— Seçiniz —</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-success btn-sm px-4">
+            <i class="bi bi-check-lg me-1"></i>Öde
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function openPayModal(stmtId, dueDate) {
+  document.getElementById('payForm').action =
+    '/credit-cards/{{ card.id }}/statement/' + stmtId + '/pay';
+  var payDateEl = document.getElementById('pay_date');
+  payDateEl.value = dueDate;
+  if (payDateEl._flatpickr) payDateEl._flatpickr.setDate(dueDate, false);
+  new bootstrap.Modal(document.getElementById('payModal')).show();
+}
+
+function togglePayFields() {
+  const method = document.getElementById('pay_method').value;
+  document.getElementById('bankField').classList.toggle('d-none', method !== 'banka');
+  document.getElementById('cashField').classList.toggle('d-none', method !== 'nakit');
+}
+</script>
+{% endblock %}

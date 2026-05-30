@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Yeni E-Fatura{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">🧾 Yeni {{ 'Satış' if invoice_type == 'satis' else ('Alış' if invoice_type == 'alis' else 'İade') }} Faturası</div>
+  </div>
+  <a href="/efatura" class="btn btn-outline">← Geri</a>
+</div>
+
+<form method="post" action="/efatura/new">
+  <div class="grid-2" style="margin-bottom:16px">
+
+    <!-- Sol: Fatura bilgileri -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">Fatura Bilgileri</span></div>
+      <div class="card-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Fatura No *</label>
+            <input name="invoice_no" required value="{{ suggested_no }}" class="font-mono">
+          </div>
+          <div class="form-group">
+            <label>Fatura Tarihi *</label>
+            <input name="invoice_date" type="date" required value="{{ today }}">
+          </div>
+          <div class="form-group">
+            <label>Tip</label>
+            <select name="invoice_type">
+              {% for t in types %}
+              <option value="{{ t.value }}" {{ 'selected' if t.value == invoice_type }}>{{ t.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Durum</label>
+            <select name="status">
+              {% for s in statuses %}
+              <option value="{{ s.value }}" {{ 'selected' if s.value == 'taslak' }}>{{ s.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group form-grid-full">
+            <label>E-dem Referans No</label>
+            <input name="edem_request_no" placeholder="TOP-ABC-2504-001">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sağ: Taraflar -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">Taraflar</span></div>
+      <div class="card-body">
+        <div style="font-weight:600;font-size:12px;color:var(--text-muted);margin-bottom:8px">DÜZENLEYEN (SATICI)</div>
+        <div class="form-grid">
+          <div class="form-group form-grid-full">
+            <label>Firma Adı *</label>
+            <input name="seller_name" required>
+          </div>
+          <div class="form-group">
+            <label>Vergi No</label>
+            <input name="seller_tax_no">
+          </div>
+          <div class="form-group">
+            <label>Vergi Dairesi</label>
+            <input name="seller_tax_office">
+          </div>
+        </div>
+        <hr>
+        <div style="font-weight:600;font-size:12px;color:var(--text-muted);margin-bottom:8px">ALICI</div>
+        <div class="form-grid">
+          <div class="form-group form-grid-full">
+            <label>Firma / Kişi Adı *</label>
+            <input name="buyer_name" required>
+          </div>
+          <div class="form-group">
+            <label>Vergi No</label>
+            <input name="buyer_tax_no">
+          </div>
+          <div class="form-group">
+            <label>Vergi Dairesi</label>
+            <input name="buyer_tax_office">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fatura satırları -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <span class="card-title">Fatura Kalemleri</span>
+      <button type="button" id="add-invoice-line" class="btn btn-sm btn-outline">+ Satır Ekle</button>
+    </div>
+    <div class="card-body" style="padding:0">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Açıklama</th>
+              <th>Birim</th>
+              <th>Miktar</th>
+              <th>Birim Fiyat (₺)</th>
+              <th>KDV %</th>
+              <th class="text-right">KDV Hariç</th>
+              <th class="text-right">KDV</th>
+              <th class="text-right">Toplam</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="invoice-lines">
+            <tr class="invoice-line-row">
+              <td><input class="line-desc" name="line_description" placeholder="Hizmet açıklaması" required></td>
+              <td><input class="line-unit" name="line_unit" value="Adet" style="width:70px"></td>
+              <td><input class="line-qty" name="line_qty" type="number" value="1" min="0" step="any" style="width:70px"></td>
+              <td><input class="line-unit-price" name="line_unit_price" type="number" value="0" min="0" step="any" style="width:110px"></td>
+              <td>
+                <select class="line-vat-rate" name="line_vat_rate">
+                  {% for r in vat_rates %}<option value="{{ r }}" {{ 'selected' if r == 20 }}>{{ r }}%</option>{% endfor %}
+                </select>
+              </td>
+              <td class="line-amount-excl text-right">₺0,00</td>
+              <td class="line-vat-amount text-right">₺0,00</td>
+              <td class="line-amount-incl text-right font-mono">₺0,00</td>
+              <td></td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr class="totals-row">
+              <td colspan="5" class="text-right">KDV Hariç Toplam:</td>
+              <td class="text-right font-mono" id="total-excl">₺0,00</td>
+              <td></td><td></td><td></td>
+            </tr>
+            <tr class="totals-row">
+              <td colspan="5" class="text-right">Toplam KDV:</td>
+              <td></td>
+              <td class="text-right font-mono" id="total-vat">₺0,00</td>
+              <td></td><td></td>
+            </tr>
+            <tr class="totals-row">
+              <td colspan="5" class="text-right" style="font-size:15px">Genel Toplam:</td>
+              <td></td><td></td>
+              <td class="text-right font-mono" id="total-incl" style="font-size:15px;color:var(--primary)">₺0,00</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notlar -->
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="form-group">
+        <label>Notlar</label>
+        <textarea name="notes" rows="2"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex gap-2">
+    <button type="submit" class="btn btn-primary">💾 Fatura Kaydet</button>
+    <a href="/efatura" class="btn btn-secondary">İptal</a>
+  </div>
+</form>
+{% endblock %}

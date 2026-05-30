@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}{% if employee %}Çalışan Düzenle{% else %}Yeni Çalışan{% endif %} — HR Ajanı{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">{% if employee %}{{ employee.full_name }} — Düzenle{% else %}Yeni Çalışan{% endif %}</div>
+  </div>
+  <a href="/employees{% if employee %}/{{ employee.id }}{% endif %}" class="btn btn-secondary">Geri</a>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<form method="post" action="/employees/{% if employee %}{{ employee.id }}/edit{% else %}new{% endif %}">
+  <div class="card">
+    <div class="card-header"><span class="card-title">Kişisel Bilgiler</span></div>
+    <div class="card-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Ad *</label>
+          <input type="text" name="first_name" value="{{ employee.first_name if employee else '' }}" required>
+        </div>
+        <div class="form-group">
+          <label>Soyad *</label>
+          <input type="text" name="last_name" value="{{ employee.last_name if employee else '' }}" required>
+        </div>
+        <div class="form-group">
+          <label>E-posta *</label>
+          <input type="email" name="email" value="{{ employee.email if employee else '' }}" required>
+        </div>
+        <div class="form-group">
+          <label>Telefon</label>
+          <input type="text" name="phone" value="{{ employee.phone if employee else '' }}">
+        </div>
+        <div class="form-group">
+          <label>T.C. Kimlik No</label>
+          <input type="text" name="tc_no" value="{{ employee.tc_no if employee else '' }}" placeholder="11 hane">
+        </div>
+        <div class="form-group">
+          <label>Doğum Tarihi</label>
+          <input type="date" name="birth_date" value="{{ employee.birth_date.isoformat() if employee and employee.birth_date else '' }}">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-4">
+    <div class="card-header"><span class="card-title">İş Bilgileri</span></div>
+    <div class="card-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>İşe Giriş Tarihi *</label>
+          <input type="date" name="hire_date" value="{{ employee.hire_date.isoformat() if employee else '' }}" required>
+        </div>
+        {% if employee %}
+        <div class="form-group">
+          <label>İşten Çıkış Tarihi</label>
+          <input type="date" name="termination_date" value="{{ employee.termination_date.isoformat() if employee and employee.termination_date else '' }}">
+        </div>
+        {% endif %}
+        <div class="form-group">
+          <label>Departman</label>
+          <input type="text" name="department" value="{{ employee.department if employee else '' }}" list="dept-list">
+          <datalist id="dept-list">
+            <option value="İnsan Kaynakları">
+            <option value="Yazılım">
+            <option value="Pazarlama">
+            <option value="Finans">
+            <option value="Operasyon">
+            <option value="Satış">
+          </datalist>
+        </div>
+        <div class="form-group">
+          <label>Ünvan</label>
+          <input type="text" name="title" value="{{ employee.title if employee else '' }}">
+        </div>
+        <div class="form-group">
+          <label>Yöneticisi</label>
+          <select name="manager_id">
+            <option value="">— Yönetici Seçin —</option>
+            {% for mgr in managers %}
+            <option value="{{ mgr.id }}" {% if employee and employee.manager_id == mgr.id %}selected{% endif %}>
+              {{ mgr.full_name }} ({{ mgr.title or mgr.employee_no }})
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Çalışma Tipi</label>
+          <select name="employment_type">
+            {% for t in employment_types %}
+            <option value="{{ t.value }}" {% if (employee and employee.employment_type == t.value) or (not employee and t.value == 'tam_zamanli') %}selected{% endif %}>
+              {{ t.label }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Durum</label>
+          <select name="status">
+            {% for s in statuses %}
+            <option value="{{ s.value }}" {% if (employee and employee.status == s.value) or (not employee and s.value == 'aktif') %}selected{% endif %}>
+              {{ s.label }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Yıllık İzin Hakkı (gün)</label>
+          <input type="number" name="annual_leave_days" value="{{ employee.annual_leave_days if employee else 14 }}" min="0">
+        </div>
+        <div class="form-group">
+          <label>Brüt Maaş (₺)</label>
+          <input type="number" name="gross_salary" value="{{ employee.gross_salary if employee else 0 }}" step="0.01" min="0">
+        </div>
+        <div class="form-group form-grid-full">
+          <label>Notlar</label>
+          <textarea name="notes">{{ employee.notes if employee else '' }}</textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px;margin-top:16px">
+    <button type="submit" class="btn btn-primary">
+      {% if employee %}Kaydet{% else %}Çalışan Oluştur{% endif %}
+    </button>
+    <a href="/employees{% if employee %}/{{ employee.id }}{% endif %}" class="btn btn-secondary">İptal</a>
+  </div>
+</form>
+{% endblock %}

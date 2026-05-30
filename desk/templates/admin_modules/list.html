@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block page_title %}Modüller{% endblock %}
+
+{% block content %}
+<style>
+  .module-card {
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+    padding: 22px; transition: transform .12s, box-shadow .12s;
+    height: 100%; display: flex; flex-direction: column;
+  }
+  .module-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.08); }
+  .module-icon-wrap {
+    width: 54px; height: 54px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; margin-bottom: 14px;
+  }
+  .module-icon-wrap .bi { font-size: 24px; }
+  .module-name { font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+  .module-desc { font-size: 13px; color: #64748b; line-height: 1.5; flex: 1; margin-bottom: 14px; }
+  .module-status {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  }
+  .status-inactive { background: #fef3c7; color: #92400e; }
+  .status-configuring { background: #dbeafe; color: #1e40af; }
+  .status-active { background: #dcfce7; color: #166534; }
+  .status-planned { background: #f1f5f9; color: #475569; }
+  .module-cta {
+    margin-top: 16px; padding-top: 14px; border-top: 1px solid #f1f5f9;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+</style>
+
+<div class="d-flex align-items-center mb-3">
+  <div>
+    <h4 class="mb-0 fw-bold">Modüller</h4>
+    <div class="text-muted small">Sistem üzerine takılabilir modüller; mali mühür ve entegratör seçimleri sonrası aktive edilirler.</div>
+  </div>
+</div>
+
+{% if error %}
+<div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> {{ error }}</div>
+{% endif %}
+
+<div class="row g-3">
+  {% for m in modules %}
+  <div class="col-md-6 col-lg-4">
+    <div class="module-card">
+      <div class="module-icon-wrap" style="background: {{ m.color }};">
+        <i class="bi {{ m.icon }}"></i>
+      </div>
+      <div class="module-name">{{ m.name }}</div>
+      <div class="module-desc">{{ m.description }}</div>
+      <div class="d-flex align-items-center justify-content-between mt-auto">
+        {% if m.status == 'inactive' %}
+          <span class="module-status status-inactive"><i class="bi bi-lock-fill"></i> {{ m.status_label }}</span>
+        {% elif m.status == 'configuring' %}
+          <span class="module-status status-configuring"><i class="bi bi-gear-fill"></i> {{ m.status_label }}</span>
+        {% elif m.status == 'active' %}
+          <span class="module-status status-active"><i class="bi bi-check-circle-fill"></i> {{ m.status_label }}</span>
+        {% else %}
+          <span class="module-status status-planned"><i class="bi bi-clock-history"></i> {{ m.status_label }}</span>
+        {% endif %}
+        <a href="/admin/modules/{{ m.key }}" class="btn btn-sm btn-outline-secondary">Detay <i class="bi bi-arrow-right"></i></a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

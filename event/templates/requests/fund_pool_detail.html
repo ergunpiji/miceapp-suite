@@ -1,0 +1,382 @@
+{% extends "base.html" %}
+{% block page_title %}{{ req.request_no }}{% endblock %}
+{% block page_title_block %}{{ req.request_no }} — Fon Havuzu{% endblock %}
+
+{% block topbar_actions %}
+<a href="/requests?view=fund_pools" class="btn btn-outline-secondary btn-sm">
+  <i class="bi bi-arrow-left me-1"></i> Fon Havuzları
+</a>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .fund-hero {
+    background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
+    color: white; border-radius: 16px; padding: 24px 28px;
+    box-shadow: 0 4px 12px rgba(37,99,235,.2);
+  }
+  .fund-hero h2 { font-weight: 800; margin: 0; }
+  .fund-hero .fund-sub { font-size: 13px; opacity: .85; margin-top: 4px; }
+  .balance-card {
+    background: white; border: 1px solid #e2e8f0; border-radius: 12px;
+    padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+  .balance-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin-bottom: 6px; }
+  .balance-value { font-size: 24px; font-weight: 800; line-height: 1.1; }
+  .balance-sub   { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+  .transfer-row-out { background: #eff6ff; }
+  .transfer-row-in  { background: #fef3c7; }
+  .direction-badge { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 10px; }
+  .dir-out { background: #dbeafe; color: #1e40af; }
+  .dir-in  { background: #fde68a; color: #92400e; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% set cur = balance.currency %}
+{% set sym = {'TRY':'₺','USD':'$','EUR':'€'}.get(cur, cur) %}
+
+{# ── HERO — Fon bilgileri ── #}
+<div class="fund-hero mb-4">
+  <div class="d-flex align-items-center gap-3">
+    <i class="bi bi-piggy-bank-fill" style="font-size:34px; opacity:.9;"></i>
+    <div class="flex-grow-1">
+      <h2>{{ req.event_name }}</h2>
+      <div class="fund-sub">
+        <strong>{{ customer.name if customer else req.client_name }}</strong>
+        · {{ req.request_no }}
+        · %{{ '{:g}'.format(balance.vat_rate) }} KDV dahil
+        · {{ req.check_in[:4] if req.check_in else '—' }} yılı
+      </div>
+    </div>
+    <a href="/requests/fund/{{ req.id }}/export" class="btn btn-outline-light fw-semibold me-2"
+       title="T cetveli formatında Excel raporu indir">
+      <i class="bi bi-file-earmark-excel me-1"></i> Excel İndir
+    </a>
+    {% if can_manage_funds %}
+    <button type="button" class="btn btn-light fw-semibold" data-bs-toggle="modal" data-bs-target="#transferModal">
+      <i class="bi bi-arrow-left-right me-1"></i> Yeni Transfer
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+{# ── BAKİYE KARTLARI ── #}
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-lg-3">
+    <div class="balance-card">
+      <div class="balance-label"><i class="bi bi-bank2 me-1"></i>Başlangıç</div>
+      <div class="balance-value text-primary">{{ sym }}{{ '{:,.2f}'.format(balance.initial).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div>
+      <div class="balance-sub">KDV hariç ≈ {{ sym }}{{ '{:,.2f}'.format(balance.initial_excl).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="balance-card">
+      <div class="balance-label"><i class="bi bi-arrow-up-right me-1"></i>Dağıtılan (Out)</div>
+      <div class="balance-value text-danger">−{{ sym }}{{ '{:,.2f}'.format(balance.out_total).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div>
+      <div class="balance-sub">Alt referanslara</div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="balance-card">
+      <div class="balance-label"><i class="bi bi-arrow-down-left me-1"></i>İade (In)</div>
+      <div class="balance-value text-success">+{{ sym }}{{ '{:,.2f}'.format(balance.in_total).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div>
+      <div class="balance-sub">Referanslardan geri</div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="balance-card" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-color:#86efac;">
+      <div class="balance-label"><i class="bi bi-wallet2 me-1"></i>Kalan Bakiye</div>
+      <div class="balance-value" style="color:#15803d;">{{ sym }}{{ '{:,.2f}'.format(balance.remaining).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div>
+      {% if cur != 'TRY' and current_rate > 1 %}
+      <div class="balance-sub">≈ ₺{{ '{:,.0f}'.format(balance.remaining * current_rate).replace(',', 'X').replace('.', ',').replace('X', '.') }} (güncel kur)</div>
+      {% else %}
+      <div class="balance-sub">{{ balance.transfer_count }} işlem</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{# ── İŞLEM TABLOSU (kurulum faturası + transferler) ── #}
+<div class="card mb-4">
+  <div class="card-body p-0">
+    <div class="d-flex align-items-center justify-content-between px-4 pt-3 pb-2">
+      <h6 class="mb-0 fw-bold"><i class="bi bi-list-ul text-primary me-2"></i>Hesap Hareketleri</h6>
+      <span class="badge bg-secondary">{{ (transfers|length) + (1 if initial_invoice else 0) }}</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-4">Tarih</th>
+            <th>İşlem</th>
+            <th>Alt Referans / Belge</th>
+            <th class="text-end">Tutar (KDV dahil)</th>
+            <th class="text-end">KDV hariç</th>
+            <th class="text-end pe-4">TRY karşılığı</th>
+            <th>Açıklama</th>
+          </tr>
+        </thead>
+        <tbody>
+          {# Transferler (en yeni en üstte) #}
+          {% for t in transfers %}
+          {% set alt = alt_map.get(t.related_request_id) %}
+          <tr class="{% if t.direction == 'out' %}transfer-row-out{% else %}transfer-row-in{% endif %}">
+            <td class="ps-4" style="font-size:12px; white-space:nowrap;">{{ t.transfer_date }}</td>
+            <td>
+              {% if t.direction == 'out' %}
+              <span class="direction-badge dir-out"><i class="bi bi-arrow-up-right me-1"></i>Dağıtım</span>
+              {% else %}
+              <span class="direction-badge dir-in"><i class="bi bi-arrow-down-left me-1"></i>İade</span>
+              {% endif %}
+            </td>
+            <td style="font-size:12px;">
+              {% if alt %}
+              <a href="/requests/{{ alt.id }}" class="text-decoration-none fw-semibold">{{ alt.request_no }}</a>
+              <div class="text-muted" style="font-size:11px;">{{ alt.event_name }}</div>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td class="text-end fw-bold" style="font-size:13px;">
+              {{ sym }}{{ '{:,.2f}'.format(t.amount).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+            </td>
+            <td class="text-end" style="font-size:12px; color:#64748b;">
+              {{ sym }}{{ '{:,.2f}'.format(t.amount_excl_vat).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+            </td>
+            <td class="text-end pe-4" style="font-size:12px;">
+              {% if cur != 'TRY' %}
+              ₺{{ '{:,.2f}'.format(t.amount_try).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+              <div class="text-muted" style="font-size:10px;">kur: {{ '{:.4f}'.format(t.exchange_rate_try) }}</div>
+              {% else %}—{% endif %}
+            </td>
+            <td class="text-muted" style="font-size:11px;">{{ t.description or '—' }}</td>
+          </tr>
+          {% endfor %}
+
+          {# Vendor pool: bölme yoluyla gelen child gelen faturalar #}
+          {% for inv in incoming_invoices %}
+          <tr style="background: #ecfdf5;">
+            <td class="ps-4" style="font-size:12px; white-space:nowrap;">{{ inv.invoice_date or '—' }}</td>
+            <td>
+              <span class="badge bg-success bg-opacity-15 text-success" style="font-size:11px;">
+                <i class="bi bi-arrow-down-right me-1"></i>Bölme Geliri
+              </span>
+            </td>
+            <td style="font-size:12px;">
+              {% if inv.invoice_no %}<span class="fw-semibold text-muted">No: {{ inv.invoice_no }}</span><br>{% endif %}
+              <span class="text-muted" style="font-size:11px;">{{ inv.vendor_name or '—' }}</span>
+            </td>
+            <td class="text-end fw-bold" style="font-size:13px; color:#16a34a;">
+              {{ sym }}{{ '{:,.2f}'.format(inv.total_amount).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+            </td>
+            <td class="text-end" style="font-size:12px; color:#64748b;">
+              {{ sym }}{{ '{:,.2f}'.format(inv.amount).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+            </td>
+            <td class="text-end pe-4 text-muted" style="font-size:12px;">—</td>
+            <td class="text-muted" style="font-size:11px;">{{ inv.description or 'Bölme kalanı' }}</td>
+          </tr>
+          {% endfor %}
+
+          {# Kurulum faturası (customer pool için) — en altta (ilk işlem) #}
+          {% if initial_invoice %}
+          <tr style="background: #f0fdf4; border-top: 2px solid #86efac;">
+            <td class="ps-4" style="font-size:12px; white-space:nowrap;">
+              {{ initial_invoice.invoice_date or '—' }}
+            </td>
+            <td>
+              <span class="badge bg-success bg-opacity-15 text-success" style="font-size:11px;">
+                <i class="bi bi-receipt-cutoff me-1"></i>Kurulum Faturası
+              </span>
+            </td>
+            <td style="font-size:12px;">
+              {% if initial_invoice.invoice_no %}
+              <span class="fw-semibold text-muted">No: {{ initial_invoice.invoice_no }}</span><br>
+              {% endif %}
+              {% if initial_invoice.document_path %}
+              <a href="/static/{{ initial_invoice.document_path }}" target="_blank"
+                 class="btn btn-xs btn-outline-success py-0 px-2" style="font-size:11px;">
+                <i class="bi bi-file-earmark-text me-1"></i>{{ initial_invoice.document_name or 'Belge' }}
+              </a>
+              {% else %}
+              <span class="text-muted" style="font-size:11px;">Belge yok</span>
+              {% endif %}
+            </td>
+            <td class="text-end fw-bold" style="font-size:13px; color:#16a34a;">
+              {{ sym }}{{ '{:,.2f}'.format(initial_invoice.total_amount).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+            </td>
+            <td class="text-end" style="font-size:12px; color:#64748b;">
+              {{ sym }}{{ '{:,.2f}'.format(initial_invoice.amount).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+            </td>
+            <td class="text-end pe-4 text-muted" style="font-size:12px;">—</td>
+            <td class="text-muted" style="font-size:11px;">{{ initial_invoice.description or 'Havuz açılış faturası' }}</td>
+          </tr>
+          {% endif %}
+
+          {% if not transfers and not initial_invoice and not incoming_invoices %}
+          <tr><td colspan="7" class="text-center py-4 text-muted" style="font-size:13px;">
+            <i class="bi bi-inbox" style="font-size:2rem; opacity:.3;"></i>
+            <div class="mt-2">Henüz işlem yok.</div>
+          </td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{# ── FON ALTINDAKİ REFERANSLAR ── #}
+<div class="card">
+  <div class="card-body p-0">
+    <div class="d-flex align-items-center justify-content-between px-4 pt-3 pb-2">
+      <h6 class="mb-0 fw-bold"><i class="bi bi-diagram-2 text-primary me-2"></i>Fona Bağlı Referanslar</h6>
+      <span class="badge bg-secondary">{{ alt_refs|length }}</span>
+    </div>
+    {% if alt_refs %}
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-4">Ref No</th>
+            <th>Etkinlik</th>
+            <th>Tarih</th>
+            <th>Durum</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in alt_refs %}
+          <tr onclick="location.href='/requests/{{ r.id }}'" style="cursor:pointer;">
+            <td class="ps-4"><span class="badge bg-primary bg-opacity-10 text-primary font-monospace">{{ r.request_no }}</span></td>
+            <td style="font-size:13px;">{{ r.event_name }}</td>
+            <td style="font-size:12px; color:#64748b;">
+              {% if r.check_in %}{{ r.check_in | date_tr }}{% else %}—{% endif %}
+            </td>
+            <td><span class="badge badge-status-{{ r.status }}">{{ r.status_label }}</span></td>
+            <td class="pe-4"><i class="bi bi-chevron-right text-muted"></i></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-4 text-muted" style="font-size:13px;">
+      Henüz bu fona bağlı alt referans oluşturulmamış.
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ── TRANSFER MODAL ── #}
+{% if can_manage_funds %}
+<div class="modal fade" id="transferModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="/requests/fund/{{ req.id }}/transfer" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>Yeni Fon Transferi</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label fw-semibold">Yön <span class="text-danger">*</span></label>
+            <div class="btn-group w-100" role="group">
+              <input type="radio" class="btn-check" name="direction" id="dirOut" value="out" checked>
+              <label class="btn btn-outline-primary" for="dirOut">
+                <i class="bi bi-arrow-up-right me-1"></i>Dağıtım (Fondan → Referansa)
+              </label>
+              <input type="radio" class="btn-check" name="direction" id="dirIn" value="in">
+              <label class="btn btn-outline-warning" for="dirIn">
+                <i class="bi bi-arrow-down-left me-1"></i>İade (Referanstan → Fona)
+              </label>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label fw-semibold">Alt Referans <span class="text-danger">*</span></label>
+            <select name="related_request_id" class="form-select" required>
+              <option value="">— Seçin —</option>
+              {% set _linked = [] %}
+              {% set _unlinked = [] %}
+              {% for r in eligible_alt_refs %}
+                {% if r.parent_fund_request_id == req.id %}
+                  {% set _ = _linked.append(r) %}
+                {% else %}
+                  {% set _ = _unlinked.append(r) %}
+                {% endif %}
+              {% endfor %}
+              {% if _linked %}
+              <optgroup label="Bu fona bağlı">
+                {% for r in _linked %}
+                <option value="{{ r.id }}">{{ r.request_no }} — {{ r.event_name }} ({{ r.status_label }})</option>
+                {% endfor %}
+              </optgroup>
+              {% endif %}
+              {% if _unlinked %}
+              <optgroup label="Müşterinin diğer aktif referansları (transfer ile otomatik bağlanır)">
+                {% for r in _unlinked %}
+                <option value="{{ r.id }}">{{ r.request_no }} — {{ r.event_name }} ({{ r.status_label }})</option>
+                {% endfor %}
+              </optgroup>
+              {% endif %}
+            </select>
+            <div class="form-text" style="font-size:11px;">
+              Müşteriye ait taslak/iptal/kapalı dışındaki tüm referanslar listelenir.
+              Henüz fona bağlı olmayan bir referans seçerseniz transfer yapılırken otomatik bu fona bağlanır.
+            </div>
+          </div>
+
+          <div class="col-md-7">
+            <label class="form-label fw-semibold">Tutar (KDV dahil, {{ sym }}) <span class="text-danger">*</span></label>
+            <input type="number" name="amount" class="form-control" required min="0.01" step="0.01"
+                   placeholder="180000.00">
+            <div class="form-text" style="font-size:11px;">Kalan bakiye: <strong>{{ sym }}{{ '{:,.2f}'.format(balance.remaining).replace(',', 'X').replace('.', ',').replace('X', '.') }}</strong></div>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label fw-semibold">KDV %</label>
+            <input type="number" name="vat_rate" class="form-control" step="1"
+                   value="{{ '{:g}'.format(balance.vat_rate) }}">
+          </div>
+
+          {% if cur != 'TRY' %}
+          <div class="col-md-5">
+            <label class="form-label fw-semibold">TRY Kuru</label>
+            <input type="number" name="exchange_rate_try" class="form-control" step="0.0001"
+                   value="{{ '{:.4f}'.format(current_rate) }}">
+            <div class="form-text" style="font-size:11px;">Raporlarda TRY karşılığı için</div>
+          </div>
+          <div class="col-md-7">
+          {% else %}
+          <div class="col-12">
+          {% endif %}
+            <label class="form-label fw-semibold">Transfer Tarihi</label>
+            <input type="date" name="transfer_date" class="form-control"
+                   value="{{ req.check_in if req.check_in else '' }}">
+          </div>
+
+          <div class="col-12">
+            <label class="form-label fw-semibold">Açıklama</label>
+            <input type="text" name="description" class="form-control"
+                   placeholder="Örn: Q2 etkinlik payı">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">İptal</button>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Transfer Yap</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+  // Transfer tarihi varsayılan = bugün
+  const d = document.querySelector('#transferModal input[name=transfer_date]');
+  if (d && !d.value) d.value = new Date().toISOString().slice(0,10);
+})();
+</script>
+{% endblock %}

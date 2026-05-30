@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}Transferler — {{ event.name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">🚌 Transfer Listesi</div>
+    <div class="page-subtitle">{{ transfers | length }} transfer kaydı</div>
+  </div>
+  <div class="btn-group">
+    <a href="{{ base_url }}/supplier/{{ event.supplier_token }}/transfers" target="_blank"
+       class="btn btn-secondary" title="Tedarikçi bağlantısı">🔗 Tedarikçi Linki</a>
+    <a href="{{ base_url }}/events/{{ event.id }}/transfers/wizard" class="btn btn-primary">✨ Transfer Sihirbazı</a>
+  </div>
+</div>
+
+{% if request.query_params.get('wizard_created') %}
+<div class="alert alert-success">
+  ✅ {{ request.query_params.get('wizard_created') }} transfer oluşturuldu.
+</div>
+{% endif %}
+{% if request.query_params.get('boarded') %}
+<div class="alert alert-success">✅ Toplu biniş kaydı yapıldı.</div>
+{% endif %}
+
+{# İsim arama #}
+<form method="get" class="filter-bar" style="flex-wrap:wrap; gap:8px; margin-bottom:4px;">
+  <input type="text" name="search" value="{{ search }}" placeholder="İsim ara..."
+         class="search-input" style="flex:1; min-width:160px;">
+  {% if direction_filter %}<input type="hidden" name="direction" value="{{ direction_filter }}">{% endif %}
+  {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+  <button type="submit" class="btn btn-secondary">Ara</button>
+  {% if search %}<a href="{{ base_url }}/events/{{ event.id }}/transfers{% if direction_filter or status_filter %}?{% endif %}{% if direction_filter %}direction={{ direction_filter }}{% endif %}{% if direction_filter and status_filter %}&{% endif %}{% if status_filter %}status={{ status_filter }}{% endif %}" class="btn btn-secondary">✕</a>{% endif %}
+</form>
+
+{# Filtre çubuğu #}
+<div class="filter-bar" style="flex-wrap:wrap; gap:8px;">
+  {% set s = "&search=" ~ search if search else "" %}
+  <a href="{{ base_url }}/events/{{ event.id }}/transfers{% if search %}?search={{ search }}{% endif %}"
+     class="btn {% if not direction_filter and not status_filter %}btn-primary{% else %}btn-secondary{% endif %}">Tümü</a>
+  <a href="{{ base_url }}/events/{{ event.id }}/transfers?direction=in{{ s }}"
+     class="btn {% if direction_filter == 'in' and not status_filter %}btn-primary{% else %}btn-secondary{% endif %}">↓ Karşılama</a>
+  <a href="{{ base_url }}/events/{{ event.id }}/transfers?direction=out{{ s }}"
+     class="btn {% if direction_filter == 'out' and not status_filter %}btn-primary{% else %}btn-secondary{% endif %}">↑ Gidiş</a>
+  <span style="border-left:1px solid #e2e8f0; margin:0 4px;"></span>
+  <a href="{{ base_url }}/events/{{ event.id }}/transfers?status=pending{{ s }}"
+     class="btn {% if status_filter == 'pending' %}btn-warning{% else %}btn-secondary{% endif %}">⏳ Bekliyor</a>
+  <a href="{{ base_url }}/events/{{ event.id }}/transfers?status=boarded{{ s }}"
+     class="btn {% if status_filter == 'boarded' %}btn-success{% else %}btn-secondary{% endif %}">✅ Bindi</a>
+</div>
+
+{# Toplu biniş formu #}
+{% if transfers %}
+<form method="post" action="{{ base_url }}/events/{{ event.id }}/transfers/bulk-board" id="bulk-form">
+  <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+    <button type="submit" class="btn btn-primary btn-sm"
+            onclick="return confirm('Seçili transfer kayıtlarını bindi olarak işaretle?')">
+      ✅ Seçilenleri Bindi İşaretle
+    </button>
+  </div>
+
+  {% if groups %}
+    {% for group_name, group_transfers in groups.items() %}
+    {# Saate göre sırala ve saat başlığı göster #}
+    {% set sorted_transfers = group_transfers | sort(attribute='pickup_time') %}
+    <div class="card" style="margin-bottom:16px; padding:0;">
+      {% set boarded_cnt = group_transfers | selectattr('boarded') | list | length %}
+      {% set total_cnt = group_transfers | length %}
+      {% set times = group_transfers | map(attribute='pickup_time') | select | list %}
+      {% set earliest = times | sort | first if times else None %}
+      <div style="padding:12px 16px; background:#f8fafc; border-bottom:1px solid #e2e8f0;
+                  display:flex; align-items:center; justify-content:space-between;">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <strong style="font-size:15px;">🚌 {{ group_name }}</strong>
+          <span style="background:#e0f2fe; color:#0369a1; border-radius:20px;
+                        padding:2px 10px; font-size:12px; font-weight:600;">
+            {{ total_cnt }} kişi
+          </span>
+          {% if boarded_cnt > 0 %}
+          <span style="background:#dcfce7; color:#166534; border-radius:20px;
+                        padding:2px 10px; font-size:12px; font-weight:600;">
+            ✅ {{ boarded_cnt }} / {{ total_cnt }} bindi
+          </span>
+          {% endif %}
+          {% if boarded_cnt == total_cnt and total_cnt > 0 %}
+          <span style="background:#16a34a; color:#fff; border-radius:20px;
+                        padding:2px 10px; font-size:12px; font-weight:600;">
+            Tamamlandı
+          </span>
+          {% endif %}
+        </div>
+        {% if earliest %}
+        <div style="font-size:22px; font-weight:800; color:#1e3a5f; white-space:nowrap;">
+          🕐 {{ earliest }}
+        </div>
+        {% endif %}
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:36px;">
+                <input type="checkbox" class="group-check" data-group="{{ loop.index }}"
+                       title="Grubu seç" onchange="toggleGroup(this, {{ loop.index }})">
+              </th>
+              <th>Yön</th>
+              <th>Katılımcı</th>
+              <th>Tarih</th>
+              <th>Alınış</th>
+              <th>Nereden</th>
+              <th>Nereye</th>
+              <th>Durum</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in sorted_transfers %}
+            <tr {% if t.boarded %}style="background:#f0fdf4;"{% endif %}>
+              <td>
+                {% if not t.boarded %}
+                <input type="checkbox" name="transfer_ids" value="{{ t.id }}"
+                       class="row-check group-{{ loop.index0 // 1 }}-item grp{{ loop.index0 }}-check">
+                {% endif %}
+              </td>
+              <td>
+                <span class="badge badge-{{ t.direction }}">
+                  {% if t.direction == 'in' %}↓ Karşılama{% else %}↑ Gidiş{% endif %}
+                </span>
+              </td>
+              <td>
+                <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ t.participant_id }}" class="table-link">
+                  {{ t.participant.full_name }}
+                </a>
+              </td>
+              <td>{{ t.transfer_date.strftime('%d.%m.%Y') if t.transfer_date else '—' }}</td>
+              <td><strong>{{ t.pickup_time or '—' }}</strong></td>
+              <td>{{ t.from_location or '—' }}</td>
+              <td>{{ t.to_location or '—' }}</td>
+              <td>
+                {% if t.boarded %}
+                  <span style="color:#16a34a; font-size:12px; white-space:nowrap;">
+                    ✅ Bindi
+                  </span>
+                  {% if t.boarded_at %}
+                  <div style="font-size:10px; color:#64748b;">
+                    {{ t.boarded_at.strftime('%d.%m %H:%M') }}
+                    {% if t.boarded_by %} · {{ t.boarded_by }}{% endif %}
+                  </div>
+                  {% endif %}
+                {% else %}
+                  <span style="color:#94a3b8; font-size:12px;">⏳ Bekliyor</span>
+                {% endif %}
+              </td>
+              <td>
+                <form method="post"
+                      action="{{ base_url }}/events/{{ event.id }}/transfers/{{ t.id }}/board"
+                      style="display:inline;">
+                  <input type="hidden" name="redirect_to"
+                         value="/events/{{ event.id }}/transfers{% if direction_filter %}?direction={{ direction_filter }}{% endif %}{% if status_filter %}?status={{ status_filter }}{% endif %}">
+                  <button type="submit" class="btn btn-sm
+                          {% if t.boarded %}btn-secondary{% else %}btn-primary{% endif %}"
+                          title="{% if t.boarded %}Binişi geri al{% else %}Bindi işaretle{% endif %}">
+                    {% if t.boarded %}↩{% else %}✅{% endif %}
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+  <div class="card">
+    <div class="empty-state">
+      <div class="empty-state-icon">🚌</div>
+      <div class="empty-state-title">Transfer kaydı yok</div>
+      <div class="empty-state-text">Katılımcı kartlarından transfer ekleyebilirsiniz.</div>
+    </div>
+  </div>
+  {% endif %}
+</form>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <div class="empty-state-icon">🚌</div>
+    <div class="empty-state-title">Transfer kaydı yok</div>
+    <div class="empty-state-text">Katılımcı kartlarından transfer ekleyebilirsiniz.</div>
+  </div>
+</div>
+{% endif %}
+
+<script>
+function toggleGroup(masterCb, groupIdx) {
+  // masterCb is the header checkbox; check all row-checks in same card
+  const card = masterCb.closest('.card');
+  card.querySelectorAll('input[name="transfer_ids"]').forEach(cb => {
+    cb.checked = masterCb.checked;
+  });
+}
+</script>
+{% endblock %}

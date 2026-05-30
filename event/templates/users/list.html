@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block page_title %}Kullanıcı Yönetimi{% endblock %}
+{% block page_title_block %}Kullanıcı Yönetimi{% endblock %}
+
+{% block topbar_actions %}
+<a href="/users/org-titles" class="btn btn-outline-secondary btn-sm">
+  <i class="bi bi-diagram-3 me-1"></i> Org Yapısı
+</a>
+<a href="/users/template" class="btn btn-outline-success btn-sm">
+  <i class="bi bi-download me-1"></i> Şablon İndir
+</a>
+<button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#importUsersModal">
+  <i class="bi bi-upload me-1"></i> Excel ile Aktar
+</button>
+<a href="/users/new" class="btn btn-primary btn-sm">
+  <i class="bi bi-person-plus me-1"></i> Yeni Kullanıcı
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th class="ps-4">Ad Soyad</th>
+            <th>E-posta</th>
+            <th>Sistem Rolü</th>
+            <th>Organizasyon Unvanı</th>
+            <th>Bütçe Limiti</th>
+            <th>Telefon</th>
+            <th>Durum</th>
+            <th class="text-end pe-4">İşlemler</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+          <tr>
+            <td class="ps-4">
+              <div class="d-flex align-items-center gap-2">
+                <div class="user-avatar" style="width:32px;height:32px;font-size:12px;border-radius:50%;background:#2563eb;color:white;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">
+                  {{ user.initials }}
+                </div>
+                <span class="fw-semibold">{{ user.full_name }}</span>
+              </div>
+            </td>
+            <td style="font-size:13px;">{{ user.email }}</td>
+            <td>
+              {% if user.role == 'admin' %}
+                <span class="badge bg-danger bg-opacity-10 text-danger">Admin</span>
+              {% elif user.role in ('yonetici', 'asistan', 'mudur') %}
+                <span class="badge bg-primary bg-opacity-10 text-primary">Proje Yöneticisi</span>
+              {% else %}
+                <span class="badge bg-success bg-opacity-10 text-success">E-dem</span>
+              {% endif %}
+            </td>
+            <td style="font-size:12px;">
+              {% if user.org_title %}
+                <span class="text-dark fw-semibold">{{ user.org_title.name }}</span>
+                <div style="color:#94a3b8; font-size:11px;">Kademe {{ user.org_title.grade }}</div>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td style="font-size:12px;">
+              {% if user.org_title and user.org_title.budget_limit is not none %}
+                <span class="badge bg-warning bg-opacity-10 text-warning fw-semibold">
+                  ₺{{ "{:,.0f}".format(user.org_title.budget_limit).replace(",", ".") }}
+                </span>
+              {% elif user.org_title %}
+                <span class="text-muted" style="font-size:11px;">Limitsiz</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td style="font-size:13px; color:#64748b;">{{ user.phone or '—' }}</td>
+            <td>
+              {% if user.active %}
+                <span class="badge bg-success bg-opacity-10 text-success">
+                  <i class="bi bi-check-circle me-1"></i>Aktif
+                </span>
+              {% else %}
+                <span class="badge bg-secondary bg-opacity-10 text-secondary">
+                  <i class="bi bi-x-circle me-1"></i>Pasif
+                </span>
+              {% endif %}
+            </td>
+            <td class="text-end pe-4">
+              <a href="/users/{{ user.id }}/edit" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-pencil"></i>
+              </a>
+              {% if user.id != current_user.id %}
+              <form method="post" action="/users/{{ user.id }}/delete" class="d-inline"
+                    onsubmit="return confirm('{{ user.full_name }} kullanıcısını devre dışı bırakmak istediğinizden emin misiniz?')">
+                <button type="submit" class="btn btn-sm btn-outline-danger">
+                  <i class="bi bi-person-x"></i>
+                </button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="9" class="text-center py-5 text-muted">
+              <i class="bi bi-people" style="font-size:3rem;opacity:.3;"></i>
+              <p class="mt-2 mb-0">Henüz kullanıcı bulunmuyor.</p>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+{% if welcome_user %}
+<script>
+(function(){
+  const email = {{ welcome_user.email | tojson }};
+  const name  = {{ welcome_user.full_name | tojson }};
+  const subject = encodeURIComponent('E-dem Sistemi — Hesabınız Hazır');
+  const body = encodeURIComponent(
+    'Merhaba ' + name + ',\n\nE-dem etkinlik yönetim sistemine hoş geldiniz!\n\n'
+    + 'Giriş bilgileriniz:\nE-posta: ' + email + '\nŞifre: (Yöneticinizden alınız)\n\nİyi çalışmalar.'
+  );
+  const mailto = 'mailto:' + email + '?subject=' + subject + '&body=' + body;
+  const fc = document.getElementById('flashContainer');
+  if (fc) {
+    const div = document.createElement('div');
+    div.className = 'alert alert-success alert-dismissible fade show shadow-sm';
+    div.role = 'alert';
+    div.innerHTML = '<i class="bi bi-person-check me-2"></i><strong>' + name + '</strong> oluşturuldu. '
+      + '<a href="' + mailto + '" class="alert-link">Hoşgeldin maili gönder →</a>'
+      + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+    fc.appendChild(div);
+  }
+  history.replaceState({}, '', '/users');
+})();
+</script>
+{% endif %}
+
+{# ─── Excel İçe Aktar Modal ─── #}
+<div class="modal fade" id="importUsersModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="/users/import" enctype="multipart/form-data">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Excel ile Kullanıcı Aktar</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          {% if request.query_params.get('import_msg') %}
+          <div class="alert alert-info py-2" style="font-size:13px;">
+            {{ request.query_params.get('import_msg') }}
+          </div>
+          {% endif %}
+          <p class="text-muted" style="font-size:13px;">
+            Önce <a href="/users/template" class="text-primary">şablonu indirin</a>, doldurun ve buradan yükleyin.
+            Aynı e-posta adresi varsa atlanır.
+          </p>
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:13px;">Excel Dosyası (.xlsx)</label>
+            <input type="file" name="file" class="form-control" accept=".xlsx" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-upload me-1"></i>Aktar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

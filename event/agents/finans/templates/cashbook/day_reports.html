@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Gün Sonu Raporları{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">📆 Gün Sonu Raporları</div>
+  </div>
+  <a href="/cashbook/day-reports/{{ today.isoformat() }}" class="btn btn-primary">Bugünü Kapat</a>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    {% if reports %}
+    <table>
+      <thead>
+        <tr>
+          <th>Tarih</th>
+          <th class="text-right">Açılış</th>
+          <th class="text-right">Toplam Giriş</th>
+          <th class="text-right">Toplam Çıkış</th>
+          <th class="text-right">Kapanış</th>
+          <th>Durum</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in reports %}
+        <tr>
+          <td class="nowrap">{{ r.report_date | fmtdate }}</td>
+          <td class="text-right font-mono">{{ r.opening_balance | currency }}</td>
+          <td class="text-right font-mono amount-positive">{{ r.total_in | currency }}</td>
+          <td class="text-right font-mono amount-negative">{{ r.total_out | currency }}</td>
+          <td class="text-right font-mono" style="font-weight:700">{{ r.closing_balance | currency }}</td>
+          <td>
+            {% if r.is_closed %}<span class="badge badge-success">Kapalı</span>
+            {% else %}<span class="badge badge-warning">Açık</span>{% endif %}
+          </td>
+          <td>
+            <a href="/cashbook/day-reports/{{ r.report_date.isoformat() }}" class="btn btn-xs btn-outline">Detay</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">📆</div>
+      <div class="empty-state-text">Henüz gün sonu raporu yok</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

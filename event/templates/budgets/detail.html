@@ -1,0 +1,527 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+{% if can_edem_edit %}
+<a href="/budgets/{{ budget.id }}/edit" class="btn btn-primary btn-sm">
+  <i class="bi bi-pencil me-1"></i> Düzenle
+</a>
+{% endif %}
+{% if can_manager_price %}
+<a href="/budgets/{{ budget.id }}/price" class="btn btn-warning btn-sm">
+  <i class="bi bi-pencil me-1"></i>
+  {% if budget.budget_status == 'approved' %}Düzenle{% else %}Fiyat Gir{% endif %}
+</a>
+{% endif %}
+{% if budget.budget_status == 'confirmed' and current_user.role in ('admin', 'mudur', 'yonetici', 'e_dem') %}
+<a href="/budgets/{{ budget.id }}/revise-price" class="btn btn-outline-primary btn-sm">
+  <i class="bi bi-pencil-square me-1"></i> Revize Fiyat
+</a>
+{% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .budget-detail-table th { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: #64748b; background: #f8fafc; white-space: nowrap; }
+  .budget-detail-table td { vertical-align: middle; font-size: 13px; }
+  .section-header-row { background: #1e293b; color: white; font-size: 11px; font-weight: 700; letter-spacing: .5px; }
+  .subtotals-row td { font-weight: 600; background: #f1f5f9; }
+  .grand-total-row td { font-weight: 800; font-size: 14px; background: #eff6ff; color: #1d4ed8; border-top: 2px solid #93c5fd; }
+  .service-fee-row td { background: #fefce8; font-weight: 600; }
+  .currency-badge { font-size: 10px; font-weight: 700; padding: 2px 5px; border-radius: 4px; background: #dbeafe; color: #1d4ed8; letter-spacing: .3px; }
+  .try-hint { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="mb-3">
+  <a href="{{ back_url }}" class="text-muted text-decoration-none" style="font-size:13px;">
+    <i class="bi bi-arrow-left me-1"></i> {{ back_label }}
+  </a>
+</div>
+
+{# ─── BAŞLIK ─── #}
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+      <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <h4 class="fw-bold mb-0">{{ budget.venue_name or 'Bütçe' }}</h4>
+          <span class="badge bg-{{ status_color }}" style="font-size:12px;">{{ status_label }}</span>
+        </div>
+        {% if req %}
+        <div class="d-flex gap-2 flex-wrap">
+          <span class="badge bg-primary bg-opacity-10 text-primary fw-semibold" style="font-size:12px; letter-spacing:.5px;">
+            {{ req.request_no }}
+          </span>
+          <span class="text-muted" style="font-size:13px;">
+            <i class="bi bi-calendar me-1"></i>{{ req.event_name }}
+          </span>
+          <span class="text-muted" style="font-size:13px;">
+            <i class="bi bi-building me-1"></i>{{ req.client_name }}
+          </span>
+        </div>
+        {% endif %}
+      </div>
+      <div class="d-flex gap-2 flex-wrap">
+        {% if can_edem_edit %}
+        {# E-dem silebilir sadece draft_edem durumunda #}
+        {% if budget.budget_status == 'draft_edem' or current_user.role == 'admin' %}
+        <form method="post" action="/budgets/{{ budget.id }}/delete"
+              onsubmit="return confirm('Bu bütçeyi silmek istediğinizden emin misiniz?')">
+          <button type="submit" class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-trash me-1"></i> Sil
+          </button>
+        </form>
+        {% endif %}
+        {% endif %}
+        {% if budget.budget_status == 'approved' and current_user.role in ('admin', 'mudur', 'yonetici') %}
+        <div class="btn-group btn-group-sm">
+          <a href="/budgets/{{ budget.id }}/export?vat=exclusive" class="btn btn-success btn-sm">
+            <i class="bi bi-file-earmark-excel me-1"></i>Excel (KDV Hariç)
+          </a>
+          <button type="button" class="btn btn-success btn-sm dropdown-toggle dropdown-toggle-split"
+                  data-bs-toggle="dropdown"></button>
+          <ul class="dropdown-menu">
+            <li>
+              <a class="dropdown-item" href="/budgets/{{ budget.id }}/export?vat=exclusive">
+                <i class="bi bi-file-earmark-excel me-2 text-success"></i>KDV Hariç (fiyatlar + KDV dökümü)
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item" href="/budgets/{{ budget.id }}/export?vat=inclusive">
+                <i class="bi bi-file-earmark-excel me-2 text-success"></i>KDV Dahil (nihai fiyatlar)
+              </a>
+            </li>
+          </ul>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if budget.revision_notes and current_user.role in ('admin', 'e_dem') %}
+<div class="alert alert-danger mb-3">
+  <i class="bi bi-arrow-counterclockwise me-2"></i>
+  <strong>Revizyon Talebi:</strong> {{ budget.revision_notes }}
+</div>
+{% endif %}
+
+{% if budget.manager_notes and current_user.role in ('admin', 'mudur', 'yonetici') %}
+<div class="alert alert-info mb-3">
+  <i class="bi bi-sticky me-2"></i>
+  <strong>Manager Notu:</strong> {{ budget.manager_notes }}
+</div>
+{% endif %}
+
+{% if req %}
+<div class="card mb-4">
+  <div class="card-body py-3">
+    <div class="d-flex flex-wrap gap-4">
+      <div>
+        <span class="text-muted" style="font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;">Tarih</span>
+        <div style="font-size:13px;">
+          {% if req.check_in %}{{ req.check_in | date_tr }}{% else %}—{% endif %}
+          {% if req.check_out %} → {{ req.check_out | date_tr }}{% endif %}
+        </div>
+      </div>
+      <div>
+        <span class="text-muted" style="font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;">Katılımcı</span>
+        <div style="font-size:13px;">{{ req.attendee_count or '—' }} kişi</div>
+      </div>
+      <div>
+        <span class="text-muted" style="font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;">Şehir</span>
+        <div style="font-size:13px;">{{ req.cities_display or '—' }}</div>
+      </div>
+      <div>
+        <span class="text-muted" style="font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;">Oluşturma</span>
+        <div style="font-size:13px;">{{ budget.created_at | date_tr }}</div>
+      </div>
+      {% if pending_approver and budget.budget_status == 'pending_manager' %}
+      <div class="ms-auto align-self-center">
+        <div class="p-2 rounded d-flex align-items-center gap-2"
+             style="background:#fef3c7; border:1px solid #fde68a; font-size:12px;">
+          <i class="bi bi-hourglass-split text-warning"></i>
+          <div>
+            <div class="text-muted" style="font-size:10px; text-transform:uppercase; font-weight:700; letter-spacing:.4px;">Onay Bekliyor</div>
+            <div class="fw-semibold">{{ pending_approver.full_name }}</div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ─── BÜTÇE TABLOSU ─── #}
+{% set SECTION_LABELS = {
+  'accommodation': '🛏 Konaklama',
+  'meeting':       '🏛 Toplantı / Salon',
+  'fb':            '🍽 F&B (Yiyecek & İçecek)',
+  'teknik':        '🔧 Teknik',
+  'dekor':         '🎨 Dekor',
+  'transfer':      '🚌 Transfer',
+  'tasarim':       '🖨 Tasarım & Baskı',
+  'other':         '📦 Diğer'
+} %}
+
+{% set sections_order = ['accommodation', 'meeting', 'fb', 'teknik', 'dekor', 'transfer', 'tasarim', 'other'] %}
+
+{% set show_cost = true %}
+
+{% set CURRENCY_SYMBOLS = {'TRY': '₺', 'EUR': '€', 'USD': '$'} %}
+{# offer_currency ve exchange_rates router'dan geliyor #}
+
+<div class="card mb-4">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table budget-detail-table mb-0">
+        <thead>
+          <tr>
+            <th class="ps-3">Hizmet</th>
+            <th>Birim</th>
+            <th>Miktar</th>
+            <th>Gece</th>
+            <th style="width:70px;">Para Bir.</th>
+            {% if show_cost %}
+            <th>Birim Maliyet</th>
+            {% endif %}
+            <th>Satış Toplamı (KDV hariç)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set ns = namespace(grand_cost_ex=0, grand_sale_ex=0) %}
+
+          {% for sec in sections_order %}
+          {% set sec_rows = rows_by_section.get(sec, []) %}
+          {% if sec_rows %}
+
+          {% set colspan_val = 7 if show_cost else 6 %}
+          <tr class="section-header-row">
+            <td class="ps-3" colspan="{{ colspan_val }}">{{ SECTION_LABELS.get(sec, sec) }}</td>
+          </tr>
+
+          {% set sec_ns = namespace(cost_ex=0, sale_ex=0) %}
+
+          {% for row in sec_rows %}
+          {% set qty       = row.qty|float if row.qty else 1 %}
+          {% set nights    = row.nights|float if row.nights else 1 %}
+          {% set cost      = row.cost_price|float if row.cost_price else 0 %}
+          {% set sale      = row.sale_price|float if row.sale_price else 0 %}
+          {% set vat       = row.vat_rate|float if row.vat_rate else 0 %}
+          {% set row_cur   = row.get('currency', 'TRY') or 'TRY' %}
+          {% set row_rate  = exchange_rates.get(row_cur, 1.0)|float if row_cur != 'TRY' else 1.0 %}
+          {% set cost_sub  = cost * qty * nights %}
+          {% set sale_sub  = sale * qty * nights %}
+          {% set cost_try  = cost_sub * row_rate %}
+          {% set sale_try  = sale_sub * row_rate %}
+          {% set sec_ns.cost_ex   = sec_ns.cost_ex  + cost_try %}
+          {% set sec_ns.sale_ex   = sec_ns.sale_ex  + sale_try %}
+          {% set ns.grand_cost_ex = ns.grand_cost_ex + cost_try %}
+          {% set ns.grand_sale_ex = ns.grand_sale_ex + sale_try %}
+          {% set row_sym = CURRENCY_SYMBOLS.get(row_cur, row_cur) %}
+          <tr>
+            <td class="ps-3 fw-semibold">
+              {{ row.service_name or '—' }}
+              {% set sel_quotes = row.get('quotes', []) | selectattr('selected', 'equalto', true) | list %}
+              {% if sel_quotes %}
+              <span class="badge bg-primary bg-opacity-15 text-primary ms-1"
+                    style="font-size:10px; font-weight:600;">{{ sel_quotes[0].supplier }}</span>
+              {% endif %}
+            </td>
+            <td style="color:#64748b;">{{ row.unit or 'Adet' }}</td>
+            <td>{{ row.qty or 1 }}</td>
+            <td>{% if sec == 'accommodation' %}{{ row.nights or 1 }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td>
+              {% if row_cur != 'TRY' %}
+              <span class="currency-badge">{{ row_cur }}</span>
+              {% else %}
+              <span class="text-muted" style="font-size:11px;">₺</span>
+              {% endif %}
+            </td>
+            {% if show_cost %}
+            <td>
+              {% if cost %}
+                {{ row_sym }}{{ cost_sub | money | replace('₺','') }}
+                {% if (qty > 1 or nights > 1) %}
+                <div class="text-muted" style="font-size:10px; margin-top:1px;">
+                  × {{ qty|int }}{% if nights > 1 %} × {{ nights|int }}g{% endif %} = {{ row_sym }}{{ (cost_sub) | money | replace('₺','') }}
+                </div>
+                {% endif %}
+                {% if row_cur != 'TRY' %}
+                <div class="try-hint">= {{ cost_try | money }}</div>
+                {% endif %}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            {% endif %}
+            <td class="fw-semibold">
+              {{ row_sym }}{{ sale_sub | money | replace('₺','') }}
+              {% if row_cur != 'TRY' %}
+              <div class="try-hint">= {{ sale_try | money }}</div>
+              {% endif %}
+              {% if vat %}
+              <span class="badge bg-secondary bg-opacity-10 text-secondary ms-1" style="font-size:10px;">%{{ vat|int }} KDV</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+
+          <tr class="subtotals-row">
+            <td class="ps-3" colspan="5" style="font-size:12px; color:#64748b;">Alt Toplam (KDV hariç)</td>
+            {% if show_cost %}
+            <td>{{ sec_ns.cost_ex | money }}</td>
+            {% endif %}
+            <td>{{ sec_ns.sale_ex | money }}</td>
+          </tr>
+
+          {% endif %}
+          {% endfor %}
+
+          {# Hizmet bedeli #}
+          {% for row in budget.rows %}
+          {% if row.get('is_service_fee') %}
+          {% set sf_sale = row.sale_price|float if row.sale_price else 0 %}
+          {% set sf_vat  = row.vat_rate|float if row.vat_rate else 0 %}
+          {% set sf_cur  = row.get('currency', 'TRY') or 'TRY' %}
+          {% set sf_rate = exchange_rates.get(sf_cur, 1.0)|float if sf_cur != 'TRY' else 1.0 %}
+          {% set sf_try  = sf_sale * sf_rate %}
+          {% set ns.grand_sale_ex = ns.grand_sale_ex + sf_try %}
+          {% set sf_sym  = CURRENCY_SYMBOLS.get(sf_cur, sf_cur) %}
+          <tr class="service-fee-row">
+            <td class="ps-3" colspan="5">
+              💼 Hizmet Bedeli
+              {% if sf_vat %}<span class="badge bg-secondary bg-opacity-10 text-secondary ms-1" style="font-size:10px;">%{{ sf_vat|int }} KDV</span>{% endif %}
+            </td>
+            {% if show_cost %}<td>—</td>{% endif %}
+            <td class="fw-semibold">
+              {{ sf_sym }}{{ sf_sale | money | replace('₺','') }}
+              {% if sf_cur != 'TRY' %}
+              <div class="try-hint">= {{ sf_try | money }}</div>
+              {% endif %}
+            </td>
+          </tr>
+          {% endif %}
+          {% endfor %}
+
+        </tbody>
+        <tfoot>
+          <tr class="grand-total-row">
+            <td class="ps-3" colspan="5">TOPLAM (KDV hariç) — ₺</td>
+            {% if show_cost %}
+            <td>{{ ns.grand_cost_ex | money }}</td>
+            {% endif %}
+            <td>{{ ns.grand_sale_ex | money }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+{# ─── ÖZET ─── #}
+{% set offer_rate = exchange_rates.get(offer_currency, 1.0)|float if offer_currency != 'TRY' else 1.0 %}
+{% set offer_sym  = CURRENCY_SYMBOLS.get(offer_currency, offer_currency) %}
+<div class="card">
+  <div class="card-body">
+    <div class="row g-3">
+      {% if show_cost %}
+      <div class="col-md-3">
+        <div class="border rounded p-3 text-center">
+          <div class="text-muted" style="font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;">Toplam Maliyet (KDV hariç)</div>
+          <div class="fw-bold text-secondary" style="font-size:18px;">{{ ns.grand_cost_ex | money }}</div>
+        </div>
+      </div>
+      {% endif %}
+      <div class="col-md-{{ '5' if show_cost else '7' }}">
+        <div class="border rounded p-3">
+          <div class="text-muted mb-2" style="font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;">KDV Hesabı (TL)</div>
+          <div class="d-flex justify-content-between border-bottom pb-2 mb-1">
+            <span style="font-size:13px;">Satış Toplamı (KDV hariç)</span>
+            <span class="fw-bold text-primary">{{ ns.grand_sale_ex | money }}</span>
+          </div>
+          {% for rate, amt in vat_by_rate %}
+          <div class="d-flex justify-content-between border-bottom py-1">
+            <span class="text-muted" style="font-size:13px;">+ %{{ rate }} KDV</span>
+            <span class="fw-semibold" style="font-size:13px;">{{ amt | money }}</span>
+          </div>
+          {% endfor %}
+          {% if not vat_by_rate %}
+          <div class="text-muted" style="font-size:12px;">KDV hesaplanmadı (satış fiyatı girilmemiş)</div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="border rounded p-3 text-center bg-success bg-opacity-10 h-100 d-flex flex-column justify-content-center">
+          <div class="text-muted" style="font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;">TOPLAM SATIŞ (KDV dahil)</div>
+          <div class="fw-bold text-success" style="font-size:24px;">{{ budget.grand_sale | money }}</div>
+          {% if offer_currency != 'TRY' and offer_rate %}
+          <hr class="my-2">
+          <div class="text-muted" style="font-size:10px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;">Teklif Para Birimi ({{ offer_currency }})</div>
+          {% set grand_sale_offer = budget.grand_sale / offer_rate %}
+          <div class="fw-bold" style="font-size:20px; color:#0369a1;">
+            {{ offer_sym }}{{ grand_sale_offer | money | replace('₺','') }}
+          </div>
+          <div class="text-muted" style="font-size:10px;">1 {{ offer_currency }} = {{ offer_rate | money | replace('₺','') }} ₺</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ─── FİYAT GEÇMİŞİ ─── #}
+{% set ph = budget.price_history %}
+{% if ph %}
+<div class="card mt-4">
+  <div class="card-header d-flex align-items-center gap-2 py-2" style="background:#f8fafc;">
+    <i class="bi bi-clock-history text-secondary"></i>
+    <span class="fw-semibold" style="font-size:13px;">Fiyat Geçmişi</span>
+    <span class="badge bg-secondary ms-1" style="font-size:11px;">{{ ph | length }} revizyon</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="accordion accordion-flush" id="priceHistoryAccordion">
+      {% for entry in ph | reverse %}
+      {% set loop_idx = loop.index %}
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button {% if loop_idx > 1 %}collapsed{% endif %} py-2"
+                  type="button" data-bs-toggle="collapse"
+                  data-bs-target="#ph-{{ loop_idx }}" style="font-size:12px; background:transparent;">
+            <span class="me-3 text-muted">{{ entry.ts }}</span>
+            <span class="fw-semibold me-2">{{ entry.user }}</span>
+            <span class="badge bg-secondary bg-opacity-15 text-secondary" style="font-size:10px;">
+              {% if entry.role == 'e_dem' %}E-dem{% elif entry.role in ('mudur', 'yonetici', 'asistan', 'project_manager') %}Manager{% else %}Admin{% endif %}
+            </span>
+            <span class="ms-2 text-muted" style="font-size:11px;">{{ entry.changes | length }} değişiklik</span>
+          </button>
+        </h2>
+        <div id="ph-{{ loop_idx }}" class="accordion-collapse collapse {% if loop_idx == 1 %}show{% endif %}">
+          <div class="accordion-body p-0">
+            <table class="table table-sm mb-0" style="font-size:12px;">
+              <thead>
+                <tr style="background:#f8fafc;">
+                  <th class="ps-3" style="font-size:11px; color:#64748b; width:40%;">Hizmet</th>
+                  <th style="font-size:11px; color:#64748b; width:15%;">Alan</th>
+                  <th style="font-size:11px; color:#64748b; width:15%;">Eski</th>
+                  <th style="font-size:11px; color:#64748b; width:15%;">Yeni</th>
+                  <th style="font-size:11px; color:#64748b; width:15%;">Fark</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for c in entry.changes %}
+                {% set diff = c.new - c.old %}
+                <tr>
+                  <td class="ps-3">{{ c.row }}</td>
+                  <td class="text-muted">{{ c.field }}</td>
+                  <td class="text-muted">{{ c.old | money }}</td>
+                  <td class="fw-semibold">{{ c.new | money }}</td>
+                  <td class="fw-semibold {% if diff > 0 %}text-danger{% elif diff < 0 %}text-success{% endif %}">
+                    {% if diff > 0 %}+{% endif %}{{ diff | money }}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ─── FİYAT ARŞİVİ (SNAPSHOT) ─── #}
+{% set ps = budget.price_snapshots %}
+{% if ps %}
+<div class="card mt-4">
+  <div class="card-header d-flex align-items-center gap-2 py-2" style="background:#f0fdf4;">
+    <i class="bi bi-archive text-success"></i>
+    <span class="fw-semibold" style="font-size:13px;">Fiyat Arşivi</span>
+    <span class="badge bg-success ms-1" style="font-size:11px;">{{ ps | length }} snapshot</span>
+    <span class="text-muted ms-2" style="font-size:11px;">Salt okunur — tam satır kopyaları</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="accordion accordion-flush" id="snapshotAccordion">
+      {% for snap in ps | reverse %}
+      {% set si = loop.index %}
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed py-2" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#snap-{{ si }}"
+                  style="font-size:12px; background:transparent;">
+            <span class="me-3 text-muted">{{ snap.ts }}</span>
+            <span class="fw-semibold text-success">{{ snap.label }}</span>
+          </button>
+        </h2>
+        <div id="snap-{{ si }}" class="accordion-collapse collapse">
+          <div class="accordion-body p-0">
+            <div class="table-responsive">
+              <table class="table table-sm mb-0" style="font-size:11px;">
+                <thead>
+                  <tr style="background:#f8fafc;">
+                    <th class="ps-3">Hizmet</th>
+                    <th>Birim</th>
+                    <th class="text-end">Miktar</th>
+                    <th class="text-end">Maliyet</th>
+                    <th class="text-end">Satış</th>
+                    <th class="text-end pe-3">KDV%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in snap.rows %}
+                  <tr>
+                    <td class="ps-3" style="color:#374151;">{{ row.service_name or row.description or '—' }}</td>
+                    <td>{{ row.unit or '—' }}</td>
+                    <td class="text-end">{{ row.qty or 1 }}</td>
+                    <td class="text-end">{{ '{:,.2f}'.format(row.cost_price | float) }}</td>
+                    <td class="text-end">{{ '{:,.2f}'.format(row.sale_price | float) }}</td>
+                    <td class="text-end pe-3">%{{ (row.vat_rate | float) | int }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% block extra_scripts %}
+<script>
+(function(){
+  const params = new URLSearchParams(location.search);
+  const managerEmail = params.get('manager_notified');
+  if (managerEmail) {
+    const subject = encodeURIComponent('Yeni Bütçe İncelemenizi Bekliyor');
+    const body    = encodeURIComponent(
+      'Merhaba,\n\nIncelemenizi bekleyen yeni bir bütçe hazırlandı.\n\nSisteme giriş yaparak bütçeyi inceleyebilirsiniz.\n\nİyi çalışmalar.'
+    );
+    const mailto = 'mailto:' + managerEmail + '?subject=' + subject + '&body=' + body;
+    const fc = document.getElementById('flashContainer');
+    if (fc) {
+      const div = document.createElement('div');
+      div.className = 'alert alert-info alert-dismissible fade show shadow-sm';
+      div.role = 'alert';
+      div.innerHTML = '<i class="bi bi-envelope me-2"></i>Bütçe manager\'a gönderildi. '
+        + '<a href="' + mailto + '" class="alert-link">Bildirim maili gönder →</a>'
+        + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+      fc.appendChild(div);
+    }
+    history.replaceState({}, '', location.pathname);
+  }
+})();
+</script>
+{% endblock %}
+
+{% endblock %}

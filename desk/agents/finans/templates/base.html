@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Finans Ajanı{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="app-layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">FA</div>
+      <div class="sidebar-title">Finans<br>Ajanı</div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="/dashboard"     class="nav-item {% if active == 'dashboard'     %}active{% endif %}">
+        <span class="nav-icon">📊</span> Dashboard
+      </a>
+
+      <div class="nav-section">Muhasebe</div>
+
+      <a href="/projects"      class="nav-item {% if active == 'budget_actual' %}active{% endif %}">
+        <span class="nav-icon">📋</span> Bütçe vs Gerçekleşen
+      </a>
+      <a href="/payments"      class="nav-item {% if active == 'payments'      %}active{% endif %}">
+        <span class="nav-icon">📅</span> Ödeme Planı
+      </a>
+      <a href="/reports"       class="nav-item {% if active == 'reports'       %}active{% endif %}">
+        <span class="nav-icon">📈</span> Raporlar
+      </a>
+
+      <div class="nav-section">İşlemler</div>
+
+      <a href="/suppliers"     class="nav-item {% if active == 'suppliers'     %}active{% endif %}">
+        <span class="nav-icon">🏢</span> Tedarikçi Cari
+      </a>
+      <a href="/efatura"       class="nav-item {% if active == 'efatura'       %}active{% endif %}">
+        <span class="nav-icon">🧾</span> E-Fatura
+      </a>
+      <a href="/cashbook"      class="nav-item {% if active == 'cashbook'      %}active{% endif %}">
+        <span class="nav-icon">💰</span> Kasa
+      </a>
+      <a href="/cashbook/day-reports" class="nav-item {% if active == 'day_reports' %}active{% endif %}">
+        <span class="nav-icon">📆</span> Gün Sonu Raporu
+      </a>
+      <a href="/credit-cards"  class="nav-item {% if active == 'credit_cards'  %}active{% endif %}">
+        <span class="nav-icon">💳</span> Kredi Kartları
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Ana içerik -->
+  <main class="main-content">
+    {% with messages = get_flashes() if get_flashes is defined else [] %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+<script src="/static/js/app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

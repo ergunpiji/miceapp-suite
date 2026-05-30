@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Esnek Yan Haklar — HR Ajanı{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Esnek Yan Haklar</div>
+    <div class="page-subtitle">{{ year }} yılı</div>
+  </div>
+  {% if user.role == 'hr_admin' %}
+  <button onclick="document.getElementById('assignModal').classList.add('open')" class="btn btn-primary">Puan Ata</button>
+  {% endif %}
+</div>
+
+<!-- Yıl filtresi -->
+<div class="filters-bar">
+  <form method="get" style="display:contents">
+    <select name="year">
+      {% for y in years %}
+      <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-outline">Görüntüle</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-body" style="padding:0">
+    {% if benefits %}
+    <table>
+      <thead>
+        <tr>
+          {% if user.role != 'employee' %}<th>Çalışan</th>{% endif %}
+          <th class="text-right">Toplam Puan</th>
+          <th class="text-right">Kullanılan</th>
+          <th class="text-right">Kalan</th>
+          <th>Kullanım</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in benefits %}
+        <tr>
+          {% if user.role != 'employee' %}
+          <td>{{ b.employee.full_name if b.employee else '—' }}</td>
+          {% endif %}
+          <td class="text-right font-mono">{{ b.total_points }}</td>
+          <td class="text-right font-mono amount-negative">{{ b.used_points }}</td>
+          <td class="text-right font-mono {% if b.remaining_points < 100 %}amount-negative{% else %}amount-positive{% endif %}">{{ b.remaining_points }}</td>
+          <td style="min-width:120px">
+            <div class="progress">
+              <div class="progress-bar {% if b.usage_pct > 80 %}over{% endif %}" style="width:{{ b.usage_pct }}%"></div>
+            </div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">{{ b.usage_pct }}%</div>
+          </td>
+          <td>
+            <a href="/benefits/flexible/{{ b.id }}" class="btn btn-xs btn-outline">Harcamalar</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">🎁</div>
+      <div class="empty-state-text">Bu yıl için esnek yan hak tanımlanmamış</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Puan Ata Modal -->
+{% if user.role == 'hr_admin' %}
+<div id="assignModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title">Esnek Hak Puanı Ata</div>
+    <form method="post" action="/benefits/flexible/assign">
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Çalışan *</label>
+        <select name="employee_id" required>
+          <option value="">— Seçin —</option>
+          {% for emp in employees %}
+          <option value="{{ emp.id }}">{{ emp.full_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Yıl</label>
+        <input type="number" name="year" value="{{ year }}" required>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Toplam Puan *</label>
+        <input type="number" name="total_points" value="1000" min="0" required>
+      </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label>Not</label>
+        <input type="text" name="notes">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button type="submit" class="btn btn-primary">Ata</button>
+        <button type="button" onclick="document.getElementById('assignModal').classList.remove('open')" class="btn btn-secondary">İptal</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

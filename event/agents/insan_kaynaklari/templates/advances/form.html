@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}Yeni Avans Talebi — HR Ajanı{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div><div class="page-title">Yeni Avans Talebi</div></div>
+  <a href="/advances" class="btn btn-secondary">Geri</a>
+</div>
+
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+<!-- Limit bilgisi (maaş avansı seçiliyken göster) -->
+{% if salary_limit is not none %}
+<div id="salaryLimitInfo" class="alert alert-info" style="display:{% if preselected_type == 'maas' %}flex{% else %}none{% endif %};gap:24px;align-items:center;flex-wrap:wrap">
+  <div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Maaş Avansı Limiti (%{{ (SALARY_ADVANCE_LIMIT_RATE * 100) | int }})</div>
+    <div style="font-size:18px;font-weight:700">{{ salary_limit | currency }}</div>
+  </div>
+  <div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Kullanılan</div>
+    <div style="font-size:18px;font-weight:700;color:var(--warning)">{{ (salary_limit - available_limit) | currency }}</div>
+  </div>
+  <div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Kullanılabilir</div>
+    <div style="font-size:18px;font-weight:700;color:var(--success)">{{ available_limit | currency }}</div>
+  </div>
+</div>
+{% endif %}
+
+<form method="post" action="/advances/new">
+  <div class="card">
+    <div class="card-body">
+      <div class="form-grid">
+
+        {% if user.role in ('hr_admin', 'hr_manager') %}
+        <div class="form-group form-grid-full">
+          <label>Çalışan *</label>
+          <select name="employee_id" required>
+            <option value="">— Seçin —</option>
+            {% for emp in employees %}
+            <option value="{{ emp.id }}">{{ emp.full_name }} ({{ emp.employee_no }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+
+        <div class="form-group">
+          <label>Avans Türü *</label>
+          <select name="advance_type" id="advanceType" onchange="onTypeChange(this.value)">
+            {% for t in advance_types %}
+            <option value="{{ t.value }}" {% if preselected_type == t.value %}selected{% endif %}>{{ t.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Talep Tutarı (₺) *</label>
+          <input type="number" name="amount" id="amountInput" step="0.01" min="0.01"
+                 {% if available_limit %}max="{{ available_limit }}"{% endif %} required>
+          {% if available_limit is not none %}
+          <div id="limitHint" style="font-size:11px;color:var(--text-muted);margin-top:3px;display:{% if preselected_type == 'maas' %}block{% else %}none{% endif %}">
+            Maksimum: {{ available_limit | currency }}
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="form-group">
+          <label>Gereksinim Tarihi</label>
+          <input type="date" name="needed_by">
+        </div>
+
+        <div class="form-group form-grid-full">
+          <label>Gerekçe / Açıklama</label>
+          <textarea name="reason" rows="3" placeholder="Avans nedenini kısaca açıklayın..."></textarea>
+        </div>
+
+      </div>
+
+      <!-- Maaş avansı: geri ödeme planı -->
+      <div id="repaymentSection" style="display:{% if preselected_type == 'maas' %}block{% else %}none{% endif %}">
+        <hr>
+        <div style="font-size:13px;font-weight:600;margin-bottom:12px">Geri Ödeme Planı</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Kaç Ayda Geri Ödenecek</label>
+            <select name="repayment_months" id="repaymentMonths" onchange="updateMonthlyCalc()">
+              <option value="1">1 ay</option>
+              <option value="2">2 ay</option>
+              <option value="3">3 ay</option>
+              <option value="4">4 ay</option>
+              <option value="6">6 ay</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Kesintinin Başlayacağı Ay</label>
+            <select name="repayment_start_month" id="startMonth">
+              {% for m in range(1, 13) %}
+              <option value="{{ m }}">{{ m | fmtmonth }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Yıl</label>
+            <input type="number" name="repayment_start_year" id="startYear" value="">
+          </div>
+          <div class="form-group" style="display:flex;align-items:flex-end">
+            <div style="padding:8px;background:#f0fdf4;border-radius:6px;font-size:13px;width:100%">
+              Aylık kesinti: <strong id="monthlyCalc">—</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- İş avansı: bilgi notu -->
+      <div id="workAdvanceInfo" style="display:{% if preselected_type == 'is' %}block{% else %}none{% endif %}">
+        <hr>
+        <div class="alert alert-info" style="margin:0">
+          <strong>İş Avansı:</strong> Ödeme yapıldıktan sonra harcama belgeleriyle kapatılması gerekmektedir.
+          Fazla kalan tutar iade edilir, eksik ise çalışandan tahsil edilir.
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div style="margin-top:16px;display:flex;gap:8px">
+    <button type="submit" class="btn btn-primary">Talep Oluştur</button>
+    <a href="/advances" class="btn btn-secondary">İptal</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const availableLimit = {{ available_limit or 0 }};
+const salaryLimit    = {{ salary_limit or 0 }};
+
+function onTypeChange(type) {
+  const repaySection   = document.getElementById('repaymentSection');
+  const workInfo       = document.getElementById('workAdvanceInfo');
+  const limitInfo      = document.getElementById('salaryLimitInfo');
+  const limitHint      = document.getElementById('limitHint');
+  const amountInput    = document.getElementById('amountInput');
+
+  if (type === 'maas') {
+    repaySection.style.display = 'block';
+    workInfo.style.display     = 'none';
+    if (limitInfo)  limitInfo.style.display  = 'flex';
+    if (limitHint)  limitHint.style.display  = 'block';
+    if (availableLimit > 0) amountInput.max = availableLimit;
+  } else {
+    repaySection.style.display = 'none';
+    workInfo.style.display     = 'block';
+    if (limitInfo)  limitInfo.style.display  = 'none';
+    if (limitHint)  limitHint.style.display  = 'none';
+    amountInput.removeAttribute('max');
+  }
+}
+
+function updateMonthlyCalc() {
+  const amount  = parseFloat(document.getElementById('amountInput').value) || 0;
+  const months  = parseInt(document.getElementById('repaymentMonths').value) || 1;
+  const monthly = amount / months;
+  document.getElementById('monthlyCalc').textContent =
+    '₺' + monthly.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+document.getElementById('amountInput').addEventListener('input', updateMonthlyCalc);
+document.getElementById('repaymentMonths').addEventListener('change', updateMonthlyCalc);
+
+// Varsayılan değerler
+const today = new Date();
+const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+document.getElementById('startMonth').value = nextMonth.getMonth() + 1;
+document.getElementById('startYear').value  = nextMonth.getFullYear();
+</script>
+{% endblock %}

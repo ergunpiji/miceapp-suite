@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header" style="background:linear-gradient(135deg,#1a3a5c,#1e5f8c);color:#fff;border-radius:10px 10px 0 0">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-wallet2 me-2"></i>Yeni Fon Havuzu</h6>
+      </div>
+      <div class="card-body p-4">
+        <form method="post" action="/fund-pools/new">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Fon Adı <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required
+                   placeholder="ör. ABC A.Ş. 2026 Etkinlik Fonu">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Müşteri</label>
+            <select name="customer_id" class="form-select">
+              <option value="">— Seçin (opsiyonel) —</option>
+              {% for c in customers %}
+              <option value="{{ c.id }}">{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-4">
+              <label class="form-label fw-semibold">Para Birimi</label>
+              <select name="currency" class="form-select">
+                <option value="TRY" selected>TRY ₺</option>
+                <option value="USD">USD $</option>
+                <option value="EUR">EUR €</option>
+              </select>
+            </div>
+            <div class="col-4">
+              <label class="form-label fw-semibold">Yıl</label>
+              <input type="number" name="year" class="form-control" value="{{ today_str[:4] }}" placeholder="2026">
+            </div>
+            <div class="col-4">
+              <label class="form-label fw-semibold">KDV %</label>
+              <select name="vat_rate" class="form-select">
+                <option value="0.0">%0</option>
+                <option value="0.01">%1</option>
+                <option value="0.08">%8</option>
+                <option value="0.10">%10</option>
+                <option value="0.18">%18</option>
+                <option value="0.20" selected>%20</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Başlangıç Tutarı (KDV dahil) <span class="text-danger">*</span></label>
+            <input type="number" name="initial_amount" step="0.01" min="0.01"
+                   class="form-control" placeholder="0,00" required>
+            <div class="form-text">Müşteriden tahsil edilen veya edilecek toplam tutar (KDV dahil).</div>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">Fatura No</label>
+              <input type="text" name="invoice_no" class="form-control" placeholder="opsiyonel">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Fatura Tarihi</label>
+              <input type="date" name="invoice_date" class="form-control" value="{{ today_str }}">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Not</label>
+            <textarea name="notes" class="form-control" rows="2" placeholder="opsiyonel"></textarea>
+          </div>
+          <div class="d-flex gap-2 mt-3">
+            <button type="submit" class="btn btn-primary px-4">
+              <i class="bi bi-check-lg me-1"></i>Havuz Oluştur
+            </button>
+            <a href="/fund-pools" class="btn btn-outline-secondary">İptal</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

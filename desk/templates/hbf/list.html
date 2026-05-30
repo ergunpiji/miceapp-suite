@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block page_title %}{% if show_archived %}HBF Arşivi{% else %}Harcama Bildirimleri{% endif %}{% endblock %}
+{% block topbar_actions %}
+{% if not show_archived %}
+<a href="/hbf/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Yeni HBF</a>
+{% endif %}
+{% endblock %}
+{% block content %}
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-transparent border-0">
+    <div class="d-flex align-items-center gap-3 mb-2">
+      <a href="/hbf" class="btn btn-sm {% if not show_archived %}btn-dark{% else %}btn-outline-secondary{% endif %}">Aktif</a>
+      {% if current_user.has_role_min("mudur") %}
+      <a href="/hbf?archived=1" class="btn btn-sm {% if show_archived %}btn-dark{% else %}btn-outline-secondary{% endif %}">
+        Arşiv {% if archived_count %}<span class="badge bg-secondary ms-1">{{ archived_count }}</span>{% endif %}
+      </a>
+      {% endif %}
+    </div>
+    {% if not show_archived %}
+    <form class="d-flex gap-2 flex-wrap" method="get">
+      <select name="status_filter" class="form-select form-select-sm" style="max-width:160px">
+        <option value="all" {% if status_filter=='all' %}selected{% endif %}>Tümü</option>
+        {% for val, lbl in status_labels.items() %}
+        <option value="{{ val }}" {% if status_filter==val %}selected{% endif %}>{{ lbl }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-sm btn-outline-secondary">Filtrele</button>
+    </form>
+    {% endif %}
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0" style="font-size:13px;">
+      <thead class="table-light">
+        <tr>
+          {% if current_user.has_role_min("mudur") and not show_archived %}
+          <th style="width:36px"><input type="checkbox" id="selectAll" class="form-check-input"></th>
+          {% endif %}
+          <th class="ps-3">HBF No</th>
+          <th>Çalışan / Oluşturan</th>
+          <th>Referanslar</th>
+          <th class="text-end">Tutar</th>
+          <th>Durum</th>
+          <th>Tarih</th>
+          <th class="pe-3"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for hbf in forms %}
+        <tr>
+          {% if current_user.has_role_min("mudur") and not show_archived %}
+          <td><input type="checkbox" class="form-check-input row-check" value="{{ hbf.id }}"></td>
+          {% endif %}
+          <td class="ps-3">
+            <a href="/hbf/{{ hbf.id }}" class="text-decoration-none fw-semibold">{{ hbf.hbf_no }}</a>
+          </td>
+          <td>{{ hbf.employee.name if hbf.employee else (hbf.creator.name if hbf.creator else '—') }}</td>
+          <td>
+            {% if hbf.refs_json %}
+              {% set rfs = hbf.refs_json | fromjson %}
+              {% for r in rfs %}<span class="badge bg-primary me-1" style="font-size:11px">{{ r.ref_no }}</span>{% endfor %}
+            {% elif hbf.reference %}
+              <span class="badge bg-primary" style="font-size:11px">{{ hbf.reference.ref_no }}</span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-end fw-semibold">{{ hbf.total_amount | money }}</td>
+          <td>
+            {% if show_archived %}
+            <span class="badge bg-secondary">Arşiv</span>
+            {% else %}
+            {% set s = hbf.status %}
+            <span class="badge {% if s=='taslak' %}bg-secondary{% elif s=='beklemede' %}bg-warning text-dark{% elif s=='mudur_onayladi' %}bg-primary{% elif s=='onaylandi' %}bg-info text-dark{% elif s=='reddedildi' %}bg-danger{% elif s=='odendi' %}bg-success{% endif %}">
+              {{ status_labels[s] }}
+            </span>
+            {% endif %}
+          </td>
+          <td class="text-muted">{{ hbf.created_at.strftime('%d.%m.%Y') }}</td>
+          <td class="text-end pe-3">
+            {% if show_archived %}
+              {% if current_user.has_role_min("mudur") %}
+              <form method="post" action="/hbf/{{ hbf.id }}/unarchive" class="d-inline">
+                <button class="btn btn-xs btn-outline-success btn-sm py-0">Geri Al</button>
+              </form>
+              {% endif %}
+            {% else %}
+              {% if hbf.status == 'taslak' and (hbf.created_by == current_user.id or current_user.is_admin) %}
+              <a href="/hbf/{{ hbf.id }}/edit" class="btn btn-xs btn-outline-secondary" title="Düzenle"><i class="bi bi-pencil"></i></a>
+              {% endif %}
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="{% if current_user.has_role_min('mudur') %}8{% else %}7{% endif %}" class="text-center text-muted py-4">
+          {% if show_archived %}Arşivde HBF yok.{% else %}Henüz kayıt yok.{% endif %}
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if current_user.has_role_min("mudur") and not show_archived %}
+<div id="bulkBar" class="position-fixed bottom-0 start-50 translate-middle-x mb-3 d-none" style="z-index:1050">
+  <div class="card shadow border-0 px-3 py-2 d-flex flex-row align-items-center gap-3">
+    <span id="selectedCount" class="text-muted small"></span>
+    <button class="btn btn-sm btn-warning" id="archiveBtn"><i class="bi bi-archive me-1"></i>Arşive Taşı</button>
+    <button class="btn btn-sm btn-outline-secondary" id="cancelSelect">İptal</button>
+  </div>
+</div>
+<script>
+const selectAll = document.getElementById('selectAll');
+const bulkBar   = document.getElementById('bulkBar');
+const countEl   = document.getElementById('selectedCount');
+function getChecked() { return [...document.querySelectorAll('.row-check:checked')].map(c => c.value); }
+function updateBar() {
+  const ids = getChecked();
+  bulkBar.classList.toggle('d-none', ids.length === 0);
+  countEl.textContent = ids.length + ' HBF seçildi';
+}
+selectAll.addEventListener('change', () => {
+  document.querySelectorAll('.row-check').forEach(c => c.checked = selectAll.checked);
+  updateBar();
+});
+document.querySelectorAll('.row-check').forEach(c => c.addEventListener('change', updateBar));
+document.getElementById('cancelSelect').addEventListener('click', () => {
+  document.querySelectorAll('.row-check').forEach(c => c.checked = false);
+  selectAll.checked = false; updateBar();
+});
+document.getElementById('archiveBtn').addEventListener('click', () => {
+  const ids = getChecked();
+  if (!ids.length) return;
+  if (!confirm(ids.length + ' HBF\'i arşive taşımak istediğinize emin misiniz?')) return;
+  const fd = new FormData();
+  fd.append('ids_json', JSON.stringify(ids));
+  fetch('/hbf/bulk-archive', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(d => {
+      if (!d.ok) { alert('Hata: ' + d.error); return; }
+      if (d.msg) alert(d.msg);
+      if (d.archived > 0) location.href = '/hbf?archived=1';
+      else location.reload();
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

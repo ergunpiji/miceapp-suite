@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block content %}
+<div class="row g-3 mb-3">
+  <div class="col-auto">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body py-2 px-3">
+        <div class="small text-muted">{{ "Toplam Kesilen" if entity_type == "customer" else "Toplam Gelen" }}</div>
+        <div class="fw-bold fs-5 text-primary">{{ (total_kesilen if entity_type == "customer" else total_gelen) | money }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-auto">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body py-2 px-3">
+        <div class="small text-muted">Ödenen</div>
+        <div class="fw-bold fs-5 text-success">{{ total_paid | money }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-auto">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body py-2 px-3">
+        <div class="small text-muted">Bakiye</div>
+        <div class="fw-bold fs-5 {% if balance > 0 %}text-danger{% else %}text-success{% endif %}">{{ balance | money }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-transparent border-0 fw-semibold">{{ entity.name }} — Fatura Hareketleri</div>
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Tarih</th>
+          <th>Fatura No</th>
+          <th>Tür</th>
+          <th>Durum</th>
+          <th class="text-end">Tutar</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for inv in invoices %}
+        <tr>
+          <td>{{ inv.invoice_date | date_tr }}</td>
+          <td>{{ inv.invoice_no or "—" }}</td>
+          <td>
+            <span class="badge {% if inv.invoice_type == 'kesilen' %}bg-success{% elif inv.invoice_type == 'gelen' %}bg-danger{% else %}bg-secondary{% endif %}">
+              {{ inv.invoice_type }}
+            </span>
+          </td>
+          <td>
+            <span class="badge {% if inv.status == 'paid' %}bg-success{% elif inv.status == 'approved' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+              {{ inv.status }}
+            </span>
+          </td>
+          <td class="text-end fw-semibold">{{ inv.amount | money }}</td>
+          <td><a href="/invoices/{{ inv.id }}" class="btn btn-xs btn-sm btn-outline-secondary py-0">Detay</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-muted py-4">Fatura kaydı bulunamadı.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

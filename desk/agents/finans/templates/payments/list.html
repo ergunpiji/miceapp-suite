@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}Ödeme Planı{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">📅 Ödeme Planı & Nakit Akışı</div>
+    <div class="page-subtitle">Planlanmış ödemeler ve nakit akış takvimi</div>
+  </div>
+  <button class="btn btn-primary" data-modal="modal-add-payment">+ Yeni Ödeme</button>
+</div>
+
+<!-- KPI'lar -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Bekleyen Toplam</div>
+    <div class="stat-value warning">{{ upcoming_total | currency }}</div>
+    <div class="stat-sub">Sonraki 30 gün</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Bu Ay Kasa Girişi</div>
+    <div class="stat-value positive">{{ cash_in | currency }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Bu Ay Kasa Çıkışı</div>
+    <div class="stat-value negative">{{ cash_out | currency }}</div>
+  </div>
+</div>
+
+<!-- Haftalık nakit akışı özeti -->
+{% if weekly %}
+<div class="card mb-4">
+  <div class="card-header"><span class="card-title">📊 Haftalık Ödeme Takvimi (90 gün)</span></div>
+  <div class="card-body">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Hafta Başı</th><th class="text-right">Planlanan Çıkış</th></tr>
+        </thead>
+        <tbody>
+          {% for week, amount in weekly.items() %}
+          <tr>
+            <td>{{ week }}</td>
+            <td class="text-right font-mono amount-negative">{{ amount | currency }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Filtreler -->
+<div class="filters-bar">
+  <a href="/payments?status=all"       class="btn btn-sm {% if status_filter == 'all' %}btn-primary{% else %}btn-outline{% endif %}">Tümü</a>
+  <a href="/payments?status=bekliyor"  class="btn btn-sm {% if status_filter == 'bekliyor' %}btn-primary{% else %}btn-outline{% endif %}">Bekliyor</a>
+  <a href="/payments?status=gecikti"   class="btn btn-sm {% if status_filter == 'gecikti' %}btn-primary{% else %}btn-outline{% endif %}">Gecikmiş</a>
+  <a href="/payments?status=odendi"    class="btn btn-sm {% if status_filter == 'odendi' %}btn-primary{% else %}btn-outline{% endif %}">Ödendi</a>
+  <a href="/payments?status=iptal"     class="btn btn-sm {% if status_filter == 'iptal' %}btn-primary{% else %}btn-outline{% endif %}">İptal</a>
+</div>
+
+<!-- Tablo -->
+<div class="card">
+  <div class="table-wrap">
+    {% if plans %}
+    <table>
+      <thead>
+        <tr>
+          <th>Açıklama</th>
+          <th>Proje</th>
+          <th>Tedarikçi</th>
+          <th>Vade</th>
+          <th class="text-right">Tutar</th>
+          <th>Yöntem</th>
+          <th>Durum</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in plans %}
+        <tr>
+          <td>{{ p.description }}</td>
+          <td>{{ p.project.name if p.project else '—' }}</td>
+          <td>{{ p.supplier_account.name if p.supplier_account else '—' }}</td>
+          <td class="nowrap {% if p.is_overdue %}amount-negative{% endif %}">
+            {{ p.due_date | fmtdate }}
+            {% if p.is_overdue %}<span class="badge badge-danger">Gecikti</span>{% endif %}
+          </td>
+          <td class="text-right font-mono">{{ p.amount | currency }}</td>
+          <td>{{ p.payment_method or '—' }}</td>
+          <td>
+            {% if p.status == 'odendi' %}<span class="badge badge-success">Ödendi</span>
+            {% elif p.status == 'bekliyor' and p.is_overdue %}<span class="badge badge-danger">Gecikti</span>
+            {% elif p.status == 'bekliyor' %}<span class="badge badge-warning">Bekliyor</span>
+            {% elif p.status == 'iptal' %}<span class="badge badge-neutral">İptal</span>
+            {% else %}<span class="badge badge-neutral">{{ p.status }}</span>{% endif %}
+          </td>
+          <td class="nowrap">
+            {% if p.status == 'bekliyor' %}
+            <button class="btn btn-xs btn-success" data-modal="modal-pay-{{ p.id }}">✓ Ödendi</button>
+            <form method="post" action="/payments/{{ p.id }}/cancel" style="display:inline" data-confirm="İptal edilsin mi?">
+              <button class="btn btn-xs btn-secondary">İptal</button>
+            </form>
+            {% endif %}
+            <form method="post" action="/payments/{{ p.id }}/delete" style="display:inline" data-confirm="Silinsin mi?">
+              <button class="btn btn-xs btn-danger">✕</button>
+            </form>
+          </td>
+        </tr>
+        {% if p.status == 'bekliyor' %}
+        <!-- Ödendi modal -->
+        <tr style="display:none">
+          <td colspan="8">
+            <div class="modal-overlay" id="modal-pay-{{ p.id }}">
+              <div class="modal-box">
+                <div class="modal-title">✓ Ödeme Onayla — {{ p.description }}</div>
+                <form method="post" action="/payments/{{ p.id }}/mark-paid">
+                  <div class="form-grid">
+                    <div class="form-group">
+                      <label>Ödeme Tarihi</label>
+                      <input name="payment_date" type="date" value="{{ today.isoformat() }}">
+                    </div>
+                    <div class="form-group">
+                      <label>Ödeme Yöntemi</label>
+                      <select name="payment_method">
+                        {% for m in methods %}
+                        <option value="{{ m.value }}">{{ m.label }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                  </div>
+                  <div class="flex gap-2 mt-4">
+                    <button type="submit" class="btn btn-success">Onayla</button>
+                    <button type="button" class="btn btn-secondary" data-close-modal>İptal</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">📅</div>
+      <div class="empty-state-text">Ödeme planı yok</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Modal: Yeni ödeme -->
+<div class="modal-overlay" id="modal-add-payment">
+  <div class="modal-box">
+    <div class="modal-title">📅 Yeni Ödeme Planı</div>
+    <form method="post" action="/payments/add">
+      <div class="form-grid">
+        <div class="form-group form-grid-full">
+          <label>Açıklama *</label>
+          <input name="description" required>
+        </div>
+        <div class="form-group">
+          <label>Tutar (₺)</label>
+          <input name="amount" type="number" step="0.01" min="0" value="0">
+        </div>
+        <div class="form-group">
+          <label>Vade Tarihi *</label>
+          <input name="due_date" type="date" required>
+        </div>
+        <div class="form-group">
+          <label>Proje</label>
+          <select name="project_id">
+            <option value="">— Seç —</option>
+            {% for pr in projects %}
+            <option value="{{ pr.id }}">{{ pr.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Tedarikçi</label>
+          <select name="supplier_account_id">
+            <option value="">— Seç —</option>
+            {% for s in suppliers %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Ödeme Yöntemi</label>
+          <select name="payment_method">
+            <option value="">— Seç —</option>
+            {% for m in methods %}
+            <option value="{{ m.value }}">{{ m.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group form-grid-full">
+          <label>Notlar</label>
+          <textarea name="notes" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary">Ekle</button>
+        <button type="button" class="btn btn-secondary" data-close-modal>İptal</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

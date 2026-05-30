@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}{% block page_title %}{% endblock %} — miceapp.net{% endblock %}</title>
+  <link rel="icon" type="image/png" href="/static/miceapp-favicon-1024.png">
+
+  <!-- Bootstrap 5 CDN -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <!-- miceapp Design Tokens -->
+  <link rel="stylesheet" href="/static/design-tokens.css">
+
+  <style>
+    :root {
+      --sidebar-width:        var(--mice-sidebar-width);
+      --sidebar-bg:           var(--mice-sidebar-bg);
+      --sidebar-hover:        var(--mice-sidebar-hover);
+      --sidebar-active-bg:    var(--mice-sidebar-active-bg);
+      --sidebar-active-color: var(--mice-sidebar-active-clr);
+      --sidebar-active-border:var(--mice-sidebar-active-bdr);
+      --topbar-height:        var(--mice-topbar-height);
+      --primary:              var(--mice-primary);
+    }
+    body { background: var(--mice-page-bg); font-family: var(--mice-font); }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: var(--sidebar-width);
+      background: var(--sidebar-bg);
+      color: white;
+      position: fixed; top: 0; left: 0;
+      height: 100vh; overflow-y: auto;
+      display: flex; flex-direction: column;
+      z-index: 1000;
+      transition: transform .25s ease;
+    }
+    body.sidebar-collapsed .sidebar { transform: translateX(-100%); }
+    body.sidebar-collapsed .main-content { margin-left: 0; }
+    body.sidebar-collapsed .topbar { left: 0; padding-left: 56px; }
+
+    /* ── Sidebar toggle (ok) ── */
+    .sidebar-toggle {
+      position: fixed; top: 16px;
+      left: calc(var(--sidebar-width) - 14px);
+      width: 28px; height: 28px; padding: 0;
+      border-radius: 50%;
+      background: #60a5fa; color: white;
+      border: 2px solid white;
+      box-shadow: 0 2px 8px rgba(0,0,0,.2);
+      cursor: pointer; z-index: 1100;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; line-height: 1;
+      transition: left .25s ease, background .15s;
+    }
+    .sidebar-toggle:hover { background: #3b82f6; }
+    .sidebar-toggle i { transition: transform .25s ease; }
+    body.sidebar-collapsed .sidebar-toggle { left: 8px; }
+    body.sidebar-collapsed .sidebar-toggle i { transform: rotate(180deg); }
+    .sidebar-header { padding: 20px 20px 16px; border-bottom: 1px solid rgba(255,255,255,.08); }
+    .sidebar-logo img { width: 190px; height: auto; display: block; }
+    .sidebar-subtitle { font-size: 10px; color: rgba(255,255,255,.4); text-transform: uppercase; letter-spacing: 1.5px; }
+    .sidebar-user { padding: 14px 20px; border-bottom: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; gap: 12px; }
+    .user-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--primary);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 14px; color: white; flex-shrink: 0;
+    }
+    .user-info .user-name { font-size: 13px; font-weight: 600; color: white; }
+    .user-info .user-role { font-size: 11px; color: rgba(255,255,255,.45); }
+    .sidebar-nav { flex: 1; padding: 10px 0; }
+    .nav-section-label {
+      padding: 12px 20px 4px;
+      font-size: 10px; font-weight: 700; color: rgba(255,255,255,.28);
+      text-transform: uppercase; letter-spacing: 1.5px;
+    }
+    .sidebar-link {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 20px;
+      color: rgba(255,255,255,.65);
+      text-decoration: none;
+      font-size: 13.5px;
+      border-left: 3px solid transparent;
+      transition: all .15s;
+    }
+    .sidebar-link:hover { background: var(--sidebar-hover); color: white; }
+    .sidebar-link.active { background: var(--sidebar-active-bg); color: var(--sidebar-active-color); border-left-color: var(--sidebar-active-border); }
+    .sidebar-link .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+    .sidebar-footer { padding: 14px 20px; border-top: 1px solid rgba(255,255,255,.08); }
+    .nav-section-label.section-main { color: rgba(255,255,255,.55); font-size: 11px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,.07); margin-top: 6px; }
+    .nav-section-label.section-main:first-of-type { border-top: none; margin-top: 0; }
+    .nav-section-label.section-cancel { color: #fca5a5; }
+    .sidebar-link .nav-badge { margin-left: auto; font-size: 10px; padding: 1px 6px; border-radius: 10px; background: rgba(255,255,255,.15); color: rgba(255,255,255,.7); }
+
+    /* ── Tree Nav ── */
+    .tree-group { border-top: 1px solid rgba(255,255,255,.06); margin-top: 2px; }
+    .tree-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 20px; cursor: pointer;
+      color: rgba(255,255,255,.45);
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+      user-select: none; transition: color .15s;
+    }
+    .tree-header:hover { color: rgba(255,255,255,.75); }
+    .tree-header .tree-icon { font-size: 14px; width: 20px; text-align: center; }
+    .tree-header .tree-arrow {
+      font-size: 10px;
+      transition: transform .2s;
+      color: rgba(255,255,255,.25);
+    }
+    .tree-header .tree-spacer { flex: 1; }
+    .tree-badge {
+      font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px;
+      background: #ef4444; color: #fff; line-height: 1.5; min-width: 18px; text-align: center;
+    }
+    .tree-group.open > .tree-header .tree-arrow { transform: rotate(90deg); }
+    .tree-group.open > .tree-header { color: rgba(255,255,255,.7); }
+    .tree-children {
+      overflow: hidden;
+      max-height: 0;
+      transition: max-height .25s ease;
+    }
+    .tree-group.open > .tree-children { max-height: 600px; }
+    .tree-children .sidebar-link { padding-left: 32px; font-size: 13px; }
+
+    /* ── Main ── */
+    .main-content {
+      margin-left: var(--sidebar-width);
+      min-height: 100vh; padding-top: var(--topbar-height);
+      transition: margin-left .25s ease;
+    }
+    .topbar {
+      background: white; border-bottom: 1px solid #e2e8f0;
+      padding: 0 28px; height: var(--topbar-height);
+      display: flex; align-items: center; justify-content: space-between;
+      position: fixed; top: 0; left: var(--sidebar-width); right: 0; z-index: 999;
+      transition: left .25s ease;
+    }
+    .page-title { font-size: 17px; font-weight: 700; color: #1e293b; }
+    .page-content { padding: 28px; }
+
+    /* ── Profil Dropdown ── */
+    .profile-btn {
+      display: flex; align-items: center; gap: 10px;
+      background: none; border: none; cursor: pointer;
+      padding: 6px 10px; border-radius: 10px; transition: background .15s;
+    }
+    .profile-btn:hover { background: #f1f5f9; }
+    .profile-avatar {
+      width: 36px; height: 36px; border-radius: 50%; object-fit: cover;
+      background: var(--primary); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 14px; color: white;
+      overflow: hidden;
+    }
+    .profile-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+    .profile-name  { font-size: 13px; font-weight: 600; color: #1e293b; text-align: left; }
+    .profile-role  { font-size: 11px; color: #64748b; text-align: left; }
+    .profile-panel {
+      position: fixed; top: calc(var(--topbar-height) + 4px); right: 16px;
+      width: 320px; background: white; border: 1px solid #e2e8f0;
+      border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,.12);
+      z-index: 2000; display: none; overflow: hidden;
+    }
+    .profile-panel.open { display: block; }
+    .profile-panel-header {
+      background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+      padding: 20px; text-align: center;
+    }
+    .profile-panel-avatar {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: var(--primary); margin: 0 auto 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 24px; color: white;
+      border: 3px solid rgba(255,255,255,.25);
+      overflow: hidden; position: relative; cursor: pointer;
+    }
+    .profile-panel-avatar img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
+    .profile-panel-avatar .avatar-overlay {
+      position: absolute; inset: 0; background: rgba(0,0,0,.45);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity .15s; border-radius: 50%;
+      color: white; font-size: 18px;
+    }
+    .profile-panel-avatar:hover .avatar-overlay { opacity: 1; }
+    .profile-panel-name  { font-size: 16px; font-weight: 700; color: white; }
+    .profile-panel-title { font-size: 12px; color: rgba(255,255,255,.65); margin-top: 3px; }
+    .profile-panel-body  { padding: 16px; }
+    .profile-field label { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: .4px; }
+    .profile-field input { font-size: 13px; }
+    .profile-divider { border-top: 1px solid #f1f5f9; margin: 12px 0; }
+    .profile-logout-btn {
+      width: 100%; text-align: left; background: none; border: none;
+      padding: 10px 16px; font-size: 13px; color: #dc2626; cursor: pointer;
+      display: flex; align-items: center; gap: 8px; border-radius: 8px;
+      transition: background .12s;
+    }
+    .profile-logout-btn:hover { background: #fef2f2; }
+
+    /* ── Cards ── */
+    .card { border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-radius: 12px; }
+    .card-header-custom { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+
+    /* ── Stats ── */
+    .stat-card {
+      background: white; border: 1px solid #e2e8f0;
+      border-radius: 12px; padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    .stat-icon { font-size: 28px; margin-bottom: 8px; }
+    .stat-value { font-size: 32px; font-weight: 800; color: #1e293b; line-height: 1; }
+    .stat-label { font-size: 12px; color: #64748b; margin-top: 4px; }
+
+    /* ── Tables ── */
+    .table th { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #64748b; background: #f8fafc; white-space: nowrap; }
+    .table td { vertical-align: middle; }
+
+    /* ── Badges ── */
+    .badge-status-draft            { background: #f1f5f9; color: #475569; }
+    .badge-status-pending          { background: #fef3c7; color: #92400e; }
+    .badge-status-in_progress      { background: #dbeafe; color: #1d4ed8; }
+    .badge-status-venues_contacted { background: #e0f2fe; color: #075985; }
+    .badge-status-budget_ready     { background: #d1fae5; color: #065f46; }
+    .badge-status-offer_sent       { background: #ccfbf1; color: #0f766e; }
+    .badge-status-confirmed        { background: #bbf7d0; color: #14532d; font-weight:700; }
+    .badge-status-revision         { background: #fef3c7; color: #92400e; }
+    .badge-status-completed        { background: #bbf7d0; color: #14532d; }
+    .badge-status-cancelled        { background: #fee2e2; color: #991b1b; }
+    .badge-status-closing          { background: #ede9fe; color: #6d28d9; }
+    .badge-status-closed           { background: #e2e8f0; color: #1e293b; }
+    .badge-status-postponed        { background: #fef3c7; color: #78350f; }
+    .badge-status-fund_pool        { background: #dbeafe; color: #1e3a8a; font-weight:700; }
+
+    /* ── Flash messages ── */
+    .flash-container { position: fixed; top: 70px; right: 20px; z-index: 9999; min-width: 300px; }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+{% if current_user %}
+<script>
+  // Sidebar durumu — boyanmadan önce oku (flash önlemek için)
+  try {
+    if (localStorage.getItem('edem_sidebar_collapsed') === '1') {
+      document.body.classList.add('sidebar-collapsed');
+    }
+  } catch(e) {}
+</script>
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">
+      <img src="/static/miceapp-logo-white-transparent.png" alt="miceapp.net">
+    </div>
+  </div>
+
+  <nav class="sidebar-nav" id="sidebarNav">
+    {% set cp = request.url.path %}
+    {% set cq = request.url.query %}
+    {% set nc = request.state.nav_counts %}
+    {# nav-badge yardımcı macro'ları #}
+    {% macro nb(n) %}{% if n and n > 0 %}<span class="nav-badge" style="background:#ef4444;color:#fff;font-weight:700;">{{ n }}</span>{% endif %}{% endmacro %}
+    {% macro tb(n) %}{% if n and n > 0 %}<span class="tree-spacer"></span><span class="tree-badge">{{ n }}</span>{% endif %}{% endmacro %}
+
+    {# ── Her rol için ortak: Dashboard ── #}
+    <a href="/dashboard"
+       class="sidebar-link {% if cp == '/dashboard' %}active{% endif %}">
+      <i class="bi bi-speedometer2 nav-icon"></i> Dashboard
+    </a>
+
+    {# ── ADMIN / GENEL MÜDÜR / MUHASEBE MÜDÜRÜ ── #}
+    {% if current_user.role in ('admin', 'mudur', 'muhasebe_muduru') or current_user.is_gm %}
+
+      {# ── DOSYA TAKİP — tek grup (Talepler + Aktif İşler + Arşiv birleşik) ── #}
+      {% set _adm_talepler = (nc.budgets_pending_all or 0) %}
+      {% set _adm_closure = (nc.closure_pending_manager or 0) + (nc.closure_pending_gm or 0) + (nc.closure_pending_finance or 0) %}
+      {% set _adm_awaiting_closure = (nc.completed_awaiting_closure or 0) %}
+      {% set _adm_dosya_total = _adm_talepler + _adm_closure + _adm_awaiting_closure %}
+      <div class="tree-group" id="grp-dosya">
+        <div class="tree-header" onclick="toggleTree('grp-dosya')">
+          <i class="bi bi-folder2-open tree-icon"></i> Dosya Takip
+          {{ tb(_adm_dosya_total) }}
+          <i class="bi bi-chevron-right tree-arrow"></i>
+        </div>
+        <div class="tree-children">
+          {% if current_user.role in ('admin', 'mudur') %}
+          <a href="/requests/new"
+             class="sidebar-link {% if cp == '/requests/new' %}active{% endif %}">
+            <i class="bi bi-plus-circle nav-icon"></i> Yeni Talep Oluştur
+          </a>
+          {% endif %}
+          <a href="/requests"
+             class="sidebar-link {% if cp == '/requests' and 'view=' not in cq %}active{% endif %}">
+            <i class="bi bi-list-ul nav-icon"></i> Referans Listesi
+          </a>
+          <a href="/requests?view=pending_work"
+             class="sidebar-link {% if 'view=pending_work' in cq %}active{% endif %}">
+            <i class="bi bi-hourglass-split nav-icon"></i> Yeni & İşlemdekiler
+          </a>
+          <a href="/requests?view=awaiting"
+             class="sidebar-link {% if 'view=awaiting' in cq %}active{% endif %}">
+            <i class="bi bi-clock-history nav-icon"></i> Referans Onaylama
+            {{ nb(_adm_talepler) }}
+          </a>
+          <a href="/requests?view=ongoing"
+             class="sidebar-link {% if 'view=ongoing' in cq %}active{% endif %}">
+            <i class="bi bi-play-circle nav-icon"></i> Aktif Referanslar
+          </a>
+          <a href="/requests?view=fund_pools"
+             class="sidebar-link {% if 'view=fund_pools' in cq %}active{% endif %}">
+            <i class="bi bi-bank2 nav-icon"></i> Fon Havuzları
+          </a>
+          {% if current_user.role in ('admin', 'muhasebe_muduru') or current_user.is_gm %}
+          <a href="/requests/fund-pools/new"
+             class="sidebar-link {% if cp == '/requests/fund-pools/new' %}active{% endif %}"
+             style="color: #a78bfa;">
+            <i class="bi bi-plus-circle nav-icon"></i> Fon Havuzu Aç
+          </a>
+          {% endif %}
+          <a href="/budgets"
+             class="sidebar-link {% if '/budgets' in cp %}active{% endif %}">
+            <i class="bi bi-calculator nav-icon"></i> Bütçe Yönetimi
+          </a>
+          <a href="/requests?view=awaiting_closure"
+             class="sidebar-link {% if 'view=awaiting_closure' in cq %}active{% endif %}">
+            <i class="bi bi-folder-symlink nav-icon"></i> Referans Kapatma
+            {{ nb(_adm_awaiting_closure) }}
+          </a>
+          <a href="/requests?view=closing"
+             class="sidebar-link {% if 'view=closing' in cq %}active{% endif %}">
+            <i class="bi bi-hourglass-split nav-icon"></i> Kapama Onayında
+            {{ nb(_adm_closure) }}
+          </a>
+          <a href="/requests?view=closed"
+             class="sidebar-link {% if 'view=closed' in cq %}active{% endif %}">
+            <i class="bi bi-lock nav-icon"></i> Kapalı Referanslar
+          </a>
+          <a href="/requests?view=cancelled"
+             class="sidebar-link {% if 'view=cancelled' in cq %}active{% endif %}">
+            <i class="bi bi-x-circle nav-icon"></i> İptal Olan İşler
+          </a>
+        </div>
+      </div>
+
+      {% set _inv_total = (nc.inv_pending_gm or 0) + (nc.inv_pending_mudur or 0) + (nc.inv_pending_cut or 0) %}
+      {% set _fin_total = _inv_total + (nc.closure_pending_manager or 0) + (nc.closure_pending_gm or 0) + (nc.closure_pending_finance or 0) %}
+      <div class="tree-group" id="grp-finans">
+        <div class="tree-header" onclick="toggleTree('grp-finans')">
+          <i class="bi bi-wallet2 tree-icon"></i> Finans
+          {{ tb(_fin_total) }}
+          <i class="bi bi-chevron-right tree-arrow"></i>
+        </div>
+        <div class="tree-children">
+          <a href="/invoices/new"
+             class="sidebar-link {% if cp == '/invoices/new' %}active{% endif %}">
+            <i class="bi bi-plus-circle nav-icon"></i> Fatura Kes
+          </a>
+          <a href="/invoices"
+             class="sidebar-link {% if cp == '/invoices' %}active{% endif %}">
+            <i class="bi bi-receipt nav-icon"></i> Faturalar
+            {{ nb(_inv_total) }}
+          </a>
+          <a href="/invoices/unlinked"
+             class="sidebar-link {% if cp == '/invoices/unlinked' %}active{% endif %}">
+            <i class="bi bi-link-45deg nav-icon"></i> Referans Bekleyenler
+            {{ nb(nc.inv_unlinked) }}
+          </a>
+          <a href="/vendors"
+             class="sidebar-link {% if cp.startswith('/vendors') and 'cash-flow' not in cp %}active{% endif %}">
+            <i class="bi bi-building-check nav-icon"></i> Tedarikçiler
+          </a>
+          <a href="/prepayment-requests"
+             class="sidebar-link {% if '/prepayment-requests' in cp %}active{% endif %}">
+            <i class="bi bi-arrow-up-circle nav-icon"></i> Ön Ödeme Talepleri
+            {{ nb((nc.prepayment_pending_gm or 0) + (nc.prepayment_approved or 0)) }}
+          </a>
+          {% if current_user.role in ('admin', 'muhasebe_muduru') or current_user.is_gm %}
+          <a href="/vendors/cash-flow/view"
+             class="sidebar-link {% if 'cash-flow' in cp %}active{% endif %}">
+            <i class="bi bi-graph-up-arrow nav-icon"></i> Nakit Akışı
+          </a>
+          <a href="/reports/financial"
+             class="sidebar-link {% if '/reports/financial' in cp %}active{% endif %}">
+            <i class="bi bi-graph-up nav-icon"></i> Finansal Rapor
+          </a>
+          {% endif %}
+          <a href="/expenses/new"
+             class="sidebar-link {% if cp == '/expenses/new' %}active{% endif %}">
+            <i class="bi bi-plus-circle nav-icon"></i> HBF Oluştur
+          </a>
+          <a href="/expenses"
+             class="sidebar-link {% if cp == '/expenses' %}active{% endif %}">
+            <i class="bi bi-clipboard-check nav-icon"></i> Harcama Formları
+          </a>
+          <a href="/closure"
+             class="sidebar-link {% if cp == '/closure' %}active{% endif %}">
+            <i class="bi bi-lock nav-icon"></i> Dosya Kapama
+            {{ nb((nc.closure_pending_manager or 0) + (nc.closure_pending_gm or 0) + (nc.closure_pending_finance or 0)) }}
+          </a>
+          {% if current_user.role in ('admin', 'mudur', 'muhasebe_muduru', 'muhasebe', 'yonetici') %}
+          <a href="/undocumented"
+             class="sidebar-link {% if cp == '/undocumented' %}active{% endif %}">
+            <i class="bi bi-cash-stack nav-icon"></i> Belgesiz Gelir/Gider
+          </a>
+          {% endif %}
+        </div>
+      </div>
+
+      {# ── Koordinatör Fatura Onayları ── #}
+      {% if current_user.is_gm or current_user.role in ('mudur', 'yonetici', 'asistan', 'project_manager') %}
+      <a href="/coordinator/invoices"
+         class="sidebar-link {% if '/coordinator/invoices' in cp %}active{% endif %}">
+        <i class="bi bi-clipboard2-check nav-icon"></i> Koordinatör Onayları
+        {{ nb(nc.coordinator_pending) }}
+      </a>
+      {% endif %}
+
+      {# Yönetim + Ayarlar: admin ve GM #}
+      {% if current_user.role == 'admin' or current_user.is_gm %}
+      <div class="tree-group" id="grp-yonetim">
+        <div class="tree-header" onclick="toggleTree('grp-yonetim')">
+          <i class="bi bi-gear tree-icon"></i> Yönetim
+          <i class="bi bi-chevron-right tree-arrow"></i>
+        </div>
+        <div class="tree-children">
+          <a href="/venues"
+             class="sidebar-link {% if '/venues' in cp %}active{% endif %}">
+            <i class="bi bi-building nav-icon"></i> Tedarikçi Havuzu
+          </a>
+          <a href="/services"
+             class="sidebar-link {% if '/services' in cp %}active{% endif %}">
+            <i class="bi bi-grid nav-icon"></i> Hizmet Kataloğu
+          </a>
+          <a href="/customers"
+             class="sidebar-link {% if '/customers' in cp %}active{% endif %}">
+            <i class="bi bi-briefcase nav-icon"></i> Müşteri Yönetimi
+          </a>
+          <a href="/users"
+             class="sidebar-link {% if cp == '/users' or ('/users' in cp and '/org-titles' not in cp) %}active{% endif %}">
+            <i class="bi bi-people nav-icon"></i> Kullanıcı Yönetimi
+          </a>
+          <a href="/users/org-titles"
+             class="sidebar-link {% if '/users/org-titles' in cp %}active{% endif %}">
+            <i class="bi bi-diagram-3 nav-icon"></i> Org Yapısı
+          </a>
+          <a href="/teams"
+             class="sidebar-link {% if '/teams' in cp %}active{% endif %}">
+            <i class="bi bi-people-fill nav-icon"></i> Etkinlik Takımları
+          </a>
+          <a href="/admin/permissions"
+             class="sidebar-link {% if '/admin/permissions' in cp %}active{% endif %}">
+            <i class="bi bi-shield-check nav-icon"></i> Rol İzinleri
+          </a>
+          <a href="/event-types"
+             class="sidebar-link {% if '/event-types' in cp %}active{% endif %}">
+            <i class="bi bi-tags nav-icon"></i> Etkinlik Tipleri
+          </a>
+          <a href="/bulk-import"
+             class="sidebar-link {% if '/bulk-import' in cp %}active{% endif %}">
+            <i class="bi bi-cloud-upload nav-icon"></i> Toplu İçe Aktarma
+          </a>
+        </div>
+      </div>
+
+      <div class="tree-group" id="grp-ayarlar">
+        <div class="tree-header" onclick="toggleTree('grp-ayarlar')">
+          <i class="bi bi-sliders tree-icon"></i> Ayarlar
+          <i class="bi bi-chevron-right tree-arrow"></i>
+        </div>
+        <div class="tree-children">
+          <a href="/email-templates"
+             class="sidebar-link {% if '/email-templates' in cp %}active{% endif %}">
+            <i class="bi bi-envelope nav-icon"></i> E-posta Şablonları
+          </a>
+          <a href="/settings"
+             class="sidebar-link {% if '/settings' in cp %}active{% endif %}">
+            <i class="bi bi-toggles nav-icon"></i> Sistem Ayarları
+          </a>
+        </div>
+      </div>
+      {% endif %}{# /Yönetim+Ayarlar #}
+
+    {# ── YÖNETİCİ (yonetici) ── Kendi referansları + teklif + bütçe onayı #}
+    {% elif current_user.role == 'yonetici' %}
+
+      {# ── DOSYA TAKİP — tek grup ── #}
+      {% set _pm_talepler = (nc.budgets_pending or 0) %}
+      {% set _pm_awaiting_closure = (nc.completed_awaiting_closure or 0) %}
+      <div class="tree-group" id="grp-dosya">
+        <div class="tree-header" onclick="toggleTree('grp-dosya')">
+          <i class="bi bi-folder2-open tree-icon"></i> Dosya Takip
+          {{ tb(_pm_talepler + _pm_awaiting_closure) }}
+          <i class="bi bi-chevron-right tree-arrow"></i>
+        </div>
+        <div class="tree-children">
+          <a href="/requests/new"
+             class="sidebar-link {% if cp == '/requests/new' %}active{% endif %}">
+            <i class="bi bi-plus-circle nav-icon"></i> Yeni Talep Oluştur
+          </a>
+          <a href="/requests"
+             class="sidebar-link {% if cp == '/requests' and not cq %}active{% endif %}">
+            <i class="bi bi-list-ul nav-icon"></i> Referans Listesi
+          </a>
+          <a href="/requests?view=pending_work"
+             class="sidebar-link {% if 'view=pending_work' in cq %}active{% endif %}">
+            <i class="bi bi-hourglass-split nav-icon"></i> Yeni & İşlemdekiler
+          </a>
+          <a href="/requests?view=awaiting"
+             class="sidebar-link {% if 'view=awaiting' in cq %}active{% endif %}">
+            <i class="bi bi-clock-history nav-icon"></i> Referans Onaylama
+            {{ nb(_pm_talepler) }}
+          </a>
+          <a href="/requests?view=ongoing"
+             class="sidebar-link {% if 'view=ongoing' in cq %}active{% endif %}">
+            <i class="bi bi-play-circle nav-icon"></i> Aktif Referanslar
+          </a>
+          <a href="/requests?view=fund_pools"
+             class="sidebar-link {% if 'view=fund_pools' in cq %}active{% endif %}">
+            <i class="bi bi-bank2 nav-icon"></i> Fon Havuzları
+          </a>
+          <a href="/requests?view=awaiting_closure"
+             class="sidebar-link {% if 'view=awaiting_closure' in cq %}active{% endif %}">
+            <i class="bi bi-folder-symlink nav-icon"></i> Referans Kapatma
+            {{ nb(_pm_awaiting_closure) }}
+          </a>
+          <a href="/requests?view=closing"
+             class="sidebar-link {% if 'view=closing' in cq %}active{% endif %}">
+            <i class="bi bi-hourglass-split nav-icon"></i> Kapama Onayında
+          </a>
+          <a href="/requests?view=closed"
+             class="sidebar-link {% if 'view=closed' in cq %}active{% endif %}">
+            <i class="bi bi-lock nav-icon"></i> Kapalı Referanslar
+          </a>
+          <a href="/requests?view=cancelled"
+             class="sidebar-link {% if 'view=cancelled' in cq %}active{% endif %}">
+            <i class="bi bi-x-circle nav-icon"></i> İptal Olan İşler
+          </a>
+        </div>
+      </div>
+
+      <div class="tree-group" id="grp-finans">
+        <div class="tree-header" onclick="toggleTree('grp-finans')">
+          <i class="bi bi-wallet2 tree-icon"></i> Finans
+          <i class="bi bi-chevron-right tree-arrow"></i>
+        </div>
+        <div class="tree-children">
+          <a href="/invoices"
+             class="sidebar-link {% if cp == '/invoices' %}active{% endif %}">
+            <i class="bi bi-receipt nav-icon"></i> Faturalar
+          </a>
+          <a href="/invoices/unlinked"
+             class="sidebar-link {% if cp == '/invoices/unlinked' %}active{% endif %}">
+            <i class="bi bi-link-45deg nav-icon"></i> Referans Bekleyenler
+            {{ nb(nc.inv_unlinked) }}
+          </a>
+          <a href="/prepayment-requests/new"
+             class="sidebar-link {% if cp == '/prepayment-requests/new' %}active{% endif %}">
+            <i class="bi bi-arrow-up-circle nav-icon"></i> Ön Ödeme Talebi
+          </a>
+          <a href="/prepayment-requests"
+             class="sidebar-link {% if '/prepayment-requests' in cp and cp != '/prepayment-requests/new' %}active{% endif %}">
+            <i class="bi bi-list-ul nav-icon"></i> Taleplerim
+          </a>
+          <a href="/expenses/new"
+             class="sidebar-link {% if cp == '/expenses/new' %}active{% endif %}">
+            <i class="bi bi-plus-circle nav-icon"></i> HBF Oluştur
+          </a>
+          <a href="/expenses"
+             class="sidebar-link {% if cp == '/expenses' %}active{% endif %}">
+            <i class="bi bi-clipboard-check nav-icon"></i> Harcama Formları
+          </a>
+        </div>
+      </div>
+
+      <div class="tree-group" id="grp-bilgi">
+        <div class="tree-header" onclick="toggleTree('grp-bilgi')">
+          <i class="bi bi-building tree-icon"></i> Bilgi
+          <i class="bi bi-chevron-right tree-arrow"></i>
+        </div>
+        <div class="tree-children">
+          <a href="/venues"
+             class="sidebar-link {% if '/venues' in cp %}active{% endif %}">
+            <i class="bi bi-building nav-icon"></i> Tedarikçi Havuzu
+          </a>
+        </div>
+      </div>
+
+    {# ── ASİSTAN (asistan) ── Görüntüleme + HBF oluştur #}
+    {% elif current_user.role == 'asistan' %}
+
+      {# ── DOSYA TAKİP — asistan sadece kendi referanslarını görür ── #}
+      <div class="tree-group" id="grp-dosya">
+        <div class="tree-header" onclick="toggleTree('grp-dosya')">
+          <i class="bi bi-folder2-open tree-icon"></i> Dosya Takip
+          <i class="bi bi-chevron-right tree-arrow"></i>
+        </div>
+        <div class="tree-children">
+          <a href="/requests/new"
+             class="sidebar-link {% if cp == '/requests/new' %}active{% endif %}">
+            <i class="bi bi-plus-circle nav-icon"></i> Yeni Talep Oluştur
+          </a>
+          <a href="/requests"
+             class="sidebar-link {% if cp == '/requests' %}active{% endif %}">
+            <i class="bi bi-list-ul nav-icon"></i> Referans Listesi
+          </a>
+        </div>
+      </div>
+
+      <div class="tree-group" id="grp-finans">
+        <div class="tree-header" onclick="toggleTree('grp-finans')">
+          <i class="bi bi-wallet2 tree-icon"></i> Finans
+          <i class="bi bi-chevron-right tree-arrow"></i>
+        </div>
+        <div class="tree-children">
+          <a href="/invoices/unlinked"
+             class="sidebar-link {% if cp == '/invoices/unlinked' %}active{% endif %}">
+            <i class="bi bi-link-45deg nav-icon"></i> Referans Bekleyenler
+            {{ nb(nc.inv_unlinked) }}
+          </a>
+          <a href="/prepayment-requests/new"
+             class="sidebar-link {% if cp == '/prepayment-requests/new' %}active{% endif %}">
+            <i class="bi bi-arrow-up-circle nav-icon"></i> Ön Ödeme Talebi
+          </a>
+          <a href="/prepayment-requests"
+             class="sidebar-link {% if '/prepayment-requests' in cp and cp != '/prepayment-requests/new' %}active{% endif %}">
+            <i class="bi bi-list-ul nav-icon"></i> Taleplerim
+          </a>
+          <a href="/expenses/new"
+             class="sidebar-link {% if cp == '/expenses/new' %}active{% endif %}">
+            <i class="bi bi-plus-circle nav-icon"></i> HBF Oluştur
+          </a>
+          <a href="/expenses"
+             class="sidebar-link {% if cp == '/expenses' %}active{% endif %}">
+            <i class="bi bi-clipboard-check nav-icon"></i> Harcama Formları
+          </a>
+        </div>
+      </div>
+
+      <div class="tree-group" id="grp-bilgi">
+        <div class="tree-header" onclick="toggleTree('grp-bilgi')">
+          <i class="bi bi-building tree-icon"></i> Bilgi
+          <i class="bi bi-chevron-right tree-arrow"></i>
+        </div>
+        <div class="tree-children">
+          <a href="/venues"
+             class="sidebar-link {% if '/venues' in cp %}active{% endif %}">
+            <i class="bi bi-building nav-icon"></i> Tedarikçi Havuzu
+          </a>
+        </div>
+      </div>
+
+    {# ── E-DEM ── #}
+    {% elif current_user.role == 'e_dem' %}
+
+      {# ── DOSYA TAKİP — tek grup ── #}
+      {% set _edem_pending = (nc.requests_pending or 0) %}
+      <div class="tree-group" id="grp-dosya">
+        <div class="tree-header" onclick="toggleTree('grp-dosya')">
+          <i class="bi bi-folder2-open tree-icon"></i> Dosya Takip
+          {{ tb(_edem_pending) }}
+          <i class="bi bi-chevron-right tree-arrow"></i>
+        </div>
+        <div class="tree-children">
+          <a href="/requests?view=pending_work"
+             class="sidebar-link {% if 'view=pending_work' in cq or (cp == '/requests' and 'view=' not in cq) %}active{% endif %}">
+            <i class="bi bi-hourglass-split nav-icon"></i> Yeni & İşlemdekiler
+            {{ nb(_edem_pending) }}
+          </a>
+          <a href="/requests?view=awaiting"
+             class="sidebar-link {% if 'view=awaiting' in cq %}active{% endif %}">
+            <i class="bi bi-clock-history nav-icon"></i> Referans Onaylama
+          </a>
+          <a href="/requests?view=ongoing"
+             class="sidebar-link {% if 'view=ongoing' in cq %}active{% endif %}">
+            <i class="bi bi-play-circle nav-icon"></i> Aktif Referanslar
+          </a>
+          <a href="/budgets"
+             class="sidebar-link {% if '/budgets' in cp %}active{% endif %}">
+            <i class="bi bi-calculator nav-icon"></i> Bütçe Yönetimi
+          </a>
+          <a href="/requests?view=awaiting_closure"
+             class="sidebar-link {% if 'view=awaiting_closure' in cq %}active{% endif %}">
+            <i class="bi bi-folder-symlink nav-icon"></i> Referans Kapatma
+          </a>
+          <a href="/requests?view=closing"
+             class="sidebar-link {% if 'view=closing' in cq %}active{% endif %}">
+            <i class="bi bi-hourglass-split nav-icon"></i> Kapama Onayında
+          </a>
+          <a href="/requests?view=closed"
+             class="sidebar-link {% if 'view=closed' in cq %}active{% endif %}">
+            <i class="bi bi-lock nav-icon"></i> Kapalı Referanslar
+          </a>
+        </div>
+      </div>
+
+      <div class="tree-group" id="grp-finans">
+        <div class="tree-header" onclick="toggleTree('grp-finans')">
+          <i class="bi bi-wallet2 tree-icon"></i> Finans
+          <i class="bi bi-chevron-right tree-arrow"></i>
+        </div>
+        <div class="tree-children">
+          <a href="/expenses/new"
+             class="sidebar-link {% if cp == '/expenses/new' %}active{% endif %}">
+            <i class="bi bi-plus-circle nav-icon"></i> HBF Oluştur
+          </a>
+          <a href="/expenses"
+             class="sidebar-link {% if cp == '/expenses' %}active{% endif %}">
+            <i class="bi bi-clipboard-check nav-icon"></i> Harcama Formları
+          </a>
+        </div>
+      </div>
+
+      <div class="tree-group" id="grp-bilgi">
+        <div class="tree-header" onclick="toggleTree('grp-bilgi')">
+          <i class="bi bi-building tree-icon"></i> Bilgi
+          <i class="bi bi-chevron-right tree-arrow"></i>
+        </div>
+        <div class="tree-children">
+          <a href="/venues"
+             class="sidebar-link {% if '/venues' in cp %}active{% endif %}">
+            <i class="bi bi-building nav-icon"></i> Tedarikçi Havuzu
+          </a>
+        </div>
+      </div>
+
+    {# ── MUHASEBE ── #}
+    {% elif current_user.role == 'muhasebe' %}
+
+      {% set _muh_inv = (nc.inv_pending_cut or 0) %}
+      <div class="tree-group" id="grp-finans">
+        <div class="tree-header" onclick="toggleTree('grp-finans')">
+          <i class="bi bi-wallet2 tree-icon"></i> Finans
+          {{ tb(_muh_inv) }}
+          <i class="bi bi-chevron-right tree-arrow"></i>
+        </div>
+        <div class="tree-children">
+          <a href="/invoices/new"
+             class="sidebar-link {% if cp == '/invoices/new' %}active{% endif %}">
+            <i class="bi bi-plus-circle nav-icon"></i> Fatura Kes
+          </a>
+          <a href="/invoices"
+             class="sidebar-link {% if cp == '/invoices' %}active{% endif %}">
+            <i class="bi bi-receipt nav-icon"></i> Faturalar
+            {{ nb(_muh_inv) }}
+          </a>
+          <a href="/invoices/unlinked"
+             class="sidebar-link {% if cp == '/invoices/unlinked' %}active{% endif %}">
+            <i class="bi bi-link-45deg nav-icon"></i> Referans Bekleyenler
+            {{ nb(nc.inv_unlinked) }}
+          </a>
+          <a href="/vendors"
+             class="sidebar-link {% if cp.startswith('/vendors') and 'cash-flow' not in cp %}active{% endif %}">
+            <i class="bi bi-building-check nav-icon"></i> Tedarikçiler
+          </a>
+          <a href="/prepayment-requests"
+             class="sidebar-link {% if '/prepayment-requests' in cp %}active{% endif %}">
+            <i class="bi bi-arrow-up-circle nav-icon"></i> Ön Ödeme Talepleri
+            {{ nb((nc.prepayment_pending_gm or 0) + (nc.prepayment_approved or 0)) }}
+          </a>
+          <a href="/vendors/cash-flow/view"
+             class="sidebar-link {% if 'cash-flow' in cp %}active{% endif %}">
+            <i class="bi bi-graph-up-arrow nav-icon"></i> Nakit Akışı
+          </a>
+          <a href="/reports/financial"
+             class="sidebar-link {% if '/reports/financial' in cp %}active{% endif %}">
+            <i class="bi bi-graph-up nav-icon"></i> Finansal Rapor
+          </a>
+        </div>
+      </div>
+
+      <div class="tree-group" id="grp-dosya">
+        <div class="tree-header" onclick="toggleTree('grp-dosya')">
+          <i class="bi bi-folder2-open tree-icon"></i> Dosya Takip
+          <i class="bi bi-chevron-right tree-arrow"></i>
+        </div>
+        <div class="tree-children">
+          <a href="/requests"
+             class="sidebar-link {% if cp == '/requests' %}active{% endif %}">
+            <i class="bi bi-list-ul nav-icon"></i> Referans Listesi
+          </a>
+        </div>
+      </div>
+
+    {% endif %}
+
+  </nav>
+
+  <div class="sidebar-footer" style="padding: 10px 20px;">
+    <div style="font-size:11px; color:rgba(255,255,255,.3); text-align:center;">
+      Çıkış için sağ üst profil menüsünü kullanın
+    </div>
+  </div>
+</aside>
+
+<!-- Sidebar aç/kapa butonu -->
+<button type="button" id="sidebarToggle" class="sidebar-toggle"
+        title="Menüyü gizle / göster" onclick="toggleSidebar()">
+  <i class="bi bi-chevron-left"></i>
+</button>
+
+<!-- ═══════════════════════════════ MAIN ═══════════════════════════════ -->
+<div class="main-content">
+  <div class="topbar">
+    <div class="page-title">{% block topbar_title %}{% block page_title_block %}{% endblock %}{% endblock %}</div>
+    <div class="d-flex align-items-center gap-2">
+      {% block topbar_actions %}{% endblock %}
+
+      {# ── Bildirim çanı ── #}
+      <div class="position-relative" id="notifBellWrap">
+        <button onclick="toggleNotifPanel(event)" id="notifBellBtn" title="Bildirimler"
+                style="background:none;border:none;padding:6px 8px;border-radius:8px;
+                       cursor:pointer;color:#64748b;position:relative;transition:background .15s;"
+                onmouseover="this.style.background='#f1f5f9'"
+                onmouseout="this.style.background='none'">
+          <i class="bi bi-bell" style="font-size:18px;"></i>
+          <span id="notifBadge"
+                style="display:none;position:absolute;top:2px;right:2px;background:#ef4444;
+                       color:#fff;border-radius:999px;font-size:9px;font-weight:700;
+                       min-width:16px;height:16px;line-height:16px;text-align:center;
+                       padding:0 3px;"></span>
+        </button>
+        <div id="notifPanel"
+             style="display:none;position:fixed;right:16px;top:calc(var(--topbar-height) + 4px);width:340px;
+                    background:#fff;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.14);
+                    z-index:2000;overflow:hidden;">
+          <div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;display:flex;
+                      align-items:center;justify-content:space-between;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-weight:700;font-size:14px;">Bildirimler</span>
+              <span id="notifPanelCount" style="display:none;font-size:11px;background:#ef4444;color:#fff;
+                    border-radius:10px;padding:1px 7px;font-weight:700;"></span>
+            </div>
+            <button onclick="markAllRead()" style="font-size:11px;color:#6366f1;background:none;
+                    border:none;cursor:pointer;padding:0;">Tümünü okundu işaretle</button>
+          </div>
+          <div id="notifList" style="max-height:400px;overflow-y:auto;">
+            <div class="text-center text-muted py-4" style="font-size:13px;">
+              <span class="spinner-border spinner-border-sm"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# ── Profil butonu ── #}
+      <button class="profile-btn" onclick="toggleProfilePanel(event)" id="profileBtn">
+        <div class="profile-avatar" id="topbarAvatar">
+          {% if current_user.avatar_b64 %}
+            <img src="{{ current_user.avatar_b64 }}" alt="">
+          {% else %}
+            {{ current_user.initials }}
+          {% endif %}
+        </div>
+        <div>
+          <div class="profile-name">{{ current_user.full_name }}</div>
+          <div class="profile-role">{{ current_user.role | role_label }}</div>
+        </div>
+        <i class="bi bi-chevron-down" style="font-size:11px;color:#94a3b8;"></i>
+      </button>
+    </div>
+  </div>
+
+  {# ── Profil Paneli ── #}
+  <div class="profile-panel" id="profilePanel">
+    {# Başlık — avatar + isim #}
+    <div class="profile-panel-header">
+      <div class="profile-panel-avatar" id="panelAvatarWrap" onclick="document.getElementById('avatarFileInput').click()" title="Fotoğraf değiştir">
+        <div id="panelAvatarInner">
+          {% if current_user.avatar_b64 %}
+            <img src="{{ current_user.avatar_b64 }}" id="panelAvatarImg" alt="">
+          {% else %}
+            <span id="panelAvatarInitials">{{ current_user.initials }}</span>
+          {% endif %}
+        </div>
+        <div class="avatar-overlay"><i class="bi bi-camera-fill"></i></div>
+      </div>
+      <input type="file" id="avatarFileInput" accept="image/*" style="display:none" onchange="handleAvatarUpload(this)">
+      <div class="profile-panel-name" id="panelFullName">{{ current_user.full_name }}</div>
+      <div class="profile-panel-title" id="panelTitle">{{ current_user.title or current_user.role | role_label }}</div>
+    </div>
+
+    {# Form alanları #}
+    <div class="profile-panel-body">
+      <form id="profileForm" onsubmit="saveProfile(event)">
+        <div class="row g-2 mb-2">
+          <div class="col-6 profile-field">
+            <label class="form-label mb-1">Ad</label>
+            <input type="text" class="form-control form-control-sm" name="name"
+                   value="{{ current_user.name }}" required>
+          </div>
+          <div class="col-6 profile-field">
+            <label class="form-label mb-1">Soyad</label>
+            <input type="text" class="form-control form-control-sm" name="surname"
+                   value="{{ current_user.surname }}" required>
+          </div>
+        </div>
+        <div class="profile-field mb-2">
+          <label class="form-label mb-1">Ünvan</label>
+          <input type="text" class="form-control form-control-sm" name="title"
+                 value="{{ current_user.title or '' }}" placeholder="Örn: Etkinlik Müdürü">
+        </div>
+        <div class="profile-field mb-3">
+          <label class="form-label mb-1">Telefon</label>
+          <input type="text" class="form-control form-control-sm" name="phone"
+                 value="{{ current_user.phone or '' }}" placeholder="+90 …">
+        </div>
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary btn-sm flex-grow-1" id="profileSaveBtn">
+            <i class="bi bi-check-lg me-1"></i> Kaydet
+          </button>
+          {% if current_user.avatar_b64 %}
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearAvatar()" title="Fotoğrafı kaldır">
+            <i class="bi bi-person-x"></i>
+          </button>
+          {% endif %}
+        </div>
+        <div id="profileMsg" class="mt-2" style="font-size:12px;display:none;"></div>
+      </form>
+
+      <div class="profile-divider"></div>
+
+      <form method="post" action="/logout">
+        <button type="submit" class="profile-logout-btn">
+          <i class="bi bi-box-arrow-right"></i> Çıkış Yap
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Flash mesajları -->
+  <div class="flash-container" id="flashContainer">
+    {% with messages = get_flashed_messages(with_categories=true) if get_flashed_messages is defined else [] %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show shadow-sm" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endwith %}
+  </div>
+
+  <div class="page-content">
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+{% else %}
+<!-- Giriş yapılmamış — sadece content bloğu -->
+{% block login_content %}{% endblock %}
+{% endif %}
+
+<!-- Bootstrap 5 JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Auto-dismiss flash -->
+<script>
+  setTimeout(() => {
+    document.querySelectorAll('.flash-container .alert').forEach(el => {
+      const bsAlert = new bootstrap.Alert(el);
+      bsAlert.close();
+    });
+  }, 4000);
+</script>
+
+<!-- ── Sidebar collapse JS ── -->
+<script>
+  window.toggleSidebar = function() {
+    var collapsed = document.body.classList.toggle('sidebar-collapsed');
+    try { localStorage.setItem('edem_sidebar_collapsed', collapsed ? '1' : '0'); } catch(e) {}
+  };
+</script>
+
+<!-- ── Tree Nav JS ── -->
+<script>
+(function() {
+  var STORE_KEY = 'edem_nav_open_{{ current_user.role }}';
+
+  function getSaved() {
+    try { return JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); } catch(e) { return []; }
+  }
+  function save(list) {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(list)); } catch(e) {}
+  }
+
+  window.toggleTree = function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var isOpen = el.classList.contains('open');
+    el.classList.toggle('open', !isOpen);
+    // localStorage güncelle
+    var saved = getSaved();
+    if (!isOpen) {
+      if (!saved.includes(id)) saved.push(id);
+    } else {
+      saved = saved.filter(function(x) { return x !== id; });
+    }
+    save(saved);
+  };
+
+  // Sayfa yüklenince: aktif linki içeren grubu aç + kaydedilmiş grupları aç
+  document.addEventListener('DOMContentLoaded', function() {
+    var saved = getSaved();
+    // Aktif link hangi grupta?
+    var activeLink = document.querySelector('#sidebarNav .sidebar-link.active');
+    if (activeLink) {
+      var grp = activeLink.closest('.tree-group');
+      if (grp && !saved.includes(grp.id)) saved.push(grp.id);
+    }
+    // Grupları aç
+    saved.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.classList.add('open');
+    });
+    save(saved);
+  });
+})();
+</script>
+
+<!-- ── Profil Paneli JS ── -->
+<script>
+(function() {
+  const panel = document.getElementById('profilePanel');
+  if (!panel) return;
+
+  // Panel aç/kapat
+  window.toggleProfilePanel = function(e) {
+    e.stopPropagation();
+    panel.classList.toggle('open');
+  };
+
+  // Dışarı tıklayınca kapat
+  document.addEventListener('click', function(e) {
+    if (!panel.contains(e.target) && !document.getElementById('profileBtn').contains(e.target)) {
+      panel.classList.remove('open');
+    }
+  });
+
+  // ── Avatar yükleme ───────────────────────────────────────────────────────
+  window.handleAvatarUpload = function(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { alert('Lütfen bir resim dosyası seçin.'); return; }
+
+    const reader = new FileReader();
+    reader.onload = async function(ev) {
+      // Önce canvas ile yeniden boyutlandır (max 256px)
+      const img = new Image();
+      img.onload = async function() {
+        const size = 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        // Kare kırp
+        const minDim = Math.min(img.width, img.height);
+        const sx = (img.width  - minDim) / 2;
+        const sy = (img.height - minDim) / 2;
+        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
+        const dataUri = canvas.toDataURL('image/jpeg', 0.85);
+        await saveAvatarToServer(dataUri);
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+  };
+
+  async function saveAvatarToServer(dataUri) {
+    const res = await fetch('/profile/avatar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data_uri: dataUri }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      updateAvatarUI(data.avatar);
+    } else {
+      alert(data.error || 'Hata');
+    }
+  }
+
+  window.clearAvatar = async function() {
+    const res = await fetch('/profile/avatar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clear: true }),
+    });
+    const data = await res.json();
+    if (data.ok) updateAvatarUI('');
+  };
+
+  function updateAvatarUI(avatarSrc) {
+    // Topbar avatar
+    const topbar = document.getElementById('topbarAvatar');
+    // Panel avatar
+    const panelInner = document.getElementById('panelAvatarInner');
+    const initials = '{{ current_user.initials }}';
+    if (avatarSrc) {
+      topbar.innerHTML  = `<img src="${avatarSrc}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+      panelInner.innerHTML = `<img src="${avatarSrc}" id="panelAvatarImg" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+    } else {
+      topbar.innerHTML  = initials;
+      panelInner.innerHTML = `<span id="panelAvatarInitials">${initials}</span>`;
+    }
+  }
+
+  // ── Profil bilgileri kaydet ───────────────────────────────────────────────
+  window.saveProfile = async function(e) {
+    e.preventDefault();
+    const form = document.getElementById('profileForm');
+    const btn  = document.getElementById('profileSaveBtn');
+    const msg  = document.getElementById('profileMsg');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>';
+
+    const fd = new FormData(form);
+    try {
+      const res  = await fetch('/profile/update', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.ok) {
+        // Topbar'daki ismi güncelle
+        const nameEl = document.querySelector('.profile-name');
+        if (nameEl) nameEl.textContent = data.full_name;
+        document.getElementById('panelFullName').textContent = data.full_name;
+        document.getElementById('panelTitle').textContent    = data.title || '{{ current_user.role | role_label }}';
+        msg.style.display = '';
+        msg.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>Kaydedildi</span>';
+        setTimeout(() => { msg.style.display = 'none'; }, 2000);
+      } else {
+        msg.style.display = '';
+        msg.innerHTML = `<span class="text-danger">${data.error}</span>`;
+      }
+    } catch(err) {
+      msg.style.display = '';
+      msg.innerHTML = '<span class="text-danger">Bağlantı hatası</span>';
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Kaydet';
+  };
+})();
+</script>
+
+<!-- ── Bildirim JS ── -->
+<script>
+(function() {
+  const badge     = document.getElementById('notifBadge');
+  const panel     = document.getElementById('notifPanel');
+  const listEl    = document.getElementById('notifList');
+  const bellWrap  = document.getElementById('notifBellWrap');
+  if (!panel) return;
+
+  // İkon + renk + Türkçe etiket tablosu
+  const NOTIF_META = {
+    invoice_pending : { icon: 'bi-receipt',              color: '#f59e0b', label: 'Fatura Onayı',    bg: '#fef3c7' },
+    hbf_submitted   : { icon: 'bi-file-earmark-check',   color: '#3b82f6', label: 'Harcama Formu',  bg: '#dbeafe' },
+    budget_pricing  : { icon: 'bi-currency-dollar',      color: '#10b981', label: 'Bütçe Fiyatlandırma', bg: '#d1fae5' },
+    budget_revision : { icon: 'bi-pencil-square',        color: '#f97316', label: 'Bütçe Revizyonu', bg: '#ffedd5' },
+    new_request     : { icon: 'bi-inbox',                color: '#8b5cf6', label: 'Yeni Talep',      bg: '#ede9fe' },
+    invoice_approved: { icon: 'bi-check-circle',         color: '#16a34a', label: 'Fatura Onaylandı', bg: '#dcfce7' },
+    closure_request : { icon: 'bi-folder-check',         color: '#0891b2', label: 'Kapama Onayı',    bg: '#cffafe' },
+    offer_ready     : { icon: 'bi-clipboard2-check',     color: '#7c3aed', label: 'Teklif Hazır',    bg: '#f3e8ff' },
+  };
+
+  const panelCount = document.getElementById('notifPanelCount');
+
+  async function fetchCount() {
+    try {
+      const r = await fetch('/notifications/count');
+      if (r.status === 401 || r.redirected) { window.location.href = '/login'; return; }
+      if (!r.ok) return;
+      const data = await r.json();
+      const count = data.count ?? 0;
+      if (count > 0) {
+        const txt = count > 99 ? '99+' : String(count);
+        badge.textContent = txt;
+        badge.style.display = '';
+        if (panelCount) { panelCount.textContent = txt + ' okunmamış'; panelCount.style.display = ''; }
+      } else {
+        badge.style.display = 'none';
+        if (panelCount) panelCount.style.display = 'none';
+      }
+    } catch (_) {}
+  }
+
+  async function loadList() {
+    listEl.innerHTML = '<div class="text-center text-muted py-4" style="font-size:13px;"><span class="spinner-border spinner-border-sm"></span></div>';
+    try {
+      const r = await fetch('/notifications');
+      if (r.status === 401 || r.redirected) { window.location.href = '/login'; return; }
+      if (!r.ok) { listEl.innerHTML = '<div class="text-center text-muted py-3" style="font-size:13px;">Yüklenemedi</div>'; return; }
+      const items = await r.json();
+      if (!items.length) {
+        listEl.innerHTML = '<div class="text-center text-muted py-4" style="font-size:13px;">Bildirim yok</div>';
+        return;
+      }
+      listEl.innerHTML = items.map(n => {
+        const m = NOTIF_META[n.type] || { icon: 'bi-bell', color: '#64748b', label: '', bg: '#f1f5f9' };
+        const bg = n.read ? '' : 'background:#f8faff;';
+        const labelHtml = m.label
+          ? `<span style="display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;
+                          background:${m.bg};color:${m.color};margin-bottom:3px;">${m.label}</span>`
+          : '';
+        return `<a href="${n.link || '#'}" onclick="markOne('${n.id}',event)"
+                   style="${bg}display:block;padding:10px 14px;text-decoration:none;
+                          border-bottom:1px solid #f1f5f9;transition:background .12s;"
+                   onmouseover="this.style.background='#f1f5f9'"
+                   onmouseout="this.style.background='${n.read ? '' : '#f8faff'}'">
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <div style="width:34px;height:34px;border-radius:8px;background:${m.bg};display:flex;
+                        align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">
+              <i class="bi ${m.icon}" style="color:${m.color};font-size:15px;"></i>
+            </div>
+            <div style="flex:1;min-width:0;">
+              ${labelHtml}
+              <div style="font-size:12.5px;font-weight:${n.read ? '400' : '600'};color:#1e293b;
+                          line-height:1.4;">${n.title}</div>
+              ${n.message ? `<div style="font-size:11px;color:#64748b;margin-top:2px;
+                             overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${n.message}</div>` : ''}
+              <div style="font-size:10px;color:#94a3b8;margin-top:3px;">
+                <i class="bi bi-clock" style="font-size:9px;"></i> ${n.created_at}
+              </div>
+            </div>
+            ${!n.read ? '<span style="width:7px;height:7px;background:#6366f1;border-radius:50%;flex-shrink:0;margin-top:6px;"></span>' : ''}
+          </div>
+        </a>`;
+      }).join('');
+    } catch (_) {
+      listEl.innerHTML = '<div class="text-center text-muted py-3" style="font-size:13px;">Yüklenemedi</div>';
+    }
+  }
+
+  window.toggleNotifPanel = function(e) {
+    e.stopPropagation();
+    const isOpen = panel.style.display !== 'none';
+    if (isOpen) {
+      panel.style.display = 'none';
+    } else {
+      panel.style.display = '';
+      loadList();
+    }
+  };
+
+  window.markAllRead = async function() {
+    await fetch('/notifications/read-all', { method: 'POST' });
+    badge.style.display = 'none';
+    if (panelCount) panelCount.style.display = 'none';
+    loadList();
+  };
+
+  window.markOne = async function(id, e) {
+    // Navigasyondan önce okundu işaretle (fire-and-forget, navigation'ı engelleme)
+    fetch(`/notifications/${id}/read`, { method: 'POST' }).catch(() => {});
+    fetchCount();
+  };
+
+  // Dışarı tıklayınca kapat
+  document.addEventListener('click', function(e) {
+    if (bellWrap && !bellWrap.contains(e.target)) {
+      panel.style.display = 'none';
+    }
+  });
+
+  // Başlangıçta say, sonra 60sn aralıklarla güncelle
+  fetchCount();
+  setInterval(fetchCount, 60000);
+})();
+</script>
+
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

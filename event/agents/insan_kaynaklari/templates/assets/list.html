@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Zimmet Takibi — HR Ajanı{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Zimmet Takibi</div>
+    <div class="page-subtitle">{{ assets | length }} kayıt</div>
+  </div>
+  {% if user.role == 'hr_admin' %}
+  <a href="/assets/new" class="btn btn-primary">+ Yeni Zimmet</a>
+  {% endif %}
+</div>
+
+<div class="filters-bar">
+  <form method="get" style="display:contents">
+    <input type="text" name="q" value="{{ q }}" placeholder="Marka, model, seri no...">
+    <select name="asset_type">
+      <option value="">Tüm Türler</option>
+      {% for t in asset_types %}
+      <option value="{{ t.value }}" {% if asset_type == t.value %}selected{% endif %}>{{ t.label }}</option>
+      {% endfor %}
+    </select>
+    <select name="status">
+      <option value="">Tümü</option>
+      <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Aktif (İadесiz)</option>
+      <option value="returned" {% if status_filter == 'returned' %}selected{% endif %}>İade Edildi</option>
+    </select>
+    <button type="submit" class="btn btn-outline">Filtrele</button>
+    <a href="/assets" class="btn btn-secondary">Temizle</a>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-body" style="padding:0">
+    {% if assets %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Çalışan</th><th>Tür</th><th>Cihaz</th><th>Seri No</th><th>Teslim Tarihi</th><th>Durum</th><th>İmza</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for asset in assets %}
+          <tr>
+            <td>
+              <a href="/employees/{{ asset.employee_id }}" style="color:var(--accent)">
+                {{ asset.employee.full_name if asset.employee else '—' }}
+              </a>
+            </td>
+            <td><span class="badge badge-neutral">{{ asset.asset_type_label }}</span></td>
+            <td>{{ asset.description }}</td>
+            <td class="font-mono">{{ asset.serial_no or '—' }}</td>
+            <td class="nowrap">{{ asset.assigned_date | fmtdate }}</td>
+            <td>
+              <span class="badge badge-{% if asset.is_active %}success{% else %}neutral{% endif %}">
+                {% if asset.is_active %}Aktif{% else %}İade Edildi{% endif %}
+              </span>
+            </td>
+            <td>
+              {% if asset.signed %}<span class="badge badge-success">✓</span>{% else %}—{% endif %}
+            </td>
+            <td>
+              <a href="/employees/{{ asset.employee_id }}?tab=assets" class="btn btn-xs btn-outline">Detay</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">💼</div>
+      <div class="empty-state-text">Zimmet kaydı bulunamadı</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

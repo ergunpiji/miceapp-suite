@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% block page_title %}{{ team.name }}{% endblock %}
+{% block page_title_block %}{{ team.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .org-node {
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    gap: 10px;
+  }
+  .org-node:hover { background: #f8fafc; }
+  .avatar-sm {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; flex-shrink: 0;
+    background: #dbeafe; color: #1d4ed8;
+  }
+  .role-badge {
+    font-size: 10px; padding: 2px 7px; border-radius: 20px; font-weight: 600;
+    flex-shrink: 0;
+  }
+  .role-mudur    { background:#1e3a5f; color:#fff; }
+  .role-yonetici { background:#0369a1; color:#fff; }
+  .role-asistan  { background:#7c3aed; color:#fff; }
+  .no-manager-warn {
+    background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px;
+    padding: 14px 18px; margin-bottom: 16px;
+  }
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+<a href="/teams" class="btn btn-outline-secondary btn-sm me-2">
+  <i class="bi bi-arrow-left me-1"></i> Takımlar
+</a>
+<button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#editModal">
+  <i class="bi bi-pencil me-1"></i> Düzenle
+</button>
+{% endblock %}
+
+{% block content %}
+
+{% if saved %}
+<div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
+  <i class="bi bi-check-circle me-2"></i>Takım güncellendi.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="row g-4">
+
+  {# ── Sol: Org Ağacı ── #}
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header fw-bold" style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
+        <i class="bi bi-diagram-3 me-2 text-primary"></i>Organizasyon Yapısı
+        <small class="text-muted fw-normal ms-2" style="font-size:12px;">{{ members | length }} aktif üye</small>
+      </div>
+
+      {% if tree %}
+      <div class="org-tree">
+        {% macro render_node(node, depth) %}
+        <div class="org-node" style="padding-left: {{ 14 + depth * 28 }}px;">
+          {# Girinti çizgisi #}
+          {% if depth > 0 %}
+          <div style="color:#cbd5e1; flex-shrink:0; font-size:13px; margin-right:2px;">└</div>
+          {% endif %}
+
+          {# Avatar #}
+          {% set u = node.user %}
+          {% if u.avatar_b64 %}
+          <img src="{{ u.avatar_b64 }}" class="avatar-sm" style="object-fit:cover;">
+          {% else %}
+          <div class="avatar-sm">{{ (u.full_name or '?')[:2].upper() }}</div>
+          {% endif %}
+
+          {# Ad, unvan #}
+          <div style="flex:1; min-width:0;">
+            <div class="fw-semibold" style="font-size:13px;">{{ u.full_name }}</div>
+            {% if u.org_title %}
+            <div style="font-size:11px; color:#94a3b8;">{{ u.org_title.name }}</div>
+            {% endif %}
+          </div>
+
+          {# Rol badge #}
+          {% if u.role == 'mudur' %}
+          <span class="role-badge role-mudur">Müdür</span>
+          {% elif u.role == 'yonetici' %}
+          <span class="role-badge role-yonetici">Yönetici</span>
+          {% elif u.role == 'asistan' %}
+          <span class="role-badge role-asistan">Asistan</span>
+          {% endif %}
+
+          {# Düzenle linki #}
+          <a href="/users/{{ u.id }}/edit" class="btn btn-sm btn-outline-secondary py-0 px-2"
+             title="Kullanıcıyı Düzenle" style="flex-shrink:0;">
+            <i class="bi bi-pencil" style="font-size:11px;"></i>
+          </a>
+        </div>
+        {% for child in node.children %}
+          {{ render_node(child, depth + 1) }}
+        {% endfor %}
+        {% endmacro %}
+
+        {% for root in tree %}
+          {{ render_node(root, 0) }}
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-people fs-1 d-block mb-2 opacity-25"></i>
+        Bu takımda henüz üye yok.
+        <div class="mt-3 small">
+          Kullanıcı düzenleme sayfasından üye ekleyebilirsiniz.
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    {# Yönetici atanmamış üyeler uyarısı #}
+    {% if unassigned %}
+    <div class="no-manager-warn mt-3">
+      <div class="fw-semibold mb-2" style="font-size:13px;">
+        <i class="bi bi-exclamation-triangle text-warning me-1"></i>
+        Takım dışı yöneticiye bağlı üyeler ({{ unassigned | length }})
+      </div>
+      {% for u in unassigned %}
+      <div class="d-flex align-items-center gap-2 mb-1">
+        <div class="avatar-sm" style="width:24px;height:24px;font-size:10px;">{{ (u.full_name or '?')[:2].upper() }}</div>
+        <span style="font-size:13px;">{{ u.full_name }}</span>
+        <a href="/users/{{ u.id }}/edit" class="btn btn-xs btn-outline-warning py-0 px-1 ms-auto" style="font-size:11px;">Düzenle</a>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  {# ── Sağ: Takım Bilgileri ── #}
+  <div class="col-lg-4">
+    <div class="card mb-3">
+      <div class="card-body">
+        <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#64748b; margin-bottom:12px;">
+          <i class="bi bi-info-circle me-1"></i>Takım Bilgileri
+        </div>
+        <table class="table table-sm mb-0" style="font-size:13px;">
+          <tr>
+            <td class="text-muted border-0">Ad</td>
+            <td class="fw-semibold border-0">{{ team.name }}</td>
+          </tr>
+          {% if team.code %}
+          <tr>
+            <td class="text-muted">Kod</td>
+            <td class="fw-semibold">{{ team.code }}</td>
+          </tr>
+          {% endif %}
+          <tr>
+            <td class="text-muted">Toplam Üye</td>
+            <td class="fw-semibold">{{ members | length }}</td>
+          </tr>
+          <tr>
+            <td class="text-muted">Durum</td>
+            <td>
+              {% if team.active %}
+              <span class="badge bg-success bg-opacity-10 text-success">Aktif</span>
+              {% else %}
+              <span class="badge bg-danger bg-opacity-10 text-danger">Pasif</span>
+              {% endif %}
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    {# Rol dağılımı #}
+    <div class="card">
+      <div class="card-body">
+        <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#64748b; margin-bottom:12px;">
+          <i class="bi bi-bar-chart me-1"></i>Rol Dağılımı
+        </div>
+        {% set mudur_cnt    = members | selectattr('role', 'equalto', 'mudur')    | list | length %}
+        {% set yonetici_cnt = members | selectattr('role', 'equalto', 'yonetici') | list | length %}
+        {% set asistan_cnt  = members | selectattr('role', 'equalto', 'asistan')  | list | length %}
+        {% for label, cnt, cls in [
+            ('Müdür',    mudur_cnt,    'role-mudur'),
+            ('Yönetici', yonetici_cnt, 'role-yonetici'),
+            ('Asistan',  asistan_cnt,  'role-asistan')
+        ] %}
+        {% if cnt > 0 %}
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <span class="role-badge {{ cls }}">{{ label }}</span>
+          <span style="font-size:13px; flex:1;">{{ cnt }} kişi</span>
+        </div>
+        {% endif %}
+        {% endfor %}
+        {% if mudur_cnt == 0 and yonetici_cnt == 0 and asistan_cnt == 0 %}
+        <div class="text-muted" style="font-size:13px;">Üye yok.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Tehlikeli bölge #}
+    {% if team.active %}
+    <div class="card mt-3 border-danger border-opacity-25">
+      <div class="card-body">
+        <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#dc2626; margin-bottom:10px;">
+          Tehlikeli Bölge
+        </div>
+        <form method="post" action="/teams/{{ team.id }}/delete"
+              onsubmit="return confirm('Takımı pasife almak istediğinize emin misiniz? Üye kullanıcılar takımda kalmaya devam eder.')">
+          <button type="submit" class="btn btn-sm btn-outline-danger w-100">
+            <i class="bi bi-archive me-1"></i> Takımı Pasife Al
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+{# ── Düzenleme Modal ── #}
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title">Takımı Düzenle</h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/teams/{{ team.id }}/edit">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:13px;">Takım Adı</label>
+            <input type="text" name="name" class="form-control form-control-sm"
+                   value="{{ team.name }}" required>
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-semibold" style="font-size:13px;">Kısa Kod</label>
+            <input type="text" name="code" class="form-control form-control-sm"
+                   value="{{ team.code or '' }}" maxlength="10">
+          </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-sm btn-primary">Kaydet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

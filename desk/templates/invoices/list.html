@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block page_title %}{% if show_archived %}Fatura Arşivi{% else %}Faturalar{% endif %}{% endblock %}
+{% block topbar_actions %}
+{% if not show_archived and can_edit(request, 'invoices') %}
+<a href="/invoices/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Fatura Ekle</a>
+{% endif %}
+{% endblock %}
+{% block content %}
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-transparent border-0">
+    <div class="d-flex align-items-center gap-3 mb-2">
+      <a href="/invoices" class="btn btn-sm {% if not show_archived %}btn-dark{% else %}btn-outline-secondary{% endif %}">Aktif</a>
+      {% if current_user.has_role_min("mudur") %}
+      <a href="/invoices?archived=1" class="btn btn-sm {% if show_archived %}btn-dark{% else %}btn-outline-secondary{% endif %}">
+        Arşiv
+      </a>
+      {% endif %}
+    </div>
+    {% if not show_archived %}
+    <form class="row g-2 align-items-end" method="get">
+      <div class="col-auto">
+        <select name="invoice_type" class="form-select form-select-sm">
+          <option value="">Tüm Tipler</option>
+          {% for val, label in invoice_types %}
+          <option value="{{ val }}" {% if invoice_type == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <select name="status_filter" class="form-select form-select-sm">
+          <option value="">Tüm Durumlar</option>
+          <option value="approved" {% if status_filter=='approved' %}selected{% endif %}>Onaylı</option>
+          <option value="paid" {% if status_filter=='paid' %}selected{% endif %}>Ödendi</option>
+          <option value="cancelled" {% if status_filter=='cancelled' %}selected{% endif %}>İptal</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="Fatura No Ara...">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-outline-secondary">Filtrele</button>
+        <a href="/invoices" class="btn btn-sm btn-link">Temizle</a>
+      </div>
+    </form>
+    {% else %}
+    <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Arşivlenmiş faturalar. "Geri Al" ile aktif listeye döndürülür.</p>
+    {% endif %}
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          {% if current_user.has_role_min("mudur") and not show_archived %}
+          <th style="width:36px"><input type="checkbox" id="selectAll" class="form-check-input"></th>
+          {% endif %}
+          <th>Fatura No</th><th>Tip</th><th>Tedarikçi / Müşteri</th><th>Referans</th><th>Tarih</th><th class="text-end">Tutar</th><th>Durum</th>
+          {% if not show_archived %}<th></th>{% endif %}
+          {% if show_archived %}<th></th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for inv in invoices %}
+        <tr>
+          {% if current_user.has_role_min("mudur") and not show_archived %}
+          <td><input type="checkbox" class="form-check-input row-check" value="{{ inv.id }}"></td>
+          {% endif %}
+          <td><a href="/invoices/{{ inv.id }}" class="text-decoration-none fw-semibold">{{ inv.invoice_no or ("#" ~ inv.id) }}</a></td>
+          <td><span class="badge bg-light text-dark">{{ inv.invoice_type }}</span></td>
+          <td>{% if inv.invoice_type in ('kesilen', 'iade_gelen') %}{% if inv.customer %}<a href="/customers/{{ inv.customer.id }}" class="text-decoration-none text-dark">{{ inv.customer.name }}</a>{% else %}—{% endif %}{% else %}{% if inv.vendor %}<a href="/vendors/{{ inv.vendor.id }}" class="text-decoration-none text-dark">{{ inv.vendor.name }}</a>{% else %}—{% endif %}{% endif %}</td>
+          <td>{% if inv.reference %}<a href="/references/{{ inv.ref_id }}" class="text-decoration-none small">{{ inv.reference.ref_no }}</a>{% else %}—{% endif %}</td>
+          <td>{{ inv.invoice_date | date_tr }}</td>
+          <td class="text-end fw-semibold">{{ inv.amount | money }}</td>
+          <td>
+            {% if inv.approval_status == 'onay_bekliyor' %}
+              <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split"></i> Onay Bekliyor</span>
+              {% if inv.current_approver %}<div class="small text-muted">{{ inv.current_approver.name }}</div>{% endif %}
+            {% elif inv.approval_status == 'reddedildi' %}
+              <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Reddedildi</span>
+            {% else %}
+              <span class="badge {% if inv.status == 'paid' %}bg-success{% elif inv.status == 'approved' %}bg-info text-dark{% else %}bg-secondary{% endif %}">{{ inv.status }}</span>
+            {% endif %}
+          </td>
+          {% if not show_archived %}
+          <td class="text-end pe-2">
+            {% if not inv.is_split_parent and not inv.split_parent_id and inv.status not in ('cancelled',) %}
+            {% set party = inv.customer.name if inv.invoice_type in ('kesilen','iade_gelen') else (inv.vendor.name if inv.vendor else '') %}
+            <button type="button" class="btn btn-outline-secondary btn-sm"
+              title="Faturayı Böl"
+              onclick="openSplitModal({id:{{ inv.id }}, party_name:'{{ party | e }}', invoice_no:'{{ (inv.invoice_no or '') | e }}', total_amount:{{ inv.total_with_vat }}, vat_rate:{{ (inv.vat_rate or 0.20) * 100 }}})">
+              <i class="bi bi-scissors"></i>
+            </button>
+            {% elif inv.is_split_parent %}
+            <span class="badge bg-light text-muted border" title="Bölünmüş fatura">Bölündü</span>
+            {% elif inv.split_parent_id %}
+            <span class="badge bg-light text-muted border" title="Bu fatura bir bölünme parçasıdır">Parça</span>
+            {% endif %}
+          </td>
+          {% endif %}
+          {% if show_archived %}
+          <td>
+            <form method="post" action="/invoices/{{ inv.id }}/undelete" class="d-inline">
+              <button class="btn btn-xs btn-outline-success btn-sm" title="Geri Al"><i class="bi bi-arrow-counterclockwise"></i> Geri Al</button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+        {% else %}
+        <tr><td colspan="{% if show_archived %}8{% elif current_user.is_admin %}9{% else %}8{% endif %}" class="text-center text-muted py-4">{% if show_archived %}Arşivde fatura yok.{% else %}Fatura bulunamadı.{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include "invoices/_split_modal.html" %}
+
+{% if current_user.has_role_min("mudur") and not show_archived %}
+<div id="bulkBar" class="position-fixed bottom-0 start-50 translate-middle-x mb-3 d-none" style="z-index:1050">
+  <div class="card shadow border-0 px-3 py-2 d-flex flex-row align-items-center gap-3">
+    <span id="selectedCount" class="text-muted small"></span>
+    <button class="btn btn-sm btn-warning" id="archiveBtn"><i class="bi bi-archive me-1"></i>Arşive Taşı</button>
+    <button class="btn btn-sm btn-outline-secondary" id="cancelSelect">İptal</button>
+  </div>
+</div>
+<script>
+const selectAll = document.getElementById('selectAll');
+const bulkBar   = document.getElementById('bulkBar');
+const countEl   = document.getElementById('selectedCount');
+function getChecked() { return [...document.querySelectorAll('.row-check:checked')].map(c => c.value); }
+function updateBar() {
+  const ids = getChecked();
+  bulkBar.classList.toggle('d-none', ids.length === 0);
+  countEl.textContent = ids.length + ' fatura seçildi';
+}
+selectAll.addEventListener('change', () => {
+  document.querySelectorAll('.row-check').forEach(c => c.checked = selectAll.checked);
+  updateBar();
+});
+document.querySelectorAll('.row-check').forEach(c => c.addEventListener('change', updateBar));
+document.getElementById('cancelSelect').addEventListener('click', () => {
+  document.querySelectorAll('.row-check').forEach(c => c.checked = false);
+  selectAll.checked = false; updateBar();
+});
+document.getElementById('archiveBtn').addEventListener('click', () => {
+  const ids = getChecked();
+  if (!ids.length) return;
+  if (!confirm(ids.length + ' faturayı arşive taşımak istediğinize emin misiniz?')) return;
+  const fd = new FormData();
+  fd.append('ids_json', JSON.stringify(ids));
+  fetch('/invoices/bulk-archive', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(d => {
+      if (!d.ok) { alert('Hata: ' + d.error); return; }
+      if (d.msg) alert(d.msg);
+      if (d.archived > 0) location.href = '/invoices?archived=1';
+      else location.reload();
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

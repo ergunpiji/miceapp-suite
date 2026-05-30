@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+{% block page_title %}Referans Bekleyen Faturalar{% endblock %}
+{% block page_title_block %}Referans Bekleyen Faturalar{% endblock %}
+
+{% block topbar_actions %}
+{% if current_user.role in ('admin','muhasebe_muduru','muhasebe') %}
+<a href="/invoices/new" class="btn btn-primary btn-sm">
+  <i class="bi bi-plus-lg me-1"></i> Yeni Fatura
+</a>
+{% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .inv-table th { font-size:11px; text-transform:uppercase; letter-spacing:.4px;
+                  color:#64748b; background:#f8fafc; white-space:nowrap; }
+  .inv-table td { font-size:13px; vertical-align:middle; }
+
+  /* Assign modal dropdown */
+  .req-drop-item:hover { background:#f0f9ff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+
+  {# Info banner #}
+  <div class="alert alert-info d-flex align-items-start gap-2 mb-3" style="font-size:13px;">
+    <i class="bi bi-info-circle-fill mt-1"></i>
+    <div>
+      Bu sayfada henüz bir referansa atanmamış faturalar listelenmektedir.
+      İlgili referansı bildiğinizde <strong>Referans Ata</strong> butonuna tıklayabilirsiniz.
+    </div>
+  </div>
+
+  {% if not invoices %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5 text-muted">
+      <i class="bi bi-check2-circle" style="font-size:2.5rem; color:#10b981;"></i>
+      <div class="mt-2">Referans bekleyen fatura bulunmuyor.</div>
+    </div>
+  </div>
+  {% else %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover inv-table mb-0">
+          <thead>
+            <tr>
+              <th class="ps-3">Fatura No</th>
+              <th>Tür</th>
+              <th>Tedarikçi</th>
+              <th>Açıklama</th>
+              <th class="text-end">Tutar (KDV hariç)</th>
+              <th class="text-end">Toplam (KDV dahil)</th>
+              <th>Tarih</th>
+              <th>Girildi</th>
+              <th>Durum</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for inv in invoices %}
+            {% set type_label = invoice_types | selectattr('value','equalto', inv.invoice_type) | map(attribute='label') | first | default(inv.invoice_type) %}
+            <tr>
+              <td class="ps-3">
+                <a href="/invoices/{{ inv.id }}/detail" class="fw-semibold text-decoration-none text-primary">
+                  {{ inv.invoice_no or '—' }}
+                </a>
+              </td>
+              <td>
+                <span class="badge text-bg-secondary" style="font-size:11px;">{{ type_label }}</span>
+              </td>
+              <td>{{ inv.vendor_name or '—' }}</td>
+              <td class="text-muted" style="max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                {{ inv.description or '—' }}
+              </td>
+              <td class="text-end fw-semibold">₺{{ "{:,.0f}".format(inv.amount or 0) }}</td>
+              <td class="text-end fw-semibold text-success">₺{{ "{:,.0f}".format(inv.total_amount or 0) }}</td>
+              <td class="text-nowrap">{{ inv.invoice_date or '—' }}</td>
+              <td class="text-muted text-nowrap" style="font-size:12px;">
+                {{ inv.created_at.strftime('%d.%m.%Y') if inv.created_at else '—' }}
+              </td>
+              <td>
+                {% if inv.status == 'pending' %}
+                  <span class="badge text-bg-warning">Onay Bekliyor</span>
+                {% elif inv.status == 'approved' %}
+                  <span class="badge text-bg-success">Onaylandı</span>
+                {% elif inv.status == 'rejected' %}
+                  <span class="badge text-bg-danger">Reddedildi</span>
+                {% else %}
+                  <span class="badge text-bg-secondary">{{ inv.status }}</span>
+                {% endif %}
+              </td>
+              <td class="text-end pe-3">
+                <button type="button" class="btn btn-outline-primary btn-sm"
+                        onclick="openAssignModal('{{ inv.id }}', '{{ (inv.vendor_name or inv.invoice_no or '—') | e }}')">
+                  <i class="bi bi-link-45deg me-1"></i>Referans Ata
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+{# ── Referans Atama Modal ── #}
+<div class="modal fade" id="assignModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold">Referans Ata</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted mb-3" style="font-size:13px;">
+          <strong id="assignVendorName"></strong> faturasına referans atıyorsunuz.
+        </p>
+
+        <form id="assignForm" method="post">
+          <input type="hidden" name="new_request_id" id="assignReqIdInput">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Referans Seç</label>
+
+            {# Seçili badge #}
+            <div id="assignSelectedBadge" style="display:none; margin-bottom:6px;">
+              <span class="badge d-inline-flex align-items-center gap-1 px-2 py-1"
+                    style="background:#dbeafe; color:#1d4ed8; font-size:13px; font-weight:600; border-radius:6px;">
+                <span id="assignBadgeText"></span>
+                <button type="button" onclick="clearAssignSelection()"
+                        style="background:none;border:none;color:#1d4ed8;padding:0 2px;font-size:14px;line-height:1;cursor:pointer;"
+                        title="Değiştir">&times;</button>
+              </span>
+            </div>
+
+            {# Arama kutusu #}
+            <div id="assignSearchWrap" style="position:relative; max-width:100%;">
+              <input type="text" id="assignSearchInput" class="form-control"
+                     placeholder="Referans no veya etkinlik adı ara..."
+                     autocomplete="off"
+                     oninput="filterAssignDropdown(this.value)"
+                     onfocus="showAssignDropdown()"
+                     onblur="setTimeout(hideAssignDropdown, 200)">
+              <div id="assignDropdown"
+                   style="display:none; position:absolute; top:100%; left:0; width:100%; max-height:220px;
+                          overflow-y:auto; z-index:1100; background:#fff; border:1px solid #e2e8f0;
+                          border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,.1); font-size:13px;">
+                {% for r in all_requests %}
+                <div class="req-drop-item px-3 py-2 border-bottom"
+                     style="cursor:pointer;"
+                     data-id="{{ r.id }}"
+                     data-label="{{ r.request_no }} — {{ r.event_name | e }} ({{ r.client_name | e }})"
+                     onmousedown="selectAssignReq(this)">
+                  <span class="fw-bold text-primary">{{ r.request_no }}</span>
+                  <span class="text-dark ms-1">{{ r.event_name }}</span>
+                  {% if r.client_name %}<span class="text-muted"> — {{ r.client_name }}</span>{% endif %}
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-end gap-2 mt-4">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">İptal</button>
+            <button type="submit" class="btn btn-primary" id="assignSubmitBtn" disabled>
+              <i class="bi bi-link-45deg me-1"></i>Ata
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const _ALL_REQS = [
+  {% for r in all_requests %}
+  { id: "{{ r.id }}", label: "{{ r.request_no }} — {{ r.event_name | e }} ({{ r.client_name | e }})" },
+  {% endfor %}
+];
+
+function openAssignModal(invId, vendorName) {
+  document.getElementById('assignForm').action = '/invoices/' + invId + '/assign-request';
+  document.getElementById('assignVendorName').textContent = vendorName;
+  document.getElementById('assignReqIdInput').value = '';
+  document.getElementById('assignSubmitBtn').disabled = true;
+  clearAssignSelection();
+  const modal = new bootstrap.Modal(document.getElementById('assignModal'));
+  modal.show();
+}
+
+function showAssignDropdown() {
+  const dd = document.getElementById('assignDropdown');
+  dd.style.display = 'block';
+  filterAssignDropdown(document.getElementById('assignSearchInput').value);
+}
+function hideAssignDropdown() {
+  document.getElementById('assignDropdown').style.display = 'none';
+}
+function filterAssignDropdown(q) {
+  const dd = document.getElementById('assignDropdown');
+  const term = q.toLowerCase();
+  dd.querySelectorAll('.req-drop-item').forEach(el => {
+    el.style.display = el.dataset.label.toLowerCase().includes(term) ? '' : 'none';
+  });
+  dd.style.display = 'block';
+}
+function selectAssignReq(el) {
+  document.getElementById('assignReqIdInput').value = el.dataset.id;
+  document.getElementById('assignBadgeText').textContent = el.dataset.label;
+  document.getElementById('assignSelectedBadge').style.display = '';
+  document.getElementById('assignSearchWrap').style.display = 'none';
+  document.getElementById('assignSubmitBtn').disabled = false;
+}
+function clearAssignSelection() {
+  document.getElementById('assignReqIdInput').value = '';
+  document.getElementById('assignBadgeText').textContent = '';
+  document.getElementById('assignSelectedBadge').style.display = 'none';
+  document.getElementById('assignSearchWrap').style.display = '';
+  document.getElementById('assignSearchInput').value = '';
+  document.getElementById('assignSubmitBtn').disabled = true;
+}
+</script>
+{% endblock %}

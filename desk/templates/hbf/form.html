@@ -1,0 +1,422 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .hbf-header {
+    background: linear-gradient(135deg, #1a3a5c 0%, #1e5f8c 100%);
+    border-radius: 12px; padding: 24px 32px; margin-bottom: 20px; color: #fff;
+  }
+  .hbf-header .label { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; opacity: .7; }
+  .hbf-header h4 { margin: 4px 0 0; font-size: 22px; font-weight: 700; }
+
+  .section-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+
+  /* Referans arama */
+  .ref-search-wrap { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 20px; margin-bottom: 16px; }
+  .ref-ac {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 1050;
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.12); max-height: 220px; overflow-y: auto; display: none;
+  }
+  .ref-ac.open { display: block; }
+  .ref-ac-row { padding: 9px 14px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #f8fafc; }
+  .ref-ac-row:hover { background: #f0f7ff; }
+  .ref-ac-row .rno { font-weight: 700; color: #1e40af; }
+  .ref-ac-row .rtitle { color: #64748b; font-size: 12px; }
+  .ref-ac-empty { padding: 10px 14px; font-size: 13px; color: #94a3b8; }
+
+  /* Per-ref section */
+  .ref-section { border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+  .ref-section-head {
+    background: #f0f7ff; border-bottom: 1px solid #dbeafe;
+    padding: 10px 18px; display: flex; align-items: center; gap: 10px;
+  }
+  .ref-section-head .badge-no { background: #1e40af; color: #fff; border-radius: 6px; padding: 3px 10px; font-size: 12px; font-weight: 700; }
+  .ref-section-head .ref-title-txt { font-size: 13px; color: #374151; flex: 1; }
+  .ref-section-head .btn-remove { color: #94a3b8; background: none; border: none; cursor: pointer; font-size: 16px; padding: 0; line-height: 1; }
+  .ref-section-head .btn-remove:hover { color: #dc2626; }
+
+  /* Items table */
+  .items-tbl { width: 100%; border-collapse: collapse; }
+  .items-tbl thead th {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    color: #64748b; padding: 7px 8px; border-bottom: 2px solid #e2e8f0; white-space: nowrap;
+    background: #fafafa;
+  }
+  .items-tbl tbody td { padding: 4px 5px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  .items-tbl .form-control, .items-tbl .form-select { font-size: 12px; padding: 4px 7px; border-color: #e2e8f0; }
+  .items-tbl .form-control:focus, .items-tbl .form-select:focus { border-color: #3b82f6; box-shadow: none; }
+  .items-tbl .calc-val { text-align: right; font-size: 12px; color: #475569; background: #f8fafc; padding: 4px 8px; border-radius: 4px; min-width: 80px; }
+
+  .add-row-btn {
+    border: 2px dashed #cbd5e1; border-radius: 7px; padding: 6px 14px; font-size: 12px;
+    color: #64748b; background: #f8fafc; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+  }
+  .add-row-btn:hover { border-color: #3b82f6; color: #3b82f6; background: #eff6ff; }
+
+  .sec-subtotal { padding: 8px 14px; background: #f8fafc; border-top: 1px solid #e2e8f0; font-size: 12px; color: #64748b; text-align: right; }
+  .sec-subtotal strong { color: #1e293b; }
+
+  /* Grand summary */
+  .summary-box {
+    background: linear-gradient(135deg, #1a3a5c 0%, #1e5f8c 100%);
+    border-radius: 10px; padding: 16px 22px; color: #fff; min-width: 260px;
+  }
+  .summary-box .row-item { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; opacity: .85; }
+  .summary-box .grand { display: flex; justify-content: space-between; font-size: 17px; font-weight: 800; padding-top: 8px; margin-top: 6px; border-top: 1px solid rgba(255,255,255,.3); }
+  .summary-box .grand-label { letter-spacing: .06em; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+
+  .no-ref-hint { border: 2px dashed #cbd5e1; border-radius: 10px; padding: 24px; text-align: center; color: #94a3b8; font-size: 13px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<form method="post" id="hbfForm">
+  <input type="hidden" name="refs_json" id="refs_json">
+  <input type="hidden" name="items_json" id="items_json">
+  <input type="hidden" name="form_token" value="{{ form_token }}">
+  <input type="hidden" name="row_attachments_json" id="row_attachments_json">
+
+  <!-- Başlık -->
+  <div class="hbf-header">
+    <div class="label">Harcama Bildirim Formu</div>
+    <h4>{{ page_title }}</h4>
+  </div>
+
+  <!-- Referans Arama -->
+  <div class="ref-search-wrap">
+    <label class="fw-semibold" style="font-size:13px;color:#374151">
+      Referans Ekle <span class="text-danger">*</span>
+      <span style="font-weight:400;color:#94a3b8;font-size:11px;margin-left:4px">(Her referans için ayrı kalem tablosu oluşturulur)</span>
+    </label>
+    <div style="position:relative;margin-top:8px;">
+      <input type="text" id="refSearch" autocomplete="off" class="form-control"
+             placeholder="Referans no veya etkinlik adı ara...">
+      <div class="ref-ac" id="refAc"></div>
+    </div>
+  </div>
+
+  <!-- Referans Bölümleri -->
+  <div id="refSections">
+    <div class="no-ref-hint" id="noRefHint">
+      <i class="bi bi-search" style="font-size:22px;opacity:.4"></i>
+      <div class="mt-2">Yukarıdan bir referans arayıp ekleyin</div>
+    </div>
+  </div>
+
+  <!-- Alt: Özet + Butonlar -->
+  <div class="d-flex align-items-end gap-4 flex-wrap mt-2">
+    <div class="summary-box">
+      <div class="row-item"><span>KDV Hariç Toplam</span><span id="sumHaric">₺0,00</span></div>
+      <div class="row-item"><span>KDV</span><span id="sumKdv">₺0,00</span></div>
+      <div class="grand">
+        <span class="grand-label">Genel Toplam</span>
+        <span id="sumTotal">₺0,00</span>
+      </div>
+    </div>
+    <div class="d-flex flex-column gap-2">
+      <button type="submit" name="action" value="gonder" class="btn btn-primary"
+              onclick="return prepareSubmit() && confirm('Onaya gönderilsin mi?')">
+        <i class="bi bi-send me-1"></i>Onaya Gönder
+      </button>
+      <button type="submit" name="action" value="taslak" class="btn btn-outline-secondary"
+              onclick="return prepareSubmit()">
+        <i class="bi bi-floppy me-1"></i>Taslak Kaydet
+      </button>
+      <a href="/hbf{% if hbf %}/{{ hbf.id }}{% endif %}" class="text-center text-secondary" style="font-size:13px;text-decoration:none;">İptal</a>
+    </div>
+  </div>
+</form>
+
+<script>
+const ALL_REFS          = {{ refs_data | safe }};
+const INIT_DATA         = {{ (hbf.items_json if hbf and hbf.items_json else '[]') | safe }};
+const FORM_TOKEN        = "{{ form_token }}";
+const EXISTING_ROW_ATTS = {{ existing_row_atts | safe }};
+
+const PAYMENT_OPTS = [['nakit','Nakit'],['kredi_karti','Kredi Kartı'],['banka','Banka/EFT'],['cek','Çek']];
+const DOC_OPTS     = [['fatura','Fatura'],['fis','Fiş'],['gider_pusulasi','Gider Pusulası'],['diger','Diğer']];
+
+let sections = [];  // [{ref_id, ref_no, ref_title}]
+
+// ---- helpers ----
+function fmt(n) {
+  return '₺' + (parseFloat(n)||0).toLocaleString('tr-TR', {minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function parseNum(s) { return parseFloat(String(s||0).replace(/\./g,'').replace(',','.')) || 0; }
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function genUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random()*16|0, v = c==='x' ? r : (r&0x3|0x8);
+    return v.toString(16);
+  });
+}
+function rowPayOpts(sel) {
+  return PAYMENT_OPTS.map(([v,l]) => `<option value="${v}"${sel===v?' selected':''}>${l}</option>`).join('');
+}
+function rowDocOpts(sel) {
+  return DOC_OPTS.map(([v,l]) => `<option value="${v}"${sel===v?' selected':''}>${l}</option>`).join('');
+}
+
+function fmtInput(n) {
+  const v = parseFloat(n) || 0;
+  return v === 0 ? '' : v.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function addItemRow(tbody, item) {
+  const tr = document.createElement('tr');
+  tr.dataset.rowId = (item && item.row_id) ? item.row_id : genUUID();
+  const withVatVal = item ? fmtInput(item.amount_with_vat || item.amount || 0) : '';
+  const vatAmtVal  = item ? fmtInput(item.vat_amount || 0) : '';
+  tr.innerHTML = `
+    <td><input type="date" class="form-control i-date" value="${item ? (item.date||'') : ''}"></td>
+    <td><input type="text" class="form-control i-desc" placeholder="Açıklama" value="${item ? escHtml(item.description||'') : ''}"></td>
+    <td><select class="form-select i-pay">${rowPayOpts(item&&item.payment)}</select></td>
+    <td><select class="form-select i-doc">${rowDocOpts(item&&item.document_type)}</select></td>
+    <td><input type="text" class="form-control text-end i-amount" inputmode="decimal" placeholder="0,00" value="${withVatVal}"></td>
+    <td><input type="text" class="form-control text-end i-vat-amt" inputmode="decimal" placeholder="0,00" value="${vatAmtVal}"></td>
+    <td><div class="calc-val i-without-vat">₺0,00</div></td>
+    <td class="text-center" style="white-space:nowrap">
+      <label class="att-row-lbl mb-0" style="cursor:pointer" title="Dosya ekle">
+        <input type="file" class="att-row-inp" style="display:none"
+               accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.xlsx,.xls,.docx,.doc">
+        <i class="bi att-row-ico" style="font-size:16px"></i>
+      </label>
+    </td>
+    <td class="text-center">
+      <button type="button" class="btn btn-link text-danger p-0" style="font-size:15px"
+        onclick="this.closest('tr').remove(); calcAllTotals()"><i class="bi bi-x-lg"></i></button>
+    </td>`;
+  tbody.appendChild(tr);
+  const calcThis = () => {
+    const withVat    = parseNum(tr.querySelector('.i-amount').value);
+    const vatAmt     = parseNum(tr.querySelector('.i-vat-amt').value);
+    const withoutVat = withVat - vatAmt;
+    tr.querySelector('.i-without-vat').textContent = fmt(withoutVat);
+    tr.dataset.v  = withVat;
+    tr.dataset.va = vatAmt;
+    tr.dataset.vh = withoutVat;
+    calcAllTotals();
+  };
+  tr.querySelector('.i-amount').addEventListener('input', calcThis);
+  tr.querySelector('.i-vat-amt').addEventListener('input', calcThis);
+  calcThis();
+
+  // Dosya ikonu başlangıç durumu
+  const ico = tr.querySelector('.att-row-ico');
+  const existingAtt = EXISTING_ROW_ATTS[tr.dataset.rowId];
+  if (existingAtt) {
+    tr.dataset.attFilename = existingAtt.filename;
+    tr.dataset.attOriginal = existingAtt.original;
+    ico.className = 'bi bi-paperclip att-row-ico';
+    ico.style.color = '#2563eb';
+    ico.title = existingAtt.original;
+  } else {
+    ico.className = 'bi bi-upload att-row-ico';
+    ico.style.color = '#94a3b8';
+    ico.title = 'Dosya ekle';
+  }
+
+  // AJAX upload
+  tr.querySelector('.att-row-inp').addEventListener('change', async function() {
+    const f = this.files[0];
+    if (!f) return;
+    const fd = new FormData();
+    fd.append('file', f);
+    fd.append('form_token', FORM_TOKEN);
+    fd.append('row_id', tr.dataset.rowId);
+    ico.className = 'bi bi-hourglass-split att-row-ico';
+    ico.style.color = '#f59e0b';
+    try {
+      const resp = await fetch('/hbf/tmp-upload', {method: 'POST', body: fd});
+      if (resp.ok) {
+        const data = await resp.json();
+        tr.dataset.attFilename = data.filename;
+        tr.dataset.attOriginal = data.original;
+        ico.className = 'bi bi-paperclip att-row-ico';
+        ico.style.color = '#16a34a';
+        ico.title = data.original;
+      } else {
+        ico.className = 'bi bi-exclamation-triangle att-row-ico';
+        ico.style.color = '#dc2626';
+        ico.title = 'Yükleme başarısız';
+      }
+    } catch(e) {
+      ico.className = 'bi bi-exclamation-triangle att-row-ico';
+      ico.style.color = '#dc2626';
+      ico.title = 'Yükleme hatası';
+    }
+  });
+}
+
+// ---- Section management ----
+function sectionDomId(refId) { return `sec-${refId}`; }
+
+function addSection(ref, existingItems) {
+  if (sections.find(s => s.ref_id === ref.id)) return;  // already added
+  sections.push({ref_id: ref.id, ref_no: ref.ref_no, ref_title: ref.title});
+
+  document.getElementById('noRefHint').style.display = 'none';
+
+  const container = document.getElementById('refSections');
+  const div = document.createElement('div');
+  div.className = 'ref-section';
+  div.id = sectionDomId(ref.id);
+  div.innerHTML = `
+    <div class="ref-section-head">
+      <span class="badge-no">${escHtml(ref.ref_no)}</span>
+      <span class="ref-title-txt">${escHtml(ref.title)}</span>
+      <button type="button" class="btn-remove" title="Bu referansı kaldır" onclick="removeSection(${ref.id})">
+        <i class="bi bi-x-circle"></i>
+      </button>
+    </div>
+    <div class="p-0">
+      <table class="items-tbl">
+        <thead>
+          <tr>
+            <th style="width:110px">Tarih</th>
+            <th>Açıklama</th>
+            <th style="width:110px">Ödeme</th>
+            <th style="width:100px">Belge</th>
+            <th style="width:130px;text-align:right">Tutar (KDV Dahil)</th>
+            <th style="width:120px;text-align:right">KDV Tutarı</th>
+            <th style="width:120px;text-align:right">KDV Hariç</th>
+            <th style="width:46px;text-align:center" title="Dosya ekle">Dosya</th>
+            <th style="width:32px"></th>
+          </tr>
+        </thead>
+        <tbody id="tbody-${ref.id}"></tbody>
+      </table>
+    </div>
+    <div class="px-3 py-2 d-flex align-items-center justify-content-between">
+      <button type="button" class="add-row-btn" onclick="addItemRow(document.getElementById('tbody-${ref.id}'), null)">
+        <i class="bi bi-plus"></i> Satır Ekle
+      </button>
+      <div class="sec-subtotal" style="border:none;padding:0">
+        Bölüm Toplam: <strong id="sec-total-${ref.id}">₺0,00</strong>
+      </div>
+    </div>`;
+  container.appendChild(div);
+
+  const tbody = document.getElementById(`tbody-${ref.id}`);
+  if (existingItems && existingItems.length) {
+    existingItems.forEach(item => addItemRow(tbody, item));
+  } else {
+    addItemRow(tbody, null);
+  }
+}
+
+function removeSection(refId) {
+  sections = sections.filter(s => s.ref_id !== refId);
+  const el = document.getElementById(sectionDomId(refId));
+  if (el) el.remove();
+  if (!sections.length) document.getElementById('noRefHint').style.display = '';
+  calcAllTotals();
+}
+
+// ---- Grand totals ----
+function calcAllTotals() {
+  let total = 0, kdv = 0, haric = 0;
+  sections.forEach(s => {
+    let st = 0;
+    const tbody = document.getElementById(`tbody-${s.ref_id}`);
+    if (!tbody) return;
+    tbody.querySelectorAll('tr').forEach(tr => {
+      total  += parseFloat(tr.dataset.v  || 0);
+      kdv    += parseFloat(tr.dataset.va || 0);
+      haric  += parseFloat(tr.dataset.vh || 0);
+      st     += parseFloat(tr.dataset.v  || 0);
+    });
+    const stEl = document.getElementById(`sec-total-${s.ref_id}`);
+    if (stEl) stEl.textContent = fmt(st);
+  });
+  document.getElementById('sumTotal').textContent = fmt(total);
+  document.getElementById('sumKdv').textContent   = fmt(kdv);
+  document.getElementById('sumHaric').textContent = fmt(haric);
+}
+
+// ---- Ref autocomplete ----
+function showRefAc(query) {
+  const ac = document.getElementById('refAc');
+  const q = query.toLowerCase().trim();
+  const alreadyAdded = sections.map(s => s.ref_id);
+  const results = ALL_REFS.filter(r =>
+    !alreadyAdded.includes(r.id) &&
+    (r.ref_no.toLowerCase().includes(q) || r.title.toLowerCase().includes(q))
+  ).slice(0, 12);
+  if (!results.length) {
+    ac.innerHTML = `<div class="ref-ac-empty">Sonuç bulunamadı</div>`;
+  } else {
+    ac.innerHTML = results.map(r =>
+      `<div class="ref-ac-row" data-id="${r.id}">
+        <span class="rno">${escHtml(r.ref_no)}</span>
+        <span class="rtitle"> — ${escHtml(r.title)}</span>
+      </div>`
+    ).join('');
+    ac.querySelectorAll('.ref-ac-row').forEach(row => {
+      row.addEventListener('mousedown', e => {
+        e.preventDefault();
+        const ref = ALL_REFS.find(r => r.id === parseInt(row.dataset.id));
+        if (ref) addSection(ref, null);
+        document.getElementById('refSearch').value = '';
+        ac.classList.remove('open');
+      });
+    });
+  }
+  ac.classList.add('open');
+}
+
+const refInp = document.getElementById('refSearch');
+refInp.addEventListener('input', () => { if (refInp.value.length >= 1) showRefAc(refInp.value); else document.getElementById('refAc').classList.remove('open'); });
+refInp.addEventListener('focus', () => showRefAc(refInp.value || ''));
+document.addEventListener('click', e => { if (!e.target.closest('#refAc') && !e.target.closest('#refSearch')) document.getElementById('refAc').classList.remove('open'); });
+
+// ---- Submit ----
+function prepareSubmit() {
+  const rowAtts = {};
+  const grouped = sections.map(s => {
+    const tbody = document.getElementById(`tbody-${s.ref_id}`);
+    const items = [];
+    if (tbody) tbody.querySelectorAll('tr').forEach(tr => {
+      const withVat = parseNum(tr.querySelector('.i-amount').value);
+      items.push({
+        row_id:             tr.dataset.rowId,
+        date:               tr.querySelector('.i-date').value,
+        description:        tr.querySelector('.i-desc').value,
+        payment:            tr.querySelector('.i-pay').value,
+        document_type:      tr.querySelector('.i-doc').value,
+        amount_with_vat:    withVat,
+        vat_amount:         parseFloat(tr.dataset.va) || 0,
+        amount_without_vat: parseFloat(tr.dataset.vh) || 0,
+      });
+      if (tr.dataset.attFilename) {
+        rowAtts[tr.dataset.rowId] = {filename: tr.dataset.attFilename, original: tr.dataset.attOriginal || ''};
+      }
+    });
+    return {ref_id: s.ref_id, ref_no: s.ref_no, ref_title: s.ref_title, items};
+  });
+  document.getElementById('items_json').value          = JSON.stringify(grouped);
+  document.getElementById('refs_json').value           = JSON.stringify(sections.map(s => ({id:s.ref_id, ref_no:s.ref_no, title:s.ref_title})));
+  document.getElementById('row_attachments_json').value = JSON.stringify(rowAtts);
+  return true;
+}
+
+// ---- Init from saved data ----
+(function initSections() {
+  let data;
+  try { data = INIT_DATA; } catch(e) { data = []; }
+  if (!data || !data.length) return;
+  // Grouped format?
+  if (data[0] && data[0].items !== undefined) {
+    data.forEach(sec => {
+      const ref = ALL_REFS.find(r => r.id === sec.ref_id) || {id: sec.ref_id, ref_no: sec.ref_no, title: sec.ref_title || ''};
+      addSection(ref, sec.items);
+    });
+  } else {
+    // Legacy flat: show under first ref if possible
+    if (ALL_REFS.length) addSection(ALL_REFS[0], data);
+  }
+})();
+</script>
+{% endblock %}

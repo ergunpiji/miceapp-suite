@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Kasa{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">💰 Kasa Hareketleri</div>
+    <div class="page-subtitle">Anlık bakiye: <strong>{{ current_balance | currency }}</strong></div>
+  </div>
+  <div class="flex gap-2">
+    <button class="btn btn-success" data-modal="modal-add-giris">+ Giriş</button>
+    <button class="btn btn-danger"  data-modal="modal-add-cikis">− Çıkış</button>
+    <a href="/cashbook/day-reports" class="btn btn-outline">📆 Gün Sonu</a>
+  </div>
+</div>
+
+<!-- KPI -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Kasa Bakiyesi</div>
+    <div class="stat-value {% if current_balance >= 0 %}positive{% else %}negative{% endif %}">{{ current_balance | currency }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Dönem Girişleri</div>
+    <div class="stat-value positive">{{ total_in | currency }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Dönem Çıkışları</div>
+    <div class="stat-value negative">{{ total_out | currency }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Net</div>
+    <div class="stat-value {% if net >= 0 %}positive{% else %}negative{% endif %}">{{ net | currency }}</div>
+  </div>
+</div>
+
+<!-- Tarih filtresi -->
+<form method="get" class="filters-bar">
+  <div class="form-group">
+    <label>Başlangıç</label>
+    <input name="date_from" type="date" value="{{ date_from }}">
+  </div>
+  <div class="form-group">
+    <label>Bitiş</label>
+    <input name="date_to" type="date" value="{{ date_to }}">
+  </div>
+  <select name="entry_type">
+    <option value="all" {{ 'selected' if entry_type_filter=='all' }}>Tümü</option>
+    {% for t in types %}
+    <option value="{{ t.value }}" {{ 'selected' if entry_type_filter==t.value }}>{{ t.label }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-outline" style="margin-top:auto">Filtrele</button>
+</form>
+
+<!-- Tablo -->
+<div class="card">
+  <div class="table-wrap">
+    {% if entries %}
+    <table>
+      <thead>
+        <tr>
+          <th>Tarih</th>
+          <th>Tür</th>
+          <th>Kategori</th>
+          <th>Açıklama</th>
+          <th>İlgili Taraf</th>
+          <th>Referans</th>
+          <th class="text-right">Tutar</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in entries %}
+        <tr>
+          <td class="nowrap">{{ e.entry_date | fmtdate }}</td>
+          <td>
+            {% if e.entry_type == 'giris' %}<span class="badge badge-success">Giriş</span>
+            {% else %}<span class="badge badge-danger">Çıkış</span>{% endif %}
+          </td>
+          <td>{{ e.category }}</td>
+          <td>{{ e.description }}</td>
+          <td>{{ e.related_party or '—' }}</td>
+          <td class="font-mono">{{ e.reference_no or '—' }}</td>
+          <td class="text-right font-mono {% if e.entry_type == 'giris' %}amount-positive{% else %}amount-negative{% endif %}">
+            {% if e.entry_type == 'giris' %}+{% else %}−{% endif %}{{ e.amount | currency }}
+          </td>
+          <td>
+            <form method="post" action="/cashbook/{{ e.id }}/delete" data-confirm="Silinsin mi?">
+              <button class="btn btn-xs btn-danger">✕</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">💰</div>
+      <div class="empty-state-text">Bu dönemde kasa hareketi yok</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Modal: Giriş -->
+<div class="modal-overlay" id="modal-add-giris">
+  <div class="modal-box">
+    <div class="modal-title" style="color:var(--success)">💵 Kasa Girişi</div>
+    <form method="post" action="/cashbook/add">
+      <input type="hidden" name="entry_type" value="giris">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Tarih *</label>
+          <input name="entry_date" type="date" required value="{{ today }}">
+        </div>
+        <div class="form-group">
+          <label>Tutar (₺)</label>
+          <input name="amount" type="number" step="0.01" min="0.01" required>
+        </div>
+        <div class="form-group">
+          <label>Kategori</label>
+          <select name="category">
+            {% for c in categories %}
+            <option value="{{ c.value }}" {{ 'selected' if c.value == 'tahsilat' }}>{{ c.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>İlgili Taraf</label>
+          <input name="related_party" placeholder="Müşteri / firma adı">
+        </div>
+        <div class="form-group form-grid-full">
+          <label>Açıklama *</label>
+          <input name="description" required>
+        </div>
+        <div class="form-group">
+          <label>Referans No</label>
+          <input name="reference_no">
+        </div>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button type="submit" class="btn btn-success">Kaydet</button>
+        <button type="button" class="btn btn-secondary" data-close-modal>İptal</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Çıkış -->
+<div class="modal-overlay" id="modal-add-cikis">
+  <div class="modal-box">
+    <div class="modal-title" style="color:var(--danger)">💸 Kasa Çıkışı</div>
+    <form method="post" action="/cashbook/add">
+      <input type="hidden" name="entry_type" value="cikis">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Tarih *</label>
+          <input name="entry_date" type="date" required value="{{ today }}">
+        </div>
+        <div class="form-group">
+          <label>Tutar (₺)</label>
+          <input name="amount" type="number" step="0.01" min="0.01" required>
+        </div>
+        <div class="form-group">
+          <label>Kategori</label>
+          <select name="category">
+            {% for c in categories %}
+            <option value="{{ c.value }}" {{ 'selected' if c.value == 'odeme' }}>{{ c.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>İlgili Taraf</label>
+          <input name="related_party" placeholder="Tedarikçi / firma adı">
+        </div>
+        <div class="form-group form-grid-full">
+          <label>Açıklama *</label>
+          <input name="description" required>
+        </div>
+        <div class="form-group">
+          <label>Referans No</label>
+          <input name="reference_no">
+        </div>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button type="submit" class="btn btn-danger">Kaydet</button>
+        <button type="button" class="btn btn-secondary" data-close-modal>İptal</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

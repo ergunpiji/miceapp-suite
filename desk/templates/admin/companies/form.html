@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block page_title %}{{ "Yeni Şirket" if not co else "Şirket Düzenle" }}{% endblock %}
+{% block topbar_actions %}
+<a href="/admin/companies" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Geri</a>
+{% endblock %}
+{% block content %}
+
+{% if saved %}
+<div class="alert alert-success py-2 mb-3">
+  <i class="bi bi-check-circle-fill"></i> <strong>Kaydedildi.</strong>
+</div>
+{% endif %}
+
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        <form method="post" action="{{ '/admin/companies/' + co.id|string + '/edit' if co else '/admin/companies/new' }}">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Ticari Unvan <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required
+                   value="{{ co.name if co else '' }}"
+                   placeholder="Örn: Prizmatik Teknik Dekor A.Ş.">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Kısa Ad</label>
+            <input type="text" name="short_name" class="form-control"
+                   value="{{ co.short_name or '' if co else '' }}"
+                   placeholder="Örn: Prizmatik">
+            <div class="form-text">Sidebar ve başlıklarda kısa ad gösterilir.</div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Vergi No</label>
+              <input type="text" name="tax_no" class="form-control font-monospace"
+                     value="{{ co.tax_no or '' if co else '' }}"
+                     placeholder="10 haneli">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Vergi Dairesi</label>
+              <input type="text" name="tax_office" class="form-control"
+                     value="{{ co.tax_office or '' if co else '' }}"
+                     placeholder="Örn: Beşiktaş VD">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Adres</label>
+            <textarea name="address" class="form-control" rows="2"
+                      placeholder="Tam adres">{{ co.address or '' if co else '' }}</textarea>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Telefon</label>
+              <input type="text" name="phone" class="form-control"
+                     value="{{ co.phone or '' if co else '' }}"
+                     placeholder="+90 5XX XXX XX XX">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">E-posta</label>
+              <input type="email" name="email" class="form-control"
+                     value="{{ co.email or '' if co else '' }}"
+                     placeholder="info@firma.com">
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" name="active" id="activeSwitch"
+                     {{ "checked" if (not co or co.active) }}>
+              <label class="form-check-label" for="activeSwitch">Aktif</label>
+            </div>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg me-1"></i>Kaydet
+            </button>
+            <a href="/admin/companies" class="btn btn-outline-secondary">İptal</a>
+            {% if co %}
+            <a href="/admin/companies/{{ co.id }}/users" class="btn btn-outline-primary ms-auto">
+              <i class="bi bi-people me-1"></i>Kullanıcıları Yönet
+            </a>
+            {% endif %}
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

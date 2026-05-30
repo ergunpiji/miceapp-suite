@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/cheques" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Listeye Dön</a>
+{% if cheque.status == 'beklemede' %}
+<a href="/cheques/{{ cheque.id }}/edit" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil me-1"></i>Düzenle</a>
+{% if cheque.cheque_type == 'alinan' %}
+<button class="btn btn-success btn-sm" onclick="openSettle()">
+  <i class="bi bi-check-lg me-1"></i>Tahsil Et
+</button>
+{% else %}
+<button class="btn btn-primary btn-sm" onclick="openSettle()">
+  <i class="bi bi-bank me-1"></i>Ödendi
+</button>
+{% endif %}
+{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .cheque-card {
+    background: linear-gradient(135deg, #1a3a5c 0%, #1e5f8c 100%);
+    border-radius: 14px;
+    padding: 24px 28px;
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .cheque-card::before {
+    content: '';
+    position: absolute;
+    right: -30px; top: -30px;
+    width: 160px; height: 160px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.06);
+  }
+  .cheque-card .cheque-bank { font-size: 13px; opacity: .8; margin-bottom: 4px; }
+  .cheque-card .cheque-amount { font-size: 32px; font-weight: 900; letter-spacing: -.5px; margin: 8px 0; }
+  .cheque-card .cheque-meta { font-size: 12px; opacity: .75; }
+  .cheque-card .cheque-badge { position: absolute; top: 20px; right: 24px; }
+
+  .detail-row { display: flex; gap: 8px; padding: 10px 0; border-bottom: 1px solid #f1f5f9; }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-row .lbl { width: 150px; font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; flex-shrink: 0; padding-top: 1px; }
+  .detail-row .val { font-size: 14px; color: #1e293b; }
+
+  .attachment-preview { border: 2px dashed #e2e8f0; border-radius: 10px; padding: 16px; text-align: center; }
+  .attachment-preview img { max-width: 100%; max-height: 400px; border-radius: 6px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-8">
+
+    <!-- Çek Kartı (fiziksel görünüm) -->
+    <div class="cheque-card">
+      <div class="cheque-badge">
+        <span class="badge bg-{{ status_badge }}" style="font-size:13px;padding:6px 14px;border-radius:20px">
+          {{ status_text }}
+        </span>
+        {% if cheque.cheque_type == 'alinan' %}
+        <span class="badge bg-success bg-opacity-75 ms-1" style="font-size:12px">Alınan</span>
+        {% else %}
+        <span class="badge bg-warning text-dark ms-1" style="font-size:12px">Verilen</span>
+        {% endif %}
+      </div>
+      <div class="cheque-bank">
+        <i class="bi bi-bank me-1"></i>{{ cheque.bank or '—' }}
+        {% if cheque.branch %} / {{ cheque.branch }}{% endif %}
+      </div>
+      <div class="cheque-amount">{{ cheque.amount | money }} {{ cheque.currency }}</div>
+      <div class="d-flex gap-4 mt-2">
+        <div class="cheque-meta">
+          <div style="font-size:10px;opacity:.65;text-transform:uppercase">Çek No</div>
+          <div style="font-size:14px;font-weight:700">{{ cheque.cheque_no or '—' }}</div>
+        </div>
+        <div class="cheque-meta">
+          <div style="font-size:10px;opacity:.65;text-transform:uppercase">Keşide</div>
+          <div style="font-size:14px">{{ cheque.cheque_date | date_tr }}</div>
+        </div>
+        <div class="cheque-meta">
+          <div style="font-size:10px;opacity:.65;text-transform:uppercase">Vade</div>
+          <div style="font-size:14px;font-weight:700">{{ cheque.due_date | date_tr }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detay Bilgileri -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-body">
+        {% if cheque.vendor %}
+        <div class="detail-row">
+          <div class="lbl">Tedarikçi</div>
+          <div class="val"><a href="/vendors/{{ cheque.vendor.id }}">{{ cheque.vendor.name }}</a></div>
+        </div>
+        {% endif %}
+        {% if cheque.customer %}
+        <div class="detail-row">
+          <div class="lbl">Müşteri</div>
+          <div class="val">{{ cheque.customer.name }}</div>
+        </div>
+        {% endif %}
+        <div class="detail-row">
+          <div class="lbl">Para Birimi</div>
+          <div class="val">{{ cheque.currency }}</div>
+        </div>
+        {% if cheque.notes %}
+        <div class="detail-row">
+          <div class="lbl">Notlar</div>
+          <div class="val text-muted">{{ cheque.notes }}</div>
+        </div>
+        {% endif %}
+        {% if cheque.status == 'tahsil_edildi' %}
+        <div class="detail-row">
+          <div class="lbl">Tahsil Tarihi</div>
+          <div class="val fw-semibold text-success">{{ cheque.settled_date | date_tr }}</div>
+        </div>
+        {% if cheque.bank_account %}
+        <div class="detail-row">
+          <div class="lbl">Banka Hesabı</div>
+          <div class="val">{{ cheque.bank_account.name }}</div>
+        </div>
+        {% endif %}
+        {% if related_movement %}
+        <div class="detail-row">
+          <div class="lbl">Banka Hareketi</div>
+          <div class="val">
+            <span class="badge bg-{{ 'success' if related_movement.movement_type == 'giris' else 'danger' }}">
+              {{ '+' if related_movement.movement_type == 'giris' else '-' }}{{ related_movement.amount | money }}
+            </span>
+            <span class="text-muted ms-2">{{ related_movement.movement_date | date_tr }}</span>
+          </div>
+        </div>
+        {% endif %}
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- İşlem Butonları (beklemede) -->
+    {% if cheque.status == 'beklemede' %}
+    <div class="card border-0 shadow-sm">
+      <div class="card-body d-flex flex-wrap gap-2 align-items-center">
+        {% if cheque.cheque_type == 'alinan' %}
+        <button class="btn btn-success" onclick="openSettle()">
+          <i class="bi bi-check-lg me-1"></i>Tahsil Et
+        </button>
+        <form method="post" action="/cheques/{{ cheque.id }}/cancel" class="d-inline">
+          <input type="hidden" name="reason" value="iade">
+          <button type="button" class="btn btn-outline-warning"
+            onclick="if(confirm('İade olarak işaretlensin mi?')) this.form.submit()">
+            <i class="bi bi-arrow-return-left me-1"></i>İade Et
+          </button>
+        </form>
+        <form method="post" action="/cheques/{{ cheque.id }}/cancel" class="d-inline">
+          <input type="hidden" name="reason" value="karsilıksız">
+          <button type="button" class="btn btn-outline-danger"
+            onclick="if(confirm('Karşılıksız olarak işaretlensin mi?')) this.form.submit()">
+            <i class="bi bi-x-circle me-1"></i>Karşılıksız
+          </button>
+        </form>
+        {% else %}
+        <button class="btn btn-primary" onclick="openSettle()">
+          <i class="bi bi-bank me-1"></i>Ödendi (Tedarikçi Tahsil Etti)
+        </button>
+        <form method="post" action="/cheques/{{ cheque.id }}/cancel" class="d-inline">
+          <input type="hidden" name="reason" value="iptal">
+          <button type="button" class="btn btn-outline-dark"
+            onclick="if(confirm('Çek iptal edilsin mi?')) this.form.submit()">
+            <i class="bi bi-slash-circle me-1"></i>İptal Et
+          </button>
+        </form>
+        <form method="post" action="/cheques/{{ cheque.id }}/cancel" class="d-inline">
+          <input type="hidden" name="reason" value="karsilıksız">
+          <button type="button" class="btn btn-outline-danger"
+            onclick="if(confirm('Karşılıksız olarak işaretlensin mi?')) this.form.submit()">
+            <i class="bi bi-x-circle me-1"></i>Karşılıksız
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+
+  <!-- Sağ kolon: Belge -->
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-bottom">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-paperclip me-2"></i>Çek Belgesi</h6>
+      </div>
+      <div class="card-body">
+        {% if cheque.attachment %}
+          {% set att = cheque.attachment %}
+          {% set ext = att.split('.')[-1].lower() %}
+          {% if ext in ['jpg','jpeg','png','webp','heic'] %}
+          <div class="attachment-preview">
+            <img src="/files/{{ att }}" alt="Çek belgesi" class="img-fluid rounded">
+          </div>
+          <a href="/files/{{ att }}" target="_blank" class="btn btn-outline-secondary btn-sm w-100 mt-2">
+            <i class="bi bi-arrows-fullscreen me-1"></i>Tam Ekran Aç
+          </a>
+          {% elif ext == 'pdf' %}
+          <div class="attachment-preview py-4">
+            <i class="bi bi-file-earmark-pdf text-danger" style="font-size:48px"></i>
+            <p class="text-muted mt-2 mb-3" style="font-size:13px">PDF Belge</p>
+            <a href="/files/{{ att }}" target="_blank" class="btn btn-outline-danger btn-sm">
+              <i class="bi bi-box-arrow-up-right me-1"></i>Aç / İndir
+            </a>
+          </div>
+          {% endif %}
+          {% if cheque.status == 'beklemede' %}
+          <form method="post" action="/cheques/{{ cheque.id }}/edit" enctype="multipart/form-data" class="mt-3">
+            <input type="hidden" name="cheque_type" value="{{ cheque.cheque_type }}">
+            <input type="hidden" name="cheque_no" value="{{ cheque.cheque_no or '' }}">
+            <input type="hidden" name="bank" value="{{ cheque.bank or '' }}">
+            <input type="hidden" name="branch" value="{{ cheque.branch or '' }}">
+            <input type="hidden" name="amount" value="{{ cheque.amount }}">
+            <input type="hidden" name="currency" value="{{ cheque.currency }}">
+            <input type="hidden" name="cheque_date" value="{{ cheque.cheque_date.isoformat() }}">
+            <input type="hidden" name="due_date" value="{{ cheque.due_date.isoformat() }}">
+            {% if cheque.vendor_id %}<input type="hidden" name="vendor_id" value="{{ cheque.vendor_id }}">{% endif %}
+            {% if cheque.customer_id %}<input type="hidden" name="customer_id" value="{{ cheque.customer_id }}">{% endif %}
+            {% if cheque.bank_account_id %}<input type="hidden" name="bank_account_id" value="{{ cheque.bank_account_id }}">{% endif %}
+            <input type="hidden" name="notes" value="{{ cheque.notes or '' }}">
+            <label class="form-label fw-semibold" style="font-size:12px">Belgeyi Değiştir</label>
+            <input type="file" name="attachment" class="form-control form-control-sm" accept=".jpg,.jpeg,.png,.pdf,.heic,.webp">
+            <button type="submit" class="btn btn-outline-secondary btn-sm w-100 mt-2">
+              <i class="bi bi-upload me-1"></i>Yükle
+            </button>
+          </form>
+          {% endif %}
+        {% else %}
+          <div class="attachment-preview py-5">
+            <i class="bi bi-file-earmark-image text-muted" style="font-size:40px"></i>
+            <p class="text-muted mt-2 mb-0" style="font-size:13px">Henüz belge eklenmedi</p>
+          </div>
+          {% if cheque.status == 'beklemede' %}
+          <form method="post" action="/cheques/{{ cheque.id }}/edit" enctype="multipart/form-data" class="mt-3">
+            <input type="hidden" name="cheque_type" value="{{ cheque.cheque_type }}">
+            <input type="hidden" name="cheque_no" value="{{ cheque.cheque_no or '' }}">
+            <input type="hidden" name="bank" value="{{ cheque.bank or '' }}">
+            <input type="hidden" name="branch" value="{{ cheque.branch or '' }}">
+            <input type="hidden" name="amount" value="{{ cheque.amount }}">
+            <input type="hidden" name="currency" value="{{ cheque.currency }}">
+            <input type="hidden" name="cheque_date" value="{{ cheque.cheque_date.isoformat() }}">
+            <input type="hidden" name="due_date" value="{{ cheque.due_date.isoformat() }}">
+            {% if cheque.vendor_id %}<input type="hidden" name="vendor_id" value="{{ cheque.vendor_id }}">{% endif %}
+            {% if cheque.customer_id %}<input type="hidden" name="customer_id" value="{{ cheque.customer_id }}">{% endif %}
+            {% if cheque.bank_account_id %}<input type="hidden" name="bank_account_id" value="{{ cheque.bank_account_id }}">{% endif %}
+            <input type="hidden" name="notes" value="{{ cheque.notes or '' }}">
+            <label class="form-label fw-semibold" style="font-size:12px">Çek Fotoğrafı / Taraması</label>
+            <input type="file" name="attachment" class="form-control form-control-sm"
+              accept=".jpg,.jpeg,.png,.pdf,.heic,.webp" required>
+            <p class="text-muted mt-1" style="font-size:11px">JPG, PNG, HEIC, PDF — maks 10MB</p>
+            <button type="submit" class="btn btn-primary btn-sm w-100">
+              <i class="bi bi-upload me-1"></i>Belge Ekle
+            </button>
+          </form>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Settle Modal -->
+{% if cheque.status == 'beklemede' %}
+<div class="modal fade" id="settleModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header" style="background:linear-gradient(135deg,#1a3a5c,#1e5f8c);color:#fff">
+        <h6 class="modal-title">
+          {% if cheque.cheque_type == 'alinan' %}
+          <i class="bi bi-check-lg me-2"></i>Tahsil Et
+          {% else %}
+          <i class="bi bi-bank me-2"></i>Ödendi — Banka Bilgilerini Girin
+          {% endif %}
+        </h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/cheques/{{ cheque.id }}/settle">
+        <div class="modal-body">
+          <div class="alert alert-info py-2 mb-3" style="font-size:13px">
+            <strong>{{ cheque.amount | money }}</strong>
+            {% if cheque.cheque_type == 'alinan' %}
+            tutarı banka hesabına <strong>giriş</strong> olarak kaydedilecek.
+            {% else %}
+            tutarı banka hesabından <strong>çıkış</strong> olarak kaydedilecek.
+            {% endif %}
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Banka Hesabı <span class="text-danger">*</span></label>
+            <select name="bank_account_id" class="form-select" required>
+              <option value="">— Seçiniz —</option>
+              {% for ba in bank_accounts %}
+              <option value="{{ ba.id }}" {% if cheque.bank_account_id == ba.id %}selected{% endif %}>
+                {{ ba.name }}{% if ba.bank_name %} — {{ ba.bank_name }}{% endif %}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Tarih <span class="text-danger">*</span></label>
+            <input type="date" name="settled_date" class="form-control"
+              value="{{ cheque.due_date.isoformat() }}" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-primary btn-sm px-4">
+            <i class="bi bi-check-lg me-1"></i>Onayla
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function openSettle() {
+  new bootstrap.Modal(document.getElementById('settleModal')).show();
+}
+</script>
+{% endif %}
+{% endblock %}

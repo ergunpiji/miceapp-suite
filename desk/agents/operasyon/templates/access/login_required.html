@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Erişim Gerekli — Operasyon Ajanı</title>
+  <link rel="stylesheet" href="{{ base_url }}/static/css/style.css">
+  <style>
+    body { background: #f1f5f9; display: flex; align-items: center;
+           justify-content: center; min-height: 100vh; }
+    .login-card {
+      background: #fff; border-radius: 16px; padding: 48px 40px;
+      max-width: 420px; width: 100%; text-align: center;
+      box-shadow: 0 4px 24px rgba(0,0,0,.08);
+    }
+    .logo { font-size: 48px; margin-bottom: 16px; }
+    h1 { font-size: 22px; font-weight: 800; color: #1e293b; margin-bottom: 8px; }
+    p { font-size: 14px; color: #64748b; line-height: 1.6; }
+    .hint {
+      margin-top: 24px; background: #f8fafc; border: 1px solid #e2e8f0;
+      border-radius: 10px; padding: 16px; font-size: 13px; color: #475569;
+      text-align: left;
+    }
+    .hint strong { color: #1e293b; }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="logo">🔐</div>
+    <h1>Erişim Bağlantısı Gerekli</h1>
+    <p>Bu sayfayı görüntülemek için size özel gönderilen bağlantıyı kullanmanız gerekiyor.</p>
+    <div class="hint">
+      <strong>Nasıl giriş yapılır?</strong><br><br>
+      Proje yöneticinizin size WhatsApp veya e-posta ile gönderdiği
+      <strong>/access/…</strong> ile başlayan bağlantıya tıklayın.
+      <br><br>
+      Bağlantınız yoksa proje yöneticinizle iletişime geçin.
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,504 @@
+{% extends "base.html" %}
+{% block page_title %}Fatura — {{ invoice.invoice_no or ("#" ~ invoice.id) }}{% endblock %}
+{% block topbar_actions %}
+<a href="/invoices/{{ invoice.id }}/edit" class="btn btn-sm btn-outline-secondary">Düzenle</a>
+{% if not invoice.is_split_parent and not invoice.split_parent_id and invoice.status != 'cancelled' %}
+{% set _party = invoice.customer.name if invoice.invoice_type in ('kesilen','iade_gelen') else (invoice.vendor.name if invoice.vendor else '') %}
+<button type="button" class="btn btn-sm btn-outline-secondary"
+  onclick="openSplitModal({id:{{ invoice.id }}, party_name:'{{ _party | e }}', invoice_no:'{{ (invoice.invoice_no or '') | e }}', total_amount:{{ invoice.total_with_vat }}, vat_rate:{{ (invoice.vat_rate or 0.20) * 100 }}})">
+  <i class="bi bi-scissors me-1"></i>Böl
+</button>
+{% elif invoice.is_split_parent %}
+<span class="badge bg-light text-muted border ms-1">Bölünmüş</span>
+{% endif %}
+{% if current_user.is_admin %}
+<form method="post" action="/invoices/{{ invoice.id }}/delete" style="display:inline" onsubmit="return confirm('Faturayı sil?')">
+  <button class="btn btn-sm btn-outline-danger">Sil</button>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+{% set is_income = invoice.invoice_type in ('kesilen', 'komisyon') %}
+
+{# Split başarı bildirimi #}
+{% if request.query_params.get('split') == '1' %}
+<div class="alert alert-success py-2 mb-3">
+  <i class="bi bi-scissors me-1"></i>
+  <strong>Fatura başarıyla bölündü.</strong> Aşağıda bölünme parçaları listelenmektedir.
+</div>
+{% endif %}
+
+{# Flash mesajları — yeni fatura kayıt sonrası "Kaydet ve GİB'e Gönder" sonucu #}
+{% set ef_sent = request.query_params.get('ef_sent') %}
+{% set ef_warning = request.query_params.get('ef_warning') %}
+{% set ef_error = request.query_params.get('ef_error') %}
+{% if ef_sent %}
+<div class="alert alert-success py-2 mb-3">
+  <i class="bi bi-check-circle-fill"></i>
+  <strong>GİB'e gönderildi.</strong> Status: <span class="badge bg-success">{{ invoice.einvoice_status }}</span>
+  {% if invoice.einvoice_uuid %}— UUID: <code>{{ invoice.einvoice_uuid }}</code>{% endif %}
+</div>
+{% endif %}
+{% if ef_warning %}
+<div class="alert alert-warning py-2 mb-3">
+  <i class="bi bi-exclamation-triangle-fill"></i>
+  <strong>Fatura kaydedildi ama GİB'e gönderilmedi.</strong>
+  Eksik müşteri bilgisi: <strong>{{ ef_warning | replace(',', ', ') }}</strong>.
+  Müşteriyi düzenleyip ardından detayda "GİB'e Gönder" butonunu kullanın.
+</div>
+{% endif %}
+{% if ef_error %}
+<div class="alert alert-danger py-2 mb-3">
+  <i class="bi bi-x-circle-fill"></i>
+  <strong>GİB gönderim hatası.</strong> Detayda "GİB'e Gönder" butonu ile tekrar deneyin (log'larda detay var).
+</div>
+{% endif %}
+{% set total = invoice.amount * (1 + invoice.vat_rate) %}
+{% set paid = invoice.paid_amount %}
+{% set remaining = invoice.remaining %}
+
+<div class="row g-3">
+  <!-- Sol: Fatura Bilgileri -->
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body">
+        <h6 class="fw-bold mb-3">Fatura Bilgileri</h6>
+        <table class="table table-sm mb-0">
+          <tr><th class="text-muted fw-normal">Fatura No</th><td class="fw-semibold">{{ invoice.invoice_no or "—" }}</td></tr>
+          <tr><th class="text-muted fw-normal">Tip</th><td><span class="badge bg-secondary">{{ invoice.invoice_type }}</span></td></tr>
+          <tr><th class="text-muted fw-normal">Tarih</th><td>{{ invoice.invoice_date | date_tr }}</td></tr>
+          <tr><th class="text-muted fw-normal">Tutar (KDV hariç)</th><td>{{ invoice.amount | money }}</td></tr>
+          <tr><th class="text-muted fw-normal">KDV %</th><td>%{{ (invoice.vat_rate * 100) | int }}</td></tr>
+          <tr><th class="text-muted fw-normal">Toplam (KDV dahil)</th><td class="fw-bold">{{ total | money }}</td></tr>
+          <tr><th class="text-muted fw-normal">Para Birimi</th><td>{{ invoice.currency }}</td></tr>
+          <tr><th class="text-muted fw-normal">Tedarikçi</th><td>{% if invoice.vendor %}<a href="/vendors/{{ invoice.vendor_id }}" class="text-decoration-none">{{ invoice.vendor.name }}</a>{% else %}—{% endif %}</td></tr>
+          <tr><th class="text-muted fw-normal">Referans</th><td>{% if invoice.reference %}<a href="/references/{{ invoice.ref_id }}" class="text-decoration-none">{{ invoice.reference.ref_no }}</a>{% else %}—{% endif %}</td></tr>
+          <tr>
+            <th class="text-muted fw-normal">Durum</th>
+            <td>
+              {% if invoice.status == 'paid' %}
+                <span class="badge bg-success">Ödendi</span>
+              {% elif invoice.status == 'partial' %}
+                <span class="badge bg-warning text-dark">Kısmi Ödendi</span>
+              {% elif invoice.status == 'approved' %}
+                <span class="badge bg-secondary">Onaylı</span>
+              {% else %}
+                <span class="badge bg-light text-dark">{{ invoice.status }}</span>
+              {% endif %}
+            </td>
+          </tr>
+        </table>
+        {% if invoice.notes %}<div class="mt-2 text-muted small">{{ invoice.notes }}</div>{% endif %}
+      </div>
+    </div>
+
+    {# ---------- Onay Akışı Paneli ---------- #}
+    {% if invoice.approval_status %}
+    <div class="card border-0 shadow-sm mb-3" style="border-left: 4px solid
+      {% if invoice.approval_status == 'approved' %}#16a34a
+      {% elif invoice.approval_status == 'reddedildi' %}#dc2626
+      {% else %}#f59e0b{% endif %} !important;">
+      <div class="card-body">
+        <h6 class="fw-bold mb-2">
+          <i class="bi bi-shield-check"></i> Onay Durumu
+        </h6>
+        {% if invoice.approval_status == 'approved' %}
+          <span class="badge bg-success"><i class="bi bi-check-circle-fill"></i> Onaylandı</span>
+        {% elif invoice.approval_status == 'reddedildi' %}
+          <span class="badge bg-danger"><i class="bi bi-x-circle-fill"></i> Reddedildi</span>
+          {% if invoice.approval_rejection_note %}
+          <div class="text-danger small mt-2">{{ invoice.approval_rejection_note }}</div>
+          {% endif %}
+        {% else %}
+          <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split"></i> Onay Bekliyor</span>
+          {% if invoice.current_approver %}
+          <div class="text-muted small mt-2">
+            Onay bekleyen: <strong>{{ invoice.current_approver.name }} {{ invoice.current_approver.surname or "" }}</strong>
+            <span class="text-muted">({{ invoice.current_approver.role | role_label }})</span>
+          </div>
+          {% endif %}
+        {% endif %}
+
+        {# Onay tarihçesi #}
+        {% set history = invoice.approval_history | fromjson %}
+        {% if history %}
+        <div class="mt-3">
+          <div class="text-muted small mb-1 fw-semibold">Tarihçe</div>
+          <ul class="list-unstyled mb-0" style="font-size:11.5px;">
+            {% for h in history %}
+            <li class="mb-1">
+              <span class="text-muted">{{ h.ts[:16] | replace('T', ' ') }}</span>
+              ·
+              {% if h.action == 'created' %}<i class="bi bi-pencil-square text-primary"></i> {{ h.user_name }} kaydetti
+              {% elif h.action == 'approved' %}<i class="bi bi-check-circle text-success"></i> {{ h.user_name }} onayladı
+              {% elif h.action == 'escalated' %}<i class="bi bi-arrow-up-right text-warning"></i> üst kademeye iletildi
+              {% elif h.action == 'rejected' %}<i class="bi bi-x-circle text-danger"></i> {{ h.user_name }} reddetti
+              {% endif %}
+              {% if h.note %}<div class="text-muted ps-3 small">"{{ h.note }}"</div>{% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+        {# Onayla / Reddet butonları — sadece current_approver veya admin #}
+        {% if invoice.approval_status == 'onay_bekliyor' and current_user
+              and (invoice.current_approver_id == current_user.id or current_user.is_admin) %}
+        <div class="mt-3 d-flex gap-2">
+          <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#approveStepModal">
+            <i class="bi bi-check-lg me-1"></i>Onayla
+          </button>
+          <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#rejectStepModal">
+            <i class="bi bi-x-lg me-1"></i>Reddet
+          </button>
+        </div>
+
+        {# Onayla modal #}
+        <div class="modal fade" id="approveStepModal" tabindex="-1">
+          <div class="modal-dialog">
+            <form method="post" action="/invoices/{{ invoice.id }}/approve-step" class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Faturayı Onayla</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+              </div>
+              <div class="modal-body">
+                <p>Tutar <strong>{{ total | money }}</strong>. Sizin onay limiti dahilindeyse fatura "onaylandı" durumuna geçer; aksi takdirde bir üst kademeye iletilir.</p>
+                <label class="form-label">Not (opsiyonel)</label>
+                <textarea name="note" class="form-control" rows="2" maxlength="500"></textarea>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-success"><i class="bi bi-check-lg me-1"></i>Onayla</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        {# Reddet modal #}
+        <div class="modal fade" id="rejectStepModal" tabindex="-1">
+          <div class="modal-dialog">
+            <form method="post" action="/invoices/{{ invoice.id }}/reject-step" class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Faturayı Reddet</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+              </div>
+              <div class="modal-body">
+                <label class="form-label">Red Gerekçesi <span class="text-danger">*</span></label>
+                <textarea name="note" class="form-control" rows="3" maxlength="500" required></textarea>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-danger"><i class="bi bi-x-lg me-1"></i>Reddet</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- E-Fatura Durumu (modül aktifse) -->
+    {% if module_enabled(request, 'einvoice') and is_income %}
+    <div class="card border-0 shadow-sm mb-3" style="border-left: 4px solid #1A3A5C !important;">
+      <div class="card-body">
+        <h6 class="fw-bold mb-2">
+          <i class="bi bi-receipt-cutoff" style="color:#1A3A5C;"></i> E-Fatura Durumu
+        </h6>
+        {% set ef = invoice.einvoice_status %}
+        {% if ef == 'accepted' %}
+          <div class="mb-2"><span class="badge bg-success"><i class="bi bi-check-circle-fill"></i> Kabul Edildi</span></div>
+        {% elif ef == 'sent' %}
+          <div class="mb-2"><span class="badge bg-info text-dark"><i class="bi bi-cloud-arrow-up"></i> Gönderildi (yanıt bekleniyor)</span></div>
+        {% elif ef == 'rejected' %}
+          <div class="mb-2"><span class="badge bg-danger"><i class="bi bi-x-circle-fill"></i> Reddedildi</span></div>
+        {% elif ef == 'cancelled' %}
+          <div class="mb-2"><span class="badge bg-secondary">İptal Edildi</span></div>
+        {% elif ef == 'error' %}
+          <div class="mb-2"><span class="badge bg-danger"><i class="bi bi-exclamation-triangle-fill"></i> Hata</span></div>
+        {% else %}
+          <div class="mb-2"><span class="badge bg-warning text-dark">Henüz Gönderilmedi</span></div>
+        {% endif %}
+
+        {% if invoice.einvoice_uuid %}
+        <div class="text-muted small mb-2">UUID: <code>{{ invoice.einvoice_uuid }}</code></div>
+        {% endif %}
+        {% if invoice.einvoice_sent_at %}
+        <div class="text-muted small mb-2">Gönderim: {{ invoice.einvoice_sent_at | datetime_tr }}</div>
+        {% endif %}
+
+        <div class="d-flex gap-1 flex-wrap">
+          {% if not invoice.einvoice_status or invoice.einvoice_status in ('error', 'rejected') %}
+          {% if current_user.is_admin %}
+          <form method="post" action="/invoices/{{ invoice.id }}/einvoice/send" class="d-inline"
+                onsubmit="return confirm('Bu faturayı GİB e-Fatura/e-Arşiv olarak göndermek istediğinizden emin misiniz?');">
+            <button class="btn btn-sm btn-primary"><i class="bi bi-send"></i> GİB'e Gönder</button>
+          </form>
+          {% endif %}
+          {% endif %}
+          {% if invoice.einvoice_status %}
+          <a href="/einvoice-ui/invoice/{{ invoice.id }}/pdf" target="_blank" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-file-earmark-pdf"></i> PDF
+          </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Ödeme / Tahsilat Formu -->
+    {% if invoice.status in ('approved', 'partial') %}
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <h6 class="fw-bold mb-1">
+          {% if is_income %}Tahsilat Ekle{% else %}Ödeme Ekle{% endif %}
+        </h6>
+        {% if remaining > 0 %}
+        <p class="text-muted small mb-3">
+          Kalan: <strong class="text-danger">{{ remaining | money }}</strong> / Toplam: {{ total | money }}
+        </p>
+        {% endif %}
+        <form method="post" action="/invoices/{{ invoice.id }}/pay" id="payForm">
+          <div class="mb-2">
+            <label class="form-label small mb-1">Tutar (KDV dahil)</label>
+            <input type="text" inputmode="decimal" id="payAmountDisplay"
+                   class="form-control form-control-sm"
+                   data-raw="{{ remaining | round(2) }}"
+                   autocomplete="off" required>
+            <input type="hidden" name="pay_amount" id="payAmountHidden" value="{{ remaining | round(2) }}">
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label small mb-1">Tarih</label>
+            <input type="date" name="pay_date" class="form-control form-control-sm"
+                   value="{{ '' }}">
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label small mb-1">{% if is_income %}Tahsilat Yöntemi{% else %}Ödeme Yöntemi{% endif %}</label>
+            <select name="payment_method" class="form-select form-select-sm" id="pmSelect" onchange="togglePayFields()">
+              {% for val, label in payment_methods %}
+              <option value="{{ val }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div id="cashFields" class="d-none mb-2">
+            <label class="form-label small mb-1">Kasa</label>
+            <select name="cash_book_id" class="form-select form-select-sm">
+              {% for b in cash_books %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
+            </select>
+          </div>
+
+          <div id="bankFields" class="d-none mb-2">
+            <label class="form-label small mb-1">Banka Hesabı</label>
+            <select name="bank_account_id" class="form-select form-select-sm">
+              {% for a in bank_accounts %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}
+            </select>
+          </div>
+
+          <div id="ccFields" class="d-none mb-2">
+            <label class="form-label small mb-1">Kredi Kartı</label>
+            <select name="credit_card_id" class="form-select form-select-sm">
+              {% for c in credit_cards %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+            </select>
+          </div>
+
+          <div id="chequeFields" class="d-none mb-2">
+            <input type="text" name="cheque_no" class="form-control form-control-sm mb-1" placeholder="Çek No">
+            <input type="text" name="cheque_bank" class="form-control form-control-sm mb-1" placeholder="Banka">
+            <input type="date" name="cheque_date" class="form-control form-control-sm mb-1" placeholder="Keşide Tarihi">
+            <input type="date" name="cheque_due_date" class="form-control form-control-sm mb-1" placeholder="Vade Tarihi">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small mb-1">Açıklama (opsiyonel)</label>
+            <input type="text" name="pay_notes" class="form-control form-control-sm" placeholder="Not...">
+          </div>
+
+          <button type="submit" class="btn btn-success btn-sm w-100">
+            {% if is_income %}Tahsil Et{% else %}Öde{% endif %}
+          </button>
+        </form>
+      </div>
+    </div>
+    {% elif invoice.status == 'paid' %}
+    <div class="alert {% if is_income %}alert-primary{% else %}alert-success{% endif %} mb-0">
+      <i class="bi bi-check-circle"></i>
+      {% if is_income %}Tahsil Edildi{% else %}Ödendi{% endif %} — {{ invoice.paid_at | datetime_tr }}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Sağ: Ödeme Geçmişi -->
+  <div class="col-md-8">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <h6 class="fw-bold mb-3">{% if is_income %}Tahsilat Geçmişi{% else %}Ödeme Geçmişi{% endif %}</h6>
+
+        {% if invoice.payments %}
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-2">
+            <thead class="table-light">
+              <tr>
+                <th>Tarih</th>
+                <th>Tutar</th>
+                <th>Yöntem</th>
+                <th>Hesap / Kasa</th>
+                <th>Not</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for pmt in invoice.payments %}
+              <tr>
+                <td>{{ pmt.payment_date | date_tr }}</td>
+                <td class="fw-semibold">{{ pmt.amount | money }}</td>
+                <td>
+                  {% if pmt.payment_method == 'nakit' %}Nakit
+                  {% elif pmt.payment_method == 'banka' %}Banka
+                  {% elif pmt.payment_method == 'kredi_karti' %}Kredi Kartı
+                  {% elif pmt.payment_method == 'cek' %}Çek
+                  {% else %}{{ pmt.payment_method }}{% endif %}
+                </td>
+                <td class="text-muted small">
+                  {% if pmt.bank_account %}{{ pmt.bank_account.name }}
+                  {% elif pmt.cash_book %}{{ pmt.cash_book.name }}
+                  {% elif pmt.credit_card %}{{ pmt.credit_card.name }}
+                  {% elif pmt.cheque %}Çek #{{ pmt.cheque.cheque_no }}
+                  {% else %}—{% endif %}
+                </td>
+                <td class="text-muted small">{{ pmt.notes or "—" }}</td>
+                <td>
+                  <form method="post"
+                        action="/invoices/{{ invoice.id }}/payment/{{ pmt.id }}/delete"
+                        onsubmit="return confirm('Bu ödeme kaydını sil?')"
+                        style="display:inline">
+                    <button class="btn btn-link btn-sm text-danger p-0" title="Sil">
+                      <i class="bi bi-x-circle"></i>
+                    </button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot class="table-light fw-semibold">
+              <tr>
+                <td>Toplam</td>
+                <td>{{ paid | money }}</td>
+                <td colspan="4">
+                  {% if remaining > 0.01 %}
+                  <span class="text-danger">Kalan: {{ remaining | money }}</span>
+                  {% else %}
+                  <span class="text-success"><i class="bi bi-check-circle"></i> Tamamlandı</span>
+                  {% endif %}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">Henüz {% if is_income %}tahsilat{% else %}ödeme{% endif %} kaydı yok.</p>
+        {% endif %}
+
+        <!-- Özet progress bar -->
+        {% if total > 0 and paid > 0 %}
+        {% set pct = [(paid / total * 100), 100] | min | int %}
+        <div class="progress mt-2" style="height:8px;">
+          <div class="progress-bar {% if pct >= 100 %}bg-success{% else %}bg-warning{% endif %}"
+               style="width:{{ pct }}%"></div>
+        </div>
+        <div class="d-flex justify-content-between mt-1">
+          <small class="text-muted">Ödenen: {{ paid | money }}</small>
+          <small class="text-muted">Toplam: {{ total | money }}</small>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Bölünmüş fatura ise parçaları göster #}
+{% if invoice.is_split_parent %}
+<div class="card border-0 shadow-sm mt-3">
+  <div class="card-header bg-transparent border-0 pb-0">
+    <h6 class="fw-semibold mb-0"><i class="bi bi-scissors me-2 text-secondary"></i>Bölünmüş Parçalar</h6>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Fatura No</th>
+          <th>Referans</th>
+          <th class="text-end">KDV Hariç</th>
+          <th class="text-end pe-3">KDV Dahil</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ch in split_children_ctx | default([]) %}
+        <tr>
+          <td class="ps-3"><a href="/invoices/{{ ch.id }}/detail" class="text-decoration-none">{{ ch.invoice_no or ('#' ~ ch.id) }}</a></td>
+          <td>{% if ch.reference %}<a href="/references/{{ ch.ref_id }}" class="text-decoration-none small">{{ ch.reference.ref_no }} — {{ ch.reference.title }}</a>{% else %}—{% endif %}</td>
+          <td class="text-end">{{ ch.amount | money }}</td>
+          <td class="text-end pe-3 fw-semibold">{{ ch.total_with_vat | money }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-muted text-center py-3">Parçalar yüklenemedi.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<script>
+function togglePayFields() {
+  const pm = document.getElementById('pmSelect').value;
+  ['cashFields','bankFields','ccFields','chequeFields'].forEach(id => {
+    document.getElementById(id).classList.add('d-none');
+  });
+  if (pm === 'nakit') document.getElementById('cashFields').classList.remove('d-none');
+  else if (pm === 'banka') document.getElementById('bankFields').classList.remove('d-none');
+  else if (pm === 'kredi_karti') document.getElementById('ccFields').classList.remove('d-none');
+  else if (pm === 'cek') document.getElementById('chequeFields').classList.remove('d-none');
+}
+togglePayFields();
+
+// pay_date default = bugün
+const dateInput = document.querySelector('input[name="pay_date"]');
+if (dateInput && !dateInput.value) {
+  dateInput.value = new Date().toISOString().split('T')[0];
+}
+
+// Tutar: Türk formatı (1.500.000,00)
+function formatTR(val) {
+  const n = parseFloat(String(val).replace(',', '.'));
+  if (isNaN(n)) return '';
+  return n.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+function parseTR(s) {
+  return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
+}
+const payDisplay = document.getElementById('payAmountDisplay');
+const payHidden  = document.getElementById('payAmountHidden');
+if (payDisplay) {
+  payDisplay.value = formatTR(payDisplay.dataset.raw);
+  payDisplay.addEventListener('input', () => {
+    const raw = parseTR(payDisplay.value);
+    payHidden.value = raw;
+  });
+  payDisplay.addEventListener('blur', () => {
+    const raw = parseTR(payDisplay.value);
+    if (raw) payDisplay.value = formatTR(raw);
+    payHidden.value = raw;
+  });
+  document.getElementById('payForm').addEventListener('submit', () => {
+    payHidden.value = parseTR(payDisplay.value);
+  });
+}
+</script>
+
+{% include "invoices/_split_modal.html" %}
+
+{% endblock %}

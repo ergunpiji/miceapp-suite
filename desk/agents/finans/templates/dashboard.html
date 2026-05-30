@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Finans Ajanı{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Dashboard</div>
+    <div class="page-subtitle">{{ today.strftime('%d.%m.%Y') }} — Finans Özeti</div>
+  </div>
+</div>
+
+<!-- KPI'lar -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Kasa Bakiyesi</div>
+    <div class="stat-value {% if cash_balance >= 0 %}positive{% else %}negative{% endif %}">
+      {{ cash_balance | currency }}
+    </div>
+    <div class="stat-sub">Son gün sonu kapanış</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Bu Ay Giriş</div>
+    <div class="stat-value positive">{{ month_in | currency }}</div>
+    <div class="stat-sub">{{ today.strftime('%B %Y') }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Bu Ay Çıkış</div>
+    <div class="stat-value negative">{{ month_out | currency }}</div>
+    <div class="stat-sub">{{ today.strftime('%B %Y') }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Net Nakit Akışı</div>
+    <div class="stat-value {% if month_net >= 0 %}positive{% else %}negative{% endif %}">
+      {{ month_net | currency }}
+    </div>
+    <div class="stat-sub">Bu ay</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Bekleyen Ödemeler</div>
+    <div class="stat-value {% if pending_total > 0 %}warning{% endif %}">
+      {{ pending_total | currency }}
+    </div>
+    <div class="stat-sub">{% if overdue_count > 0 %}<span style="color:var(--danger)">{{ overdue_count }} adet gecikmiş</span>{% else %}Tamamı zamanında{% endif %}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Gecikmiş KK Ekstre</div>
+    <div class="stat-value {% if overdue_cc_total > 0 %}negative{% endif %}">
+      {{ overdue_cc_total | currency }}
+    </div>
+    <div class="stat-sub">{{ overdue_statements | length }} ekstre vadesi geçmiş</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Aktif Projeler</div>
+    <div class="stat-value">{{ active_projects | length }}</div>
+    <div class="stat-sub">Bütçe takibinde</div>
+  </div>
+</div>
+
+<div class="grid-2">
+
+  <!-- Yaklaşan ödemeler -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">📅 Yaklaşan Ödemeler (30 gün)</span>
+      <a href="/payments" class="btn btn-sm btn-outline">Tümü</a>
+    </div>
+    <div class="card-body" style="padding:0">
+      {% if upcoming_payments %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Açıklama</th>
+              <th>Vade</th>
+              <th class="text-right">Tutar</th>
+              <th>Durum</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in upcoming_payments %}
+            <tr>
+              <td>{{ p.description }}</td>
+              <td class="nowrap {% if p.is_overdue %}amount-negative{% endif %}">
+                {{ p.due_date | fmtdate }}
+                {% if p.is_overdue %}<span class="badge badge-danger">Gecikti</span>{% endif %}
+              </td>
+              <td class="text-right font-mono">{{ p.amount | currency }}</td>
+              <td>
+                <span class="badge badge-warning">Bekliyor</span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <div class="empty-state-icon">✅</div>
+        <div class="empty-state-text">Yaklaşan ödeme yok</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Son gerçekleşen giderler -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">💸 Son Giderler</span>
+      <a href="/projects" class="btn btn-sm btn-outline">Projeler</a>
+    </div>
+    <div class="card-body" style="padding:0">
+      {% if recent_entries %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Tarih</th>
+              <th>Açıklama</th>
+              <th class="text-right">Tutar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in recent_entries %}
+            <tr>
+              <td class="nowrap">{{ e.entry_date | fmtdate }}</td>
+              <td>{{ e.description }}</td>
+              <td class="text-right font-mono amount-negative">{{ e.amount | currency }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <div class="empty-state-icon">📋</div>
+        <div class="empty-state-text">Henüz gider kaydı yok</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- Aktif projeler -->
+{% if active_projects %}
+<div class="card mt-6">
+  <div class="card-header">
+    <span class="card-title">📋 Aktif Projeler — Bütçe Durumu</span>
+    <a href="/projects" class="btn btn-sm btn-outline">Tümü</a>
+  </div>
+  <div class="card-body" style="padding:0">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Proje</th>
+            <th>Müşteri</th>
+            <th class="text-right">Bütçe</th>
+            <th class="text-right">Gerçekleşen</th>
+            <th class="text-right">Sapma</th>
+            <th>İlerleme</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in active_projects %}
+          <tr>
+            <td><a href="/projects/{{ p.id }}" style="color:var(--accent)">{{ p.name }}</a></td>
+            <td>{{ p.customer_name or '—' }}</td>
+            <td class="text-right font-mono">{{ p.total_budgeted | currency }}</td>
+            <td class="text-right font-mono">{{ p.total_actual | currency }}</td>
+            <td class="text-right font-mono {% if p.variance >= 0 %}amount-positive{% else %}amount-negative{% endif %}">
+              {{ p.variance | currency }}
+            </td>
+            <td style="min-width:100px">
+              <div class="progress">
+                <div class="progress-bar {% if p.completion_pct > 100 %}over{% elif p.completion_pct >= 80 %}ok{% endif %}"
+                     style="width:{{ [p.completion_pct, 100] | min }}%"></div>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">{{ p.completion_pct }}%</div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

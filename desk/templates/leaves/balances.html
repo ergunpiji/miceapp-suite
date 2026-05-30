@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block page_title %}İzin Bakiyeleri{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+
+  <!-- Sol: çalışan seç -->
+  <div class="col-md-3">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent"><strong>Çalışan Seç</strong></div>
+      <div class="list-group list-group-flush" style="max-height:500px;overflow-y:auto">
+        {% for emp in employees %}
+        <a href="/leaves/balances/manage?employee_id={{ emp.id }}"
+           class="list-group-item list-group-item-action {% if selected_emp and selected_emp.id == emp.id %}active{% endif %}"
+           style="font-size:13px">
+          {{ emp.name }}
+          {% if emp.title %}<br><small class="text-muted">{{ emp.title }}</small>{% endif %}
+        </a>
+        {% else %}
+        <div class="p-3 text-muted small">Çalışan bulunamadı.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Sağ: bakiye ve yeni dönem -->
+  <div class="col-md-9">
+    {% if not selected_emp %}
+    <div class="text-muted py-5 text-center">Soldaki listeden bir çalışan seçin.</div>
+    {% else %}
+
+    {% if request.query_params.get('saved') %}
+    <div class="alert alert-success alert-dismissible fade show py-2">
+      <i class="bi bi-check-circle me-1"></i>Bakiye kaydedildi.
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    <h5 class="mb-3">{{ selected_emp.name }} — İzin Bakiyeleri</h5>
+
+    <!-- Mevcut bakiyeler -->
+    {% if emp_balances %}
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-body p-0">
+        <table class="table mb-0" style="font-size:13px">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">İzin Türü</th>
+              <th>Dönem</th>
+              <th class="text-center">Hak</th>
+              <th class="text-center">Devir</th>
+              <th class="text-center">Kullanılan</th>
+              <th class="text-center">Kalan</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for b in emp_balances %}
+            <tr>
+              <td class="ps-3">
+                <span class="me-1" style="color:{{ b.leave_type.color }}">&#9679;</span>
+                {{ b.leave_type.name }}
+              </td>
+              <td class="text-muted">{{ b.period_start | date_tr }} – {{ b.period_end | date_tr }}</td>
+              <td class="text-center">{{ b.entitled_days }}</td>
+              <td class="text-center">{{ b.carried_over_days }}</td>
+              <td class="text-center">{{ b.used_days }}</td>
+              <td class="text-center fw-bold {% if b.remaining_days < 0 %}text-danger{% elif b.remaining_days < 3 %}text-warning{% else %}text-success{% endif %}">
+                {{ b.remaining_days }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Yeni dönem / bakiye ekle -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent">
+        <strong>Yeni Dönem / Bakiye Tanımla</strong>
+      </div>
+      <div class="card-body">
+        <form method="post" action="/leaves/balances/manage">
+          <input type="hidden" name="employee_id" value="{{ selected_emp.id }}">
+          <div class="row g-3">
+            <div class="col-md-5">
+              <label class="form-label fw-semibold">İzin Türü <span class="text-danger">*</span></label>
+              <select name="leave_type_id" class="form-select" required>
+                {% for lt in leave_types %}
+                <option value="{{ lt.id }}">{{ lt.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Dönem Başlangıcı <span class="text-danger">*</span></label>
+              <input type="date" name="period_start" class="form-control" required
+                placeholder="İşe giriş yıl dönümü">
+              <div class="form-text">İşe giriş: {{ selected_emp.start_date | date_tr }}</div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">Hak Edilen Gün <span class="text-danger">*</span></label>
+              <input type="number" name="entitled_days" class="form-control" step="0.5" min="0" required>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">Devir (önceki dönemden)</label>
+              <input type="number" name="carried_over_days" class="form-control" step="0.5" min="0" value="0">
+            </div>
+            <div class="col-md-9">
+              <label class="form-label fw-semibold">Not</label>
+              <input type="text" name="notes" class="form-control" placeholder="İsteğe bağlı...">
+            </div>
+          </div>
+          <div class="mt-3">
+            <button type="submit" class="btn btn-primary px-4">
+              <i class="bi bi-check-lg me-1"></i>Kaydet
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

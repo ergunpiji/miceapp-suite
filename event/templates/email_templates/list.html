@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block content %}
+
+{% if request.query_params.get('saved') %}
+<div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
+  <i class="bi bi-check-circle me-2"></i>Şablon başarıyla kaydedildi.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between py-2"
+       style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
+    <h6 class="fw-bold mb-0">
+      <i class="bi bi-envelope-open me-2 text-primary"></i>E-posta Şablonları
+      <span class="badge bg-secondary ms-1" style="font-size:11px;">{{ tpls | length }}</span>
+    </h6>
+  </div>
+
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0" style="font-size:13px;">
+        <thead style="background:#f1f5f9;">
+          <tr>
+            <th class="ps-3" style="min-width:200px;">Şablon Adı</th>
+            <th>Slug</th>
+            <th>Açıklama</th>
+            <th class="text-center">Durum</th>
+            <th class="text-end pe-3">İşlem</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tpl in tpls %}
+          <tr>
+            <td class="ps-3 fw-semibold">
+              <i class="bi bi-envelope me-2 text-muted"></i>{{ tpl.name }}
+            </td>
+            <td>
+              <code class="badge bg-secondary bg-opacity-10 text-secondary"
+                    style="font-size:11px; font-weight:600;">{{ tpl.slug }}</code>
+            </td>
+            <td class="text-muted" style="font-size:12px;">{{ tpl.description or '—' }}</td>
+            <td class="text-center">
+              <form method="post" action="/email-templates/{{ tpl.id }}/toggle" class="d-inline">
+                <button type="submit" class="btn btn-sm {% if tpl.active %}btn-success{% else %}btn-outline-secondary{% endif %} py-0 px-2"
+                        style="font-size:11px; min-width:64px;">
+                  {% if tpl.active %}Aktif{% else %}Pasif{% endif %}
+                </button>
+              </form>
+            </td>
+            <td class="text-end pe-3">
+              <a href="/email-templates/{{ tpl.id }}"
+                 class="btn btn-sm btn-outline-primary py-0 px-2">
+                <i class="bi bi-pencil me-1"></i>Düzenle
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{# Değişken Referansı #}
+<div class="card mt-4">
+  <div class="card-header py-2" style="background:#f8fafc;">
+    <h6 class="fw-bold mb-0">
+      <i class="bi bi-braces me-2 text-warning"></i>Kullanılabilir Değişkenler
+    </h6>
+  </div>
+  <div class="card-body">
+    <p class="text-muted mb-3" style="font-size:13px;">
+      Şablon konu ve içerik alanlarında bu değişkenleri <code>{variable_adi}</code> formatında kullanın.
+      Değişken bulunamazsa olduğu gibi bırakılır.
+    </p>
+    <div class="row g-2">
+      {% for v in [
+        ('event_name','Etkinlik Adı'), ('request_no','Referans No'), ('client_name','Müşteri Adı'),
+        ('check_in','Etkinlik Başlangıç'), ('check_out','Etkinlik Bitiş'),
+        ('accom_check_in','Konaklama Giriş'), ('accom_check_out','Konaklama Çıkış'),
+        ('attendee_count','Katılımcı Sayısı'), ('venue_name','Mekan / Tedarikçi Adı'),
+        ('contact_name','Kontak Kişi Adı'), ('quote_deadline','Teklif Son Tarihi'),
+        ('company_name','Şirket Adı'), ('company_email','Şirket E-posta'),
+        ('company_phone','Şirket Telefonu'), ('email_signature','E-posta İmzası')
+      ] %}
+      <div class="col-md-4 col-lg-3">
+        <div class="d-flex align-items-center gap-2 p-2 rounded" style="background:#f8fafc; border:1px solid #e2e8f0;">
+          <code class="text-primary" style="font-size:11px;">{{"{"}}{{ v[0] }}{{"}"}}}</code>
+          <span class="text-muted" style="font-size:11px;">{{ v[1] }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}

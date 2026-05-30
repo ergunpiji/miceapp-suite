@@ -1,0 +1,395 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .import-card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 28px; }
+  .type-btn { border: 2px solid #e2e8f0; border-radius: 10px; padding: 16px 24px; cursor: pointer;
+              text-align: center; transition: all .15s; background: white; width: 100%; }
+  .type-btn.active { border-color: #2563eb; background: #eff6ff; }
+  .type-btn .type-icon { font-size: 32px; display: block; margin-bottom: 8px; }
+  .type-btn .type-label { font-size: 14px; font-weight: 600; color: #1e293b; }
+  .type-btn .type-sub { font-size: 11px; color: #64748b; margin-top: 4px; }
+  .preview-wrap { display: none; }
+  .preview-wrap.show { display: block; }
+  .tbl-preview { font-size: 12px; }
+  .tbl-preview th { font-size: 10px; background: #f8fafc; position: sticky; top: 0; z-index: 1; }
+  .tbl-preview td { padding: 4px 8px; white-space: nowrap; }
+  .row-valid   { background: #f0fdf4; }
+  .row-update  { background: #fefce8; }
+  .row-update td:first-child { border-left: 3px solid #eab308; }
+  .row-invalid { background: #fef2f2; }
+  .row-invalid td:first-child { border-left: 3px solid #ef4444; }
+  .update-badge { font-size: 10px; background: #fef9c3; color: #854d0e;
+                  border-radius: 4px; padding: 1px 5px; display: inline-block; margin: 1px; }
+  .error-badge { font-size: 10px; background: #fee2e2; color: #dc2626;
+                 border-radius: 4px; padding: 1px 5px; display: inline-block; margin: 1px; }
+  .auto-badge  { font-size: 10px; background: #fef9c3; color: #854d0e;
+                 border-radius: 4px; padding: 1px 5px; display: inline-block; }
+  .drop-zone { border: 2px dashed #94a3b8; border-radius: 10px; padding: 40px;
+               text-align: center; cursor: pointer; transition: all .15s;
+               background: #f8fafc; }
+  .drop-zone.dragover { border-color: #2563eb; background: #eff6ff; }
+  .drop-zone input[type=file] { display: none; }
+  .step-badge { width: 28px; height: 28px; border-radius: 50%; background: #2563eb;
+                color: white; font-size: 12px; font-weight: 700;
+                display: inline-flex; align-items: center; justify-content: center; }
+  .result-box { border-radius: 10px; padding: 20px; }
+  .tbl-scroll { max-height: 480px; overflow-y: auto; border-radius: 8px; border: 1px solid #e2e8f0; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="row g-4">
+
+  {# ── SOL: Ayarlar ── #}
+  <div class="col-lg-4">
+
+    {# Adım 1: Tip seçimi #}
+    <div class="import-card mb-4">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="step-badge">1</span>
+        <span class="fw-bold" style="font-size:14px;">İçe Aktarma Tipi</span>
+      </div>
+      <div class="row g-2">
+        <div class="col-6">
+          <button class="type-btn active" id="btnCustomers" onclick="selectType('customers')">
+            <span class="type-icon">🏢</span>
+            <span class="type-label">Müşteriler</span>
+            <div class="type-sub">Firma & kontak bilgileri</div>
+          </button>
+        </div>
+        <div class="col-6">
+          <button class="type-btn" id="btnVenues" onclick="selectType('venues')">
+            <span class="type-icon">🏨</span>
+            <span class="type-label">Tedarikçiler</span>
+            <div class="type-sub">Mekan & tedarikçi bilgileri</div>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    {# Adım 2: Şablon indir #}
+    <div class="import-card mb-4">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="step-badge">2</span>
+        <span class="fw-bold" style="font-size:14px;">Şablonu İndir & Doldur</span>
+      </div>
+      <p class="text-muted" style="font-size:13px; margin-bottom:12px;">
+        Örnek Excel şablonunu indirip doldurun. Koyu mavi sütunlar zorunludur.
+      </p>
+      <a id="tplLink" href="/bulk-import/template/customers"
+         class="btn btn-outline-primary btn-sm w-100">
+        <i class="bi bi-download me-1"></i>
+        <span id="tplLinkText">Müşteri Şablonu İndir</span>
+      </a>
+
+      <div class="mt-3 p-3" style="background:#f0f9ff;border-radius:8px;font-size:12px;color:#0369a1;">
+        <strong>Tedarikçi Tipleri:</strong><br>
+        {% for st in supplier_types %}
+        <span class="badge bg-secondary bg-opacity-25 text-dark me-1 mb-1" style="font-size:10px;">{{ st.value }}</span>
+        {% endfor %}
+      </div>
+    </div>
+
+    {# Adım 3: Yükle #}
+    <div class="import-card">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="step-badge">3</span>
+        <span class="fw-bold" style="font-size:14px;">Excel Dosyası Yükle</span>
+      </div>
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="handleFileSelect(this)">
+        <div id="dropText">
+          <i class="bi bi-cloud-upload" style="font-size:32px;color:#94a3b8;"></i>
+          <div class="mt-2 text-muted" style="font-size:13px;">
+            Dosyayı buraya sürükleyin veya tıklayın
+          </div>
+          <div class="mt-1 text-muted" style="font-size:11px;">.xlsx / .xls desteklenir</div>
+        </div>
+        <div id="dropFileSelected" style="display:none;">
+          <i class="bi bi-file-earmark-excel" style="font-size:32px;color:#16a34a;"></i>
+          <div class="mt-2 fw-semibold" style="font-size:13px;" id="dropFileName"></div>
+        </div>
+      </div>
+      <button class="btn btn-primary w-100 mt-3" id="btnPreview" onclick="doPreview()" disabled>
+        <i class="bi bi-eye me-1"></i> Önizle
+      </button>
+    </div>
+
+  </div>
+
+  {# ── SAĞ: Önizleme & İçe Aktarma ── #}
+  <div class="col-lg-8">
+
+    {# Başlangıç durumu #}
+    <div id="emptyState" class="import-card text-center py-5">
+      <div style="font-size:64px; opacity:.3;">📥</div>
+      <div class="mt-3 text-muted" style="font-size:14px;">
+        Bir Excel dosyası yükleyip <strong>Önizle</strong> butonuna tıklayın.
+      </div>
+    </div>
+
+    {# Yükleniyor #}
+    <div id="loadingState" class="import-card text-center py-5" style="display:none;">
+      <div class="spinner-border text-primary"></div>
+      <div class="mt-3 text-muted" style="font-size:14px;">Dosya işleniyor…</div>
+    </div>
+
+    {# Önizleme #}
+    <div id="previewState" style="display:none;">
+      <div class="import-card mb-3">
+        <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+          <div class="d-flex align-items-center gap-2">
+            <span class="step-badge">4</span>
+            <span class="fw-bold" style="font-size:14px;">Önizleme</span>
+          </div>
+          <div class="d-flex gap-2 flex-wrap">
+            <span class="badge bg-success" id="validBadge">0 geçerli</span>
+            <span class="badge bg-danger"  id="invalidBadge">0 hatalı</span>
+            <span class="badge bg-secondary" id="totalBadge">toplam 0</span>
+          </div>
+        </div>
+        <div id="previewAlert" class="alert alert-warning py-2 mb-3" style="display:none;font-size:13px;">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          <span id="previewAlertText"></span>
+        </div>
+        <div class="tbl-scroll">
+          <table class="table table-sm tbl-preview mb-0">
+            <thead id="previewThead"></thead>
+            <tbody id="previewTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="import-card">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <span class="step-badge">5</span>
+          <span class="fw-bold" style="font-size:14px;">İçe Aktarma</span>
+        </div>
+        <p class="text-muted" style="font-size:13px;">
+          Yalnızca <strong>geçerli satırlar</strong> kaydedilir. Hatalı satırlar atlanır.
+        </p>
+        <div class="d-flex gap-2">
+          <button class="btn btn-success px-4" id="btnImport" onclick="doImport()">
+            <i class="bi bi-check-circle me-1"></i> İçe Aktar
+          </button>
+          <button class="btn btn-outline-secondary" onclick="resetAll()">
+            <i class="bi bi-arrow-counterclockwise me-1"></i> Sıfırla
+          </button>
+        </div>
+      </div>
+    </div>
+
+    {# Sonuç #}
+    <div id="resultState" style="display:none;">
+      <div class="import-card">
+        <div id="resultBox"></div>
+        <div class="mt-3 d-flex gap-2">
+          <a id="resultLink" href="#" class="btn btn-primary">Listeye Git</a>
+          <button class="btn btn-outline-secondary" onclick="resetAll()">Yeni İçe Aktarma</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let selectedType = 'customers';
+let selectedFile = null;
+let previewData  = null;
+
+function selectType(type) {
+  selectedType = type;
+  document.getElementById('btnCustomers').classList.toggle('active', type === 'customers');
+  document.getElementById('btnVenues').classList.toggle('active', type === 'venues');
+  const tplLink  = document.getElementById('tplLink');
+  const tplText  = document.getElementById('tplLinkText');
+  tplLink.href   = `/bulk-import/template/${type}`;
+  tplText.textContent = type === 'customers' ? 'Müşteri Şablonu İndir' : 'Tedarikçi Şablonu İndir';
+  resetPreview();
+}
+
+// ── Drag & Drop ──────────────────────────────────────────────────────────────
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f) setFile(f);
+});
+
+function handleFileSelect(input) {
+  if (input.files[0]) setFile(input.files[0]);
+}
+
+function setFile(f) {
+  selectedFile = f;
+  document.getElementById('dropText').style.display = 'none';
+  document.getElementById('dropFileSelected').style.display = 'block';
+  document.getElementById('dropFileName').textContent = f.name;
+  document.getElementById('btnPreview').disabled = false;
+  resetPreview();
+}
+
+// ── Önizle ───────────────────────────────────────────────────────────────────
+async function doPreview() {
+  if (!selectedFile) return;
+  showState('loading');
+
+  const fd = new FormData();
+  fd.append('import_type', selectedType);
+  fd.append('file', selectedFile);
+
+  let res, text;
+  try {
+    res  = await fetch('/bulk-import/preview', { method: 'POST', body: fd });
+    text = await res.text();
+  } catch(e) {
+    alert('Bağlantı hatası: ' + e);
+    showState('empty');
+    return;
+  }
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch(e) {
+    alert('Sunucu hatası (' + (res ? res.status : '?') + '):\n' + text.slice(0, 500));
+    showState('empty');
+    return;
+  }
+  if (data.error) { alert(data.error); showState('empty'); return; }
+  previewData = data;
+  renderPreview(data);
+  showState('preview');
+}
+
+function renderPreview(data) {
+  // Başlık
+  document.getElementById('validBadge').textContent   = data.valid_count   + ' geçerli';
+  document.getElementById('invalidBadge').textContent = data.invalid_count + ' hatalı';
+  document.getElementById('totalBadge').textContent   = 'toplam ' + data.total;
+
+  const alertEl = document.getElementById('previewAlert');
+  const alertTx = document.getElementById('previewAlertText');
+  if (data.invalid_count > 0) {
+    alertEl.style.display = '';
+    alertTx.textContent   = `${data.invalid_count} satırda hata var — bu satırlar atlanacak.`;
+  } else {
+    alertEl.style.display = 'none';
+  }
+
+  // Tablo başlığı
+  const thead = document.getElementById('previewThead');
+  let thHtml = '<tr><th>#</th><th>Durum</th>';
+  data.col_labels.forEach(l => thHtml += `<th>${l}</th>`);
+  thHtml += '</tr>';
+  thead.innerHTML = thHtml;
+
+  // Tablo satırları
+  const tbody = document.getElementById('previewTbody');
+  let html = '';
+  data.rows.forEach(row => {
+    const cls = !row._valid ? 'row-invalid' : (row._will_update ? 'row-update' : 'row-valid');
+    html += `<tr class="${cls}">`;
+    html += `<td class="text-muted">${row._row}</td>`;
+    if (!row._valid) {
+      html += `<td>${row._errors.map(e => `<span class="error-badge">${escHtml(e)}</span>`).join('')}</td>`;
+    } else if (row._will_update) {
+      html += `<td><span class="update-badge">↻ Güncelleme</span></td>`;
+    } else {
+      html += `<td><span class="badge bg-success" style="font-size:10px;">✓ Yeni</span></td>`;
+    }
+    data.field_names.forEach(fn => {
+      let val = row[fn] || '';
+      if (fn === 'code' && row._code_auto) {
+        val = `${val} <span class="auto-badge">oto</span>`;
+      }
+      html += `<td>${val}</td>`;
+    });
+    html += '</tr>';
+  });
+  tbody.innerHTML = html;
+}
+
+// ── İçe Aktar ────────────────────────────────────────────────────────────────
+async function doImport() {
+  if (!previewData) return;
+  document.getElementById('btnImport').disabled = true;
+  document.getElementById('btnImport').innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Kaydediliyor…';
+
+  const fd = new FormData();
+  fd.append('import_type', selectedType);
+  fd.append('rows_json',   JSON.stringify(previewData.rows));
+
+  let res2, text2;
+  try {
+    res2  = await fetch('/bulk-import/import', { method: 'POST', body: fd });
+    text2 = await res2.text();
+  } catch(e) {
+    alert('Bağlantı hatası: ' + e);
+    document.getElementById('btnImport').disabled = false;
+    document.getElementById('btnImport').innerHTML = '<i class="bi bi-check-circle me-1"></i> İçe Aktar';
+    return;
+  }
+  let data;
+  try {
+    data = JSON.parse(text2);
+  } catch(e) {
+    alert('Sunucu hatası (' + (res2 ? res2.status : '?') + '):\n' + text2.slice(0, 500));
+    document.getElementById('btnImport').disabled = false;
+    document.getElementById('btnImport').innerHTML = '<i class="bi bi-check-circle me-1"></i> İçe Aktar';
+    return;
+  }
+  if (data.error) { alert(data.error); return; }
+
+    const listUrl = selectedType === 'customers' ? '/customers' : '/venues';
+    document.getElementById('resultLink').href = listUrl;
+
+    const box = document.getElementById('resultBox');
+    box.innerHTML = `
+      <div class="text-center py-3">
+        <div style="font-size:56px;">✅</div>
+        <h4 class="mt-3 fw-bold text-success">${data.saved} kayıt eklendi</h4>
+        ${data.skipped > 0 ? `<p class="text-muted">${data.skipped} hatalı satır atlandı.</p>` : ''}
+      </div>`;
+    showState('result');
+}
+
+// ── Yardımcılar ───────────────────────────────────────────────────────────────
+function showState(state) {
+  document.getElementById('emptyState').style.display   = state === 'empty'   ? '' : 'none';
+  document.getElementById('loadingState').style.display = state === 'loading' ? '' : 'none';
+  document.getElementById('previewState').style.display = state === 'preview' ? '' : 'none';
+  document.getElementById('resultState').style.display  = state === 'result'  ? '' : 'none';
+}
+
+function resetPreview() {
+  previewData = null;
+  showState('empty');
+  document.getElementById('btnImport').disabled = false;
+  document.getElementById('btnImport').innerHTML = '<i class="bi bi-check-circle me-1"></i> İçe Aktar';
+}
+
+function resetAll() {
+  selectedFile = null;
+  previewData  = null;
+  document.getElementById('fileInput').value = '';
+  document.getElementById('dropText').style.display         = '';
+  document.getElementById('dropFileSelected').style.display = 'none';
+  document.getElementById('btnPreview').disabled = true;
+  showState('empty');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+showState('empty');
+</script>
+{% endblock %}

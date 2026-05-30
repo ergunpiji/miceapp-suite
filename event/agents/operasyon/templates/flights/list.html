@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Uçuşlar — {{ event.name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">✈️ Uçuşlar</div>
+    <div class="page-subtitle">{{ flights | length }} uçuş kaydı</div>
+  </div>
+  <div class="btn-group">
+    <a href="{{ base_url }}/events/{{ event.id }}/transfers/wizard" class="btn btn-secondary">🚌 Transfer Sihirbazı</a>
+    <form method="post" action="{{ base_url }}/events/{{ event.id }}/flights/fill-missing" style="display:inline;">
+      <button type="submit" class="btn btn-secondary"
+              onclick="this.textContent='⏳ Dolduruluyor...'; this.disabled=true;">
+        ✨ Eksik Detayları Tamamla
+      </button>
+    </form>
+    <a href="{{ base_url }}/events/{{ event.id }}/flights/validate" class="btn btn-secondary"
+       onclick="this.textContent='⏳ Doğrulanıyor...'; this.style.pointerEvents='none';">
+      🔍 Uçuşları Doğrula
+    </a>
+  </div>
+</div>
+
+{% if request.query_params.get('validated') %}
+<div class="alert alert-success">✅ Uçuşlar doğrulandı. Tutarsız alanlar kırmızıyla işaretlendi.</div>
+{% endif %}
+{% if request.query_params.get('filled') %}
+<div class="alert alert-success">✨ {{ request.query_params.get('filled') }} uçuşun eksik detayları tamamlandı.</div>
+{% endif %}
+
+<form method="get" class="filter-bar" style="flex-wrap:wrap; gap:8px;">
+  <input type="text" name="search" value="{{ search }}" placeholder="İsim ara..."
+         class="search-input" style="flex:1; min-width:160px;">
+  {% if direction_filter %}<input type="hidden" name="direction" value="{{ direction_filter }}">{% endif %}
+  <button type="submit" class="btn btn-secondary">Ara</button>
+  {% if search %}<a href="{{ base_url }}/events/{{ event.id }}/flights{% if direction_filter %}?direction={{ direction_filter }}{% endif %}" class="btn btn-secondary">✕</a>{% endif %}
+</form>
+<div class="filter-bar">
+  <a href="{{ base_url }}/events/{{ event.id }}/flights{% if search %}?search={{ search }}{% endif %}"
+     class="btn {% if not direction_filter %}btn-primary{% else %}btn-secondary{% endif %}">Tümü</a>
+  <a href="{{ base_url }}/events/{{ event.id }}/flights?direction=in{% if search %}&search={{ search }}{% endif %}"
+     class="btn {% if direction_filter == 'in' %}btn-primary{% else %}btn-secondary{% endif %}">↓ Geliş</a>
+  <a href="{{ base_url }}/events/{{ event.id }}/flights?direction=out{% if search %}&search={{ search }}{% endif %}"
+     class="btn {% if direction_filter == 'out' %}btn-primary{% else %}btn-secondary{% endif %}">↑ Dönüş</a>
+</div>
+
+{% if flights %}
+<div class="card" style="padding:0">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Yön</th>
+          <th>Katılımcı</th>
+          <th>Uçuş No</th>
+          <th>Güzergah</th>
+          <th>Tarih</th>
+          <th>Kalkış</th>
+          <th>İniş</th>
+          <th>Koltuk / PNR</th>
+          <th>Doğrulama</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in flights %}
+        {% set issues = f.validation_issues | from_json if f.validation_issues else [] %}
+        <tr {% if f.validation_status == 'error' %}style="background:#fff5f5;"
+            {% elif f.validation_status == 'warning' %}style="background:#fffbeb;"{% endif %}>
+          <td>
+            <span class="badge badge-{{ f.direction }}">
+              {% if f.direction == 'in' %}↓ Geliş{% else %}↑ Dönüş{% endif %}
+            </span>
+          </td>
+          <td>
+            <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ f.participant_id }}" class="table-link">
+              {{ f.participant.full_name }}
+            </a>
+          </td>
+          <td><strong>{{ f.flight_number or '—' }}</strong></td>
+          <td>
+            {# Havalimanı — yanlışsa kırmızı + doğru değer #}
+            {% set dep = f.departure_airport or '?' %}
+            {% set arr = f.arrival_airport or '?' %}
+            {% if f.validated_departure_airport and f.validated_departure_airport != dep %}
+              <span style="color:#dc2626; text-decoration:line-through;" title="Doğru: {{ f.validated_departure_airport }}">{{ dep }}</span>
+              <span style="color:#16a34a; font-size:11px;"> → {{ f.validated_departure_airport }}</span>
+            {% else %}{{ dep }}{% endif %}
+            →
+            {% if f.validated_arrival_airport and f.validated_arrival_airport != arr %}
+              <span style="color:#dc2626; text-decoration:line-through;" title="Doğru: {{ f.validated_arrival_airport }}">{{ arr }}</span>
+              <span style="color:#16a34a; font-size:11px;"> → {{ f.validated_arrival_airport }}</span>
+            {% else %}{{ arr }}{% endif %}
+          </td>
+          <td>{{ f.flight_date.strftime('%d.%m.%Y') if f.flight_date else '—' }}</td>
+          <td>
+            {% if f.validated_departure_time and f.validated_departure_time != f.departure_time %}
+              <span style="color:#dc2626; text-decoration:line-through;" title="Doğru: {{ f.validated_departure_time }}">{{ f.departure_time or '—' }}</span>
+              <span style="color:#16a34a; font-size:11px;"> {{ f.validated_departure_time }}</span>
+            {% else %}{{ f.departure_time or '—' }}{% endif %}
+          </td>
+          <td>
+            {% if f.validated_arrival_time and f.validated_arrival_time != f.arrival_time %}
+              <span style="color:#dc2626; text-decoration:line-through;" title="Doğru: {{ f.validated_arrival_time }}">{{ f.arrival_time or '—' }}</span>
+              <span style="color:#16a34a; font-size:11px;"> {{ f.validated_arrival_time }}</span>
+            {% else %}{{ f.arrival_time or '—' }}{% endif %}
+          </td>
+          <td>
+            {% if f.seat %}<span style="font-size:12px;">{{ f.seat }}</span>{% endif %}
+            {% if f.pnr %}<span style="color:#94a3b8; font-size:11px;"> · {{ f.pnr }}</span>{% endif %}
+            {% if not f.seat and not f.pnr %}—{% endif %}
+          </td>
+          <td style="min-width:120px;">
+            {% if f.validation_status == 'ok' %}
+              <span style="color:#16a34a; font-size:12px;">✅ Doğru</span>
+            {% elif f.validation_status == 'error' %}
+              <span style="color:#dc2626; font-size:12px;" title="{{ issues | join(', ') }}">❌ Hatalı</span>
+              {% if issues %}<div style="font-size:10px; color:#dc2626; margin-top:2px;">{{ issues[0] }}</div>{% endif %}
+            {% elif f.validation_status == 'warning' %}
+              <span style="color:#d97706; font-size:12px;" title="{{ issues | join(', ') }}">⚠️ Uyarı</span>
+              {% if issues %}<div style="font-size:10px; color:#d97706; margin-top:2px;">{{ issues[0] }}</div>{% endif %}
+            {% else %}
+              <span style="color:#94a3b8; font-size:11px;">— doğrulanmadı</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <div class="empty-state-icon">✈️</div>
+    <div class="empty-state-title">Uçuş kaydı yok</div>
+    <div class="empty-state-text">Katılımcı kartlarından uçuş ekleyebilirsiniz.</div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

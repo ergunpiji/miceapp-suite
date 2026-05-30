@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block page_title %}Rol İzinleri{% endblock %}
+{% block page_title_block %}Rol İzinleri{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-body p-0">
+
+    {# Açıklama #}
+    <div class="px-4 pt-4 pb-2">
+      <p class="text-muted mb-0" style="font-size:13px;">
+        Her rol için izinleri açıp kapatın. Admin her zaman tüm izinlere sahiptir.
+        Değişiklikler anında kaydedilir.
+      </p>
+    </div>
+
+    {# İzin Tablosu #}
+    <div class="table-responsive px-4 pb-4 mt-3">
+      <table class="table table-bordered align-middle mb-0" style="font-size:13px;">
+        <thead class="table-dark">
+          <tr>
+            <th style="min-width:200px;">İzin</th>
+            {% for role in roles %}
+            <th class="text-center" style="min-width:110px;">{{ role.label }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% set ns = namespace(current_group="") %}
+          {% for perm in permissions %}
+
+          {# Grup başlığı #}
+          {% if perm.group != ns.current_group %}
+          {% set ns.current_group = perm.group %}
+          <tr class="table-light">
+            <td colspan="{{ roles|length + 1 }}" class="fw-bold ps-3" style="font-size:12px; color:#64748b; letter-spacing:.05em;">
+              {{ perm.group | upper }}
+            </td>
+          </tr>
+          {% endif %}
+
+          <tr>
+            <td class="ps-3 fw-semibold">{{ perm.label }}</td>
+            {% for role in roles %}
+            {% set is_allowed = perm_map.get(role.value, {}).get(perm.key, false) %}
+            <td class="text-center">
+              <div class="form-check form-switch d-flex justify-content-center mb-0">
+                <input class="form-check-input perm-toggle"
+                       type="checkbox"
+                       style="cursor:pointer; width:2.2em; height:1.2em;"
+                       data-role="{{ role.value }}"
+                       data-perm="{{ perm.key }}"
+                       {% if is_allowed %}checked{% endif %}>
+              </div>
+            </td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# Kaydet bildirimi #}
+    <div id="saveToast" class="position-fixed bottom-0 end-0 p-3" style="z-index:9999; display:none;">
+      <div class="toast show align-items-center text-bg-success border-0">
+        <div class="d-flex">
+          <div class="toast-body"><i class="bi bi-check-circle me-2"></i>Kaydedildi</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let toastTimer = null;
+
+document.querySelectorAll('.perm-toggle').forEach(function(cb) {
+  cb.addEventListener('change', function() {
+    const role    = this.dataset.role;
+    const perm    = this.dataset.perm;
+    const allowed = this.checked;
+
+    fetch('/admin/permissions/toggle', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({role, permission: perm, allowed}),
+    }).then(function(r) {
+      if (r.ok) {
+        const toast = document.getElementById('saveToast');
+        toast.style.display = 'block';
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.style.display = 'none', 1500);
+      }
+    });
+  });
+});
+</script>
+{% endblock %}

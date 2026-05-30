@@ -1,0 +1,343 @@
+{% extends "base.html" %}
+{% block page_title %}Ön Ödeme Talebi{% endblock %}
+{% block page_title_block %}Ön Ödeme Talebi{% endblock %}
+
+{% block topbar_actions %}
+<a href="/prepayment-requests" class="btn btn-outline-secondary btn-sm">
+  <i class="bi bi-arrow-left me-1"></i>Taleplere Dön
+</a>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .timeline-line { border-left:2px solid #e2e8f0; margin-left:15px; }
+  .timeline-dot  { width:28px; height:28px; border-radius:50%; display:flex; align-items:center;
+                   justify-content:center; font-size:13px; flex-shrink:0; margin-left:-14px; }
+  .step-badge    { width:28px; height:28px; border-radius:50%; display:inline-flex;
+                   align-items:center; justify-content:center; font-size:13px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  {% if just_created %}
+  <div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
+    <i class="bi bi-check-circle me-1"></i>
+    Ön ödeme talebiniz oluşturuldu ve Genel Müdür onayına gönderildi.
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endif %}
+
+  <div class="row g-3">
+
+    {# Sol sütun: Talep bilgileri + durum adımları #}
+    <div class="col-lg-5">
+
+      {# Talep bilgileri #}
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body">
+          {% set st = statuses.get(pr.status, ('—','secondary','bi-circle')) %}
+          <div class="d-flex justify-content-between align-items-start mb-3">
+            <h6 class="fw-bold mb-0">{{ pr.vendor.name if pr.vendor else '—' }}</h6>
+            <span class="badge bg-{{ st[1] }}">
+              <i class="bi {{ st[2] }} me-1"></i>{{ st[0] }}
+            </span>
+          </div>
+
+          <div class="mb-2" style="font-size:13px;">
+            <span class="text-muted">Tutar:</span>
+            <span class="fw-bold fs-5 ms-2">₺{{ '{:,.0f}'.format(pr.amount or 0) }}</span>
+          </div>
+
+          {% if pr.request %}
+          <div class="mb-2" style="font-size:13px;">
+            <span class="text-muted">Referans:</span>
+            <a href="/requests/{{ pr.request_id }}" class="ms-2 text-decoration-none fw-semibold">
+              {{ pr.request.request_no }}
+              {% if pr.request.event_name %} — {{ pr.request.event_name }}{% endif %}
+            </a>
+          </div>
+          {% endif %}
+
+          {% if pr.description %}
+          <div class="mb-2" style="font-size:13px;">
+            <span class="text-muted">Açıklama:</span>
+            <span class="ms-2">{{ pr.description }}</span>
+          </div>
+          {% endif %}
+
+          {% if pr.notes %}
+          <div class="mb-2" style="font-size:13px;">
+            <span class="text-muted">Notlar:</span>
+            <span class="ms-2">{{ pr.notes }}</span>
+          </div>
+          {% endif %}
+
+          <hr class="my-3">
+
+          <div class="mb-1" style="font-size:12px;color:#64748b;">
+            Talep Eden:
+            <span class="text-dark fw-semibold ms-1">
+              {% if pr.requester %}{{ pr.requester.name }} {{ pr.requester.surname }}{% else %}—{% endif %}
+            </span>
+          </div>
+          <div style="font-size:12px;color:#64748b;">
+            Talep Tarihi:
+            <span class="text-dark ms-1">{{ pr.requested_at | datetime_tr }}</span>
+          </div>
+        </div>
+      </div>
+
+      {# Süreç adımları #}
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-white border-bottom py-2">
+          <span class="fw-semibold" style="font-size:13px;">Onay Süreci</span>
+        </div>
+        <div class="card-body py-3">
+
+          {# Adım 1: Talep #}
+          <div class="d-flex gap-3 mb-3">
+            <div class="step-badge bg-success text-white">
+              <i class="bi bi-plus-circle"></i>
+            </div>
+            <div>
+              <div class="fw-semibold" style="font-size:13px;">Talep Oluşturuldu</div>
+              <div style="font-size:11px;color:#64748b;">
+                {{ pr.requester.name if pr.requester else '' }} {{ pr.requester.surname if pr.requester else '' }}
+                · {{ pr.requested_at | datetime_tr }}
+              </div>
+            </div>
+          </div>
+
+          {# Adım 2: GM Onayı #}
+          <div class="d-flex gap-3 mb-3">
+            {% if pr.status == 'pending_gm' %}
+            <div class="step-badge bg-warning text-dark">
+              <i class="bi bi-hourglass-split"></i>
+            </div>
+            <div>
+              <div class="fw-semibold" style="font-size:13px;">GM Onayı Bekleniyor</div>
+              <div style="font-size:11px;color:#64748b;">Genel Müdür'ün onayı bekleniyor</div>
+            </div>
+            {% elif pr.status == 'rejected' %}
+            <div class="step-badge bg-danger text-white">
+              <i class="bi bi-x-circle"></i>
+            </div>
+            <div>
+              <div class="fw-semibold text-danger" style="font-size:13px;">Reddedildi</div>
+              <div style="font-size:11px;color:#64748b;">
+                {{ pr.approver.name if pr.approver else '' }} · {{ pr.approved_at | datetime_tr if pr.approved_at else '' }}
+              </div>
+              {% if pr.rejection_note %}
+              <div class="mt-1 p-2 rounded" style="background:#fef2f2;font-size:11px;color:#dc2626;">
+                {{ pr.rejection_note }}
+              </div>
+              {% endif %}
+            </div>
+            {% else %}
+            <div class="step-badge bg-success text-white">
+              <i class="bi bi-check-circle"></i>
+            </div>
+            <div>
+              <div class="fw-semibold" style="font-size:13px;">GM Onayladı</div>
+              <div style="font-size:11px;color:#64748b;">
+                {{ pr.approver.name if pr.approver else '' }} {{ pr.approver.surname if pr.approver else '' }}
+                · {{ pr.approved_at | datetime_tr if pr.approved_at else '' }}
+              </div>
+            </div>
+            {% endif %}
+          </div>
+
+          {# Adım 3: Muhasebe Ödemesi #}
+          <div class="d-flex gap-3">
+            {% if pr.status == 'paid' %}
+            <div class="step-badge bg-success text-white">
+              <i class="bi bi-bank"></i>
+            </div>
+            <div>
+              <div class="fw-semibold" style="font-size:13px;">Ödeme Yapıldı</div>
+              <div style="font-size:11px;color:#64748b;">
+                {{ pr.payer.name if pr.payer else '' }} {{ pr.payer.surname if pr.payer else '' }}
+                · {{ pr.paid_at }}
+              </div>
+              <div style="font-size:11px;" class="mt-1">
+                {% if pr.payment_method == 'kredi_karti' %}
+                <span class="badge" style="background:#ede9fe;color:#6d28d9;"><i class="bi bi-credit-card"></i> Kredi Kartı</span>
+                {% if pr.cc_due_date %}<span class="ms-1 text-muted">son ödeme: {{ pr.cc_due_date }}</span>{% endif %}
+                {% elif pr.payment_method == 'cek' %}
+                <span class="badge" style="background:#f1f5f9;color:#475569;"><i class="bi bi-file-text"></i> Çek</span>
+                {% else %}
+                <span class="badge" style="background:#f0fdf4;color:#166534;"><i class="bi bi-bank"></i> Banka Havalesi</span>
+                {% endif %}
+              </div>
+              {% if pr.vendor_prepayment %}
+              <div class="mt-1">
+                <a href="/vendors/{{ pr.vendor_id }}" class="text-decoration-none" style="font-size:11px;">
+                  <i class="bi bi-box-arrow-up-right me-1"></i>Tedarikçi kartında görüntüle
+                </a>
+              </div>
+              {% endif %}
+            </div>
+            {% elif pr.status == 'approved' %}
+            <div class="step-badge bg-info text-white">
+              <i class="bi bi-hourglass-split"></i>
+            </div>
+            <div>
+              <div class="fw-semibold" style="font-size:13px;">Muhasebe Ödemesi Bekleniyor</div>
+              <div style="font-size:11px;color:#64748b;">Muhasebe ekibi ödemeyi işleyecek</div>
+            </div>
+            {% else %}
+            <div class="step-badge" style="background:#e2e8f0;color:#94a3b8;">
+              <i class="bi bi-bank"></i>
+            </div>
+            <div>
+              <div class="fw-semibold text-muted" style="font-size:13px;">Muhasebe Ödemesi</div>
+              <div style="font-size:11px;color:#94a3b8;">Henüz bu aşamaya ulaşılmadı</div>
+            </div>
+            {% endif %}
+          </div>
+
+        </div>
+      </div>
+
+      {# Aksiyon butonları #}
+      {% if pr.status == 'pending_gm' and is_gm %}
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body">
+          <div class="fw-semibold mb-3" style="font-size:13px;">GM Kararı</div>
+          <form method="post" action="/prepayment-requests/{{ pr.id }}/approve" class="d-inline me-2">
+            <button type="submit" class="btn btn-success btn-sm">
+              <i class="bi bi-check-circle me-1"></i>Onayla
+            </button>
+          </form>
+          <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#rejectModal">
+            <i class="bi bi-x-circle me-1"></i>Reddet
+          </button>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if pr.status == 'approved' and can_finance %}
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body">
+          <div class="fw-semibold mb-3" style="font-size:13px;">Ödemeyi İşle</div>
+          <form method="post" action="/prepayment-requests/{{ pr.id }}/pay" id="payForm">
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label class="form-label fw-semibold" style="font-size:12px;">Ödeme Tarihi</label>
+                <input type="date" name="paid_at" class="form-control form-control-sm"
+                       value="{{ today_str }}" required>
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-semibold" style="font-size:12px;">Ödeme Yöntemi</label>
+                <select name="payment_method" class="form-select form-select-sm"
+                        onchange="onPayMethodChange(this.value)">
+                  <option value="banka">Banka Havalesi</option>
+                  <option value="kredi_karti">Kredi Kartı</option>
+                  <option value="cek">Çek</option>
+                </select>
+              </div>
+            </div>
+            <div id="ccBox" style="display:none;" class="mb-2">
+              <label class="form-label fw-semibold" style="font-size:12px;">Kart Son Ödeme Tarihi</label>
+              <input type="date" name="cc_due_date" class="form-control form-control-sm">
+              <div style="font-size:11px;color:#2563eb;" class="mt-1">
+                <i class="bi bi-info-circle me-1"></i>Nakit akışı kart son ödeme tarihine göre hesaplanacak.
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm w-100">
+              <i class="bi bi-bank me-1"></i>Ödemeyi Kaydet — ₺{{ '{:,.0f}'.format(pr.amount or 0) }}
+            </button>
+          </form>
+        </div>
+      </div>
+      {% endif %}
+
+      {# İptal butonu #}
+      {% if pr.status not in ('paid', 'cancelled', 'rejected') %}
+      {% if is_requester or is_gm or can_finance %}
+      <form method="post" action="/prepayment-requests/{{ pr.id }}/cancel"
+            onsubmit="return confirm('Bu talep iptal edilsin mi?');">
+        <input type="hidden" name="note" value="Kullanıcı tarafından iptal edildi.">
+        <button type="submit" class="btn btn-outline-secondary btn-sm w-100">
+          <i class="bi bi-slash-circle me-1"></i>Talebi İptal Et
+        </button>
+      </form>
+      {% endif %}
+      {% endif %}
+
+    </div>
+
+    {# Sağ sütun: İşlem geçmişi #}
+    <div class="col-lg-7">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom py-2">
+          <span class="fw-semibold" style="font-size:13px;">İşlem Geçmişi</span>
+        </div>
+        <div class="card-body py-3">
+          {% if logs %}
+          <div class="timeline-line ps-4">
+            {% for log in logs | reverse %}
+            {% set la = log_actions.get(log.action, ('İşlem', '#64748b', 'bi-circle')) %}
+            <div class="d-flex gap-3 mb-3 position-relative">
+              <div class="timeline-dot" style="background:{{ la[1] }}15;border:2px solid {{ la[1] }};">
+                <i class="bi {{ la[2] }}" style="color:{{ la[1] }};font-size:11px;"></i>
+              </div>
+              <div>
+                <div class="fw-semibold" style="font-size:13px;">{{ la[0] }}</div>
+                <div style="font-size:11px;color:#64748b;">
+                  {% if log.actor %}{{ log.actor.name }} {{ log.actor.surname }}{% endif %}
+                  · {{ log.created_at | datetime_tr }}
+                </div>
+                {% if log.note %}
+                <div class="mt-1 p-2 rounded" style="background:#f8fafc;font-size:12px;color:#475569;">
+                  {{ log.note }}
+                </div>
+                {% endif %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="text-muted text-center py-3" style="font-size:13px;">Henüz işlem kaydı yok.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{# Red modali #}
+{% if pr.status == 'pending_gm' and is_gm %}
+<div class="modal fade" id="rejectModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-semibold text-danger">Talebi Reddet</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/prepayment-requests/{{ pr.id }}/reject">
+        <div class="modal-body">
+          <label class="form-label fw-semibold" style="font-size:12px;">Red Nedeni</label>
+          <textarea name="rejection_note" class="form-control" rows="3"
+                    placeholder="Talebi neden reddediyorsunuz?"></textarea>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-danger btn-sm">
+            <i class="bi bi-x-circle me-1"></i>Reddet
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script>
+function onPayMethodChange(val) {
+  document.getElementById('ccBox').style.display = val === 'kredi_karti' ? '' : 'none';
+}
+</script>
+{% endblock %}

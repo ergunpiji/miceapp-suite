@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block page_title %}E-Fatura Paneli{% endblock %}
+
+{% block content %}
+<style>
+  .ef-stat-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 22px; text-align: center; }
+  .ef-stat-num { font-size: 28px; font-weight: 800; color: #0f172a; }
+  .ef-stat-label { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: .04em; margin-top: 4px; }
+  .ef-provider-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  }
+  .ef-pill-fake { background: #fef3c7; color: #92400e; }
+  .ef-pill-prod { background: #dcfce7; color: #166534; }
+</style>
+
+<div class="alert alert-info py-2 mb-3">
+  <i class="bi bi-info-circle"></i>
+  <strong>Provider:</strong>
+  <span class="ef-provider-pill {% if provider_name == 'fake' %}ef-pill-fake{% else %}ef-pill-prod{% endif %}">
+    {{ provider_name | upper }}
+  </span>
+  {% if is_sandbox %}<span class="badge bg-secondary ms-1">SANDBOX</span>{% endif %}
+  {% if provider_name == 'fake' %}
+  <span class="text-muted small ms-2">— Tüm gönderimler simüle edilir; gerçek GİB iletimi yok.</span>
+  {% endif %}
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-4">
+    <div class="ef-stat-card">
+      <div class="ef-stat-num text-success">{{ total_sent }}</div>
+      <div class="ef-stat-label">Gönderildi</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="ef-stat-card">
+      <div class="ef-stat-num text-danger">{{ total_rejected }}</div>
+      <div class="ef-stat-label">Reddedilen</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="ef-stat-card">
+      <div class="ef-stat-num text-warning">{{ inbox_pending }}</div>
+      <div class="ef-stat-label">Inbox'ta Bekleyen</div>
+    </div>
+  </div>
+</div>
+
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-header bg-transparent fw-semibold">Hızlı İşlemler</div>
+  <div class="card-body d-flex gap-2 flex-wrap">
+    <a href="/einvoice-ui/inbox" class="btn btn-primary">
+      <i class="bi bi-envelope-arrow-down"></i> Gelen E-Faturalar
+    </a>
+    <form method="post" action="/einvoice-ui/inbox/sync" class="d-inline">
+      <input type="hidden" name="days" value="30">
+      <button class="btn btn-outline-primary"><i class="bi bi-arrow-clockwise"></i> Inbox'ı Şimdi Çek (30 gün)</button>
+    </form>
+    <a href="/invoices?invoice_type=kesilen" class="btn btn-outline-secondary">
+      <i class="bi bi-receipt"></i> Kesilen Faturalar
+    </a>
+  </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-transparent fw-semibold">Son Gönderimler</div>
+  <div class="card-body p-0">
+    {% if recent %}
+    <table class="table table-hover mb-0 no-sort">
+      <thead class="table-light">
+        <tr>
+          <th>Tarih</th>
+          <th>Fatura</th>
+          <th>Tip</th>
+          <th>Durum</th>
+          <th>UUID</th>
+          <th class="text-end">Aksiyon</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in recent %}
+        <tr>
+          <td>{{ s.submitted_at | datetime_tr }}</td>
+          <td><a href="/invoices/{{ s.invoice_id }}" class="text-decoration-none">#{{ s.invoice_id }}</a></td>
+          <td><span class="badge bg-light text-dark">{{ s.doc_type }}</span></td>
+          <td>
+            {% if s.status == 'accepted' %}<span class="badge bg-success">Kabul</span>
+            {% elif s.status == 'sent' %}<span class="badge bg-info">Gönderildi</span>
+            {% elif s.status == 'rejected' %}<span class="badge bg-danger">Red</span>
+            {% elif s.status == 'cancelled' %}<span class="badge bg-secondary">İptal</span>
+            {% elif s.status == 'error' %}<span class="badge bg-danger">Hata</span>
+            {% else %}<span class="badge bg-warning text-dark">{{ s.status }}</span>{% endif %}
+          </td>
+          <td><code class="small">{{ s.uuid or '—' }}</code></td>
+          <td class="text-end">
+            <a href="/einvoice-ui/invoice/{{ s.invoice_id }}/pdf" target="_blank" class="btn btn-sm btn-outline-secondary" title="PDF görüntüle">
+              <i class="bi bi-file-earmark-pdf"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="text-muted text-center py-4">Henüz gönderim yok. Kesilen bir faturanın detay sayfasından "GİB'e Gönder" diyebilirsiniz.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

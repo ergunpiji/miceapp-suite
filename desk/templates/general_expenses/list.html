@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block page_title %}Genel Giderler{% endblock %}
+{% block topbar_actions %}
+<a href="/general-expenses/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Gider Ekle</a>
+<a href="/general-expenses/summary" class="btn btn-sm btn-outline-secondary">Özet</a>
+{% endblock %}
+{% block content %}
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-transparent border-0">
+    <form class="row g-2 align-items-end" method="get">
+      <div class="col-auto">
+        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="Ara...">
+      </div>
+      <div class="col-auto">
+        <select name="payment_method" class="form-select form-select-sm">
+          <option value="">Tüm Ödeme Yöntemleri</option>
+          <option value="nakit" {% if payment_method=='nakit' %}selected{% endif %}>Nakit</option>
+          <option value="banka" {% if payment_method=='banka' %}selected{% endif %}>Banka</option>
+          <option value="kredi_karti" {% if payment_method=='kredi_karti' %}selected{% endif %}>Kredi Kartı</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <input type="month" name="month" value="{{ month }}" class="form-control form-control-sm">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-outline-secondary">Filtrele</button>
+        <a href="/general-expenses" class="btn btn-sm btn-link">Temizle</a>
+      </div>
+      <div class="col-auto ms-auto">
+        <span class="badge bg-secondary fs-6">Toplam: {{ total | money }}</span>
+      </div>
+    </form>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr><th>Tarih</th><th>Açıklama</th><th>Kategori</th><th>Ödeme Yöntemi</th><th class="text-end">Tutar</th><th>Kaynak</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for e in expenses %}
+        <tr>
+          <td>{{ e.expense_date | date_tr }}</td>
+          <td>{{ e.description or "—" }}</td>
+          <td class="small text-muted">{% if e.category %}{% if e.category.parent %}{{ e.category.parent.name }} / {% endif %}{{ e.category.name }}{% endif %}</td>
+          <td>{{ e.payment_method or "—" }}</td>
+          <td class="text-end fw-semibold">{{ e.amount | money }}</td>
+          <td><span class="badge {% if e.source == 'manual' %}bg-light text-dark{% else %}bg-info text-dark{% endif %}">{{ e.source }}</span></td>
+          <td class="text-end text-nowrap">
+            {% if e.source == 'manual' %}
+            <a href="/general-expenses/{{ e.id }}/edit" class="btn btn-sm btn-outline-secondary py-0">Düzenle</a>
+            {% if current_user.is_admin %}
+            <form method="post" action="/general-expenses/{{ e.id }}/delete" class="d-inline">
+              <button type="button" class="btn btn-sm btn-outline-danger py-0"
+                      onclick="if(confirm('Bu gider silinsin mi?')) this.closest('form').submit()">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+            {% endif %}
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-4">Gider bulunamadı.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

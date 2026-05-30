@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Gün Sonu — {{ report.report_date | fmtdate }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">📆 Gün Sonu Raporu — {{ report.report_date | fmtdate }}</div>
+    <div class="page-subtitle">
+      {% if report.is_closed %}
+        <span class="badge badge-success">Kapalı</span>
+        {% if report.closed_at %}  {{ report.closed_at.strftime('%H:%M') }}'de kapatıldı{% endif %}
+      {% else %}
+        <span class="badge badge-warning">Açık</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="flex gap-2">
+    <button onclick="window.print()" class="btn btn-outline">🖨 Yazdır</button>
+    <a href="/cashbook/day-reports" class="btn btn-secondary">← Geri</a>
+  </div>
+</div>
+
+<!-- Bakiye özeti -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Açılış Bakiyesi</div>
+    <div class="stat-value">{{ report.opening_balance | currency }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Toplam Giriş</div>
+    <div class="stat-value positive">{{ report.total_in | currency }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Toplam Çıkış</div>
+    <div class="stat-value negative">{{ report.total_out | currency }}</div>
+  </div>
+  <div class="stat-card" style="border: 2px solid var(--primary)">
+    <div class="stat-label">Kapanış Bakiyesi</div>
+    <div class="stat-value" style="font-size:26px">{{ report.closing_balance | currency }}</div>
+  </div>
+</div>
+
+<!-- Hareketler tablosu -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Günlük Hareketler</span>
+    {% if not report.is_closed %}
+    <a href="/cashbook" class="btn btn-sm btn-outline">Hareket Ekle</a>
+    {% endif %}
+  </div>
+  <div class="card-body" style="padding:0">
+    {% if entries %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Tür</th><th>Kategori</th><th>Açıklama</th><th>İlgili Taraf</th><th class="text-right">Tutar</th></tr>
+        </thead>
+        <tbody>
+          {% for e in entries %}
+          <tr>
+            <td>
+              {% if e.entry_type == 'giris' %}<span class="badge badge-success">Giriş</span>
+              {% else %}<span class="badge badge-danger">Çıkış</span>{% endif %}
+            </td>
+            <td>{{ category_labels.get(e.category, e.category) }}</td>
+            <td>{{ e.description }}</td>
+            <td>{{ e.related_party or '—' }}</td>
+            <td class="text-right font-mono {% if e.entry_type == 'giris' %}amount-positive{% else %}amount-negative{% endif %}">
+              {% if e.entry_type == 'giris' %}+{% else %}−{% endif %}{{ e.amount | currency }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="totals-row">
+            <td colspan="4" class="text-right">Toplam Giriş:</td>
+            <td class="text-right font-mono amount-positive">{{ report.total_in | currency }}</td>
+          </tr>
+          <tr class="totals-row">
+            <td colspan="4" class="text-right">Toplam Çıkış:</td>
+            <td class="text-right font-mono amount-negative">{{ report.total_out | currency }}</td>
+          </tr>
+          <tr class="totals-row" style="font-size:15px">
+            <td colspan="4" class="text-right">Kapanış Bakiyesi:</td>
+            <td class="text-right font-mono" style="color:var(--primary)">{{ report.closing_balance | currency }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">💰</div>
+      <div class="empty-state-text">Bu gün hareket kaydedilmemiş</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if not report.is_closed %}
+<!-- Gün sonu kapat -->
+<div class="card mt-6" style="max-width:480px">
+  <div class="card-header"><span class="card-title">🔒 Günü Kapat</span></div>
+  <div class="card-body">
+    <form method="post" action="/cashbook/day-reports/{{ report.report_date.isoformat() }}/close">
+      <div class="form-group mb-4">
+        <label>Notlar (opsiyonel)</label>
+        <textarea name="notes" rows="2">{{ report.notes or '' }}</textarea>
+      </div>
+      <button type="submit" class="btn btn-primary">🔒 Günü Kapat</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% if report.notes %}
+<div class="card mt-4" style="max-width:480px">
+  <div class="card-body">
+    <strong>Not:</strong> {{ report.notes }}
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+{% block scripts %}
+<style>
+@media print {
+  .sidebar, .page-header .flex, .card:last-child { display: none !important; }
+  .main-content { padding: 0; }
+}
+</style>
+{% endblock %}

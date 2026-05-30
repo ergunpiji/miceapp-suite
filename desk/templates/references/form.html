@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .ref-code-box { background:#f0f7ff; border:2px solid #bfdbfe; border-radius:10px; padding:20px 24px; margin-bottom:20px; }
+  .ref-code-label { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#1d4ed8; margin-bottom:6px; }
+  .ref-code-auto { font-size:20px; font-weight:800; font-family:monospace; letter-spacing:2px; color:#1e3a5f; }
+  .ref-code-auto-placeholder { font-size:14px; color:#64748b; font-style:italic; }
+  .ref-code-input { font-size:22px; font-weight:800; font-family:monospace; letter-spacing:2px;
+    border:none; background:transparent; width:100%; outline:none; color:#1e3a5f; text-transform:uppercase; }
+  .ref-code-input::placeholder { color:#93c5fd; font-weight:400; font-size:18px; letter-spacing:1px; }
+  .ref-code-hint { font-size:11px; color:#64748b; margin-top:5px; }
+
+  .form-label { font-weight:600; font-size:13px; color:#374151; margin-bottom:4px; }
+  .form-control, .form-select { font-size:13px; border-color:#e2e8f0; }
+  .form-control:focus, .form-select:focus { border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,.15); }
+
+  .badge-refno { display:inline-block; background:#1e3a5f; color:#fff; border-radius:6px;
+    padding:4px 12px; font-family:monospace; font-size:15px; font-weight:700; letter-spacing:1px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7">
+
+    {% if error %}
+    <div class="alert alert-danger d-flex align-items-center gap-2 mb-3">
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      <span>{{ error }}</span>
+    </div>
+    {% endif %}
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        <form method="post">
+
+          <!-- Referans Kodu -->
+          <div class="ref-code-box">
+            <div class="ref-code-label"><i class="bi bi-hash me-1"></i>Referans Kodu</div>
+            {% if ref %}
+            <!-- Düzenlemede mevcut kodu göster, değiştirilebilir -->
+            <input type="text" name="ref_no" class="ref-code-input" required
+                   value="{{ ref.ref_no }}"
+                   oninput="this.value = this.value.toUpperCase()">
+            <div class="ref-code-hint">
+              <i class="bi bi-info-circle me-1"></i>
+              Bu kod projenizin benzersiz kimliği — faturalar, ödemeler ve tüm kayıtlar bu kodla ilişkilendirilir.
+            </div>
+            {% else %}
+            <!-- Yeni referansta kod otomatik üretilir -->
+            <div class="ref-code-auto" id="refNoPreview">
+              <span class="ref-code-auto-placeholder">Etkinlik tipi + müşteri + başlangıç tarihi seçilince otomatik üretilir</span>
+            </div>
+            <div class="ref-code-hint mt-2">
+              <i class="bi bi-magic me-1"></i>
+              Format: <code>TIP-MUS-GGAAYYYY-a</code> — örn. <code>YI-ABC-15052026-a</code>
+            </div>
+            {% endif %}
+          </div>
+
+          <!-- Başlık -->
+          <div class="mb-3">
+            <label class="form-label">Proje / Etkinlik Adı <span class="text-danger">*</span></label>
+            <input type="text" name="title" class="form-control" required
+                   value="{{ ref.title if ref else '' }}"
+                   placeholder="Etkinlik veya proje başlığı">
+          </div>
+
+          <!-- Müşteri -->
+          <div class="mb-3">
+            <label class="form-label">Müşteri <span class="text-danger">*</span></label>
+            <select name="customer_id" class="form-select" id="customerSelect" {% if not ref %}required{% endif %}
+                    onchange="updateRefPreview()">
+              <option value="">— Seçiniz —</option>
+              {% for c in customers %}
+              <option value="{{ c.id }}" data-code="{{ c.code }}"
+                {% if ref and ref.customer_id == c.id %}selected{% endif %}>
+                {{ c.name }} ({{ c.code }})
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Etkinlik Tipi + Tarihler -->
+          <div class="row g-3 mb-3">
+            <div class="col-md-4">
+              <label class="form-label">Etkinlik Tipi <span class="text-danger">*</span></label>
+              <select name="event_type" class="form-select" id="eventTypeSelect" onchange="updateRefPreview()">
+                {% for val, label in event_types %}
+                <option value="{{ val }}"
+                  {% set cur_type = ref.event_type if ref else 'yi' %}
+                  {% if cur_type == val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Başlangıç Tarihi <span class="text-danger">*</span></label>
+              <input type="date" name="check_in" class="form-control" id="checkInInput"
+                     {% if not ref %}required{% endif %}
+                     value="{{ ref.check_in.isoformat() if ref and ref.check_in else '' }}"
+                     onchange="updateRefPreview()">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Bitiş Tarihi</label>
+              <input type="date" name="check_out" class="form-control"
+                     value="{{ ref.check_out.isoformat() if ref and ref.check_out else '' }}">
+            </div>
+          </div>
+
+          <!-- Notlar -->
+          <div class="mb-4">
+            <label class="form-label">Notlar</label>
+            <textarea name="notes" class="form-control" rows="3"
+                      placeholder="Proje hakkında ek bilgiler...">{{ ref.notes if ref else '' }}</textarea>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary px-4">
+              <i class="bi bi-check-lg me-1"></i>{% if ref %}Güncelle{% else %}Oluştur{% endif %}
+            </button>
+            <a href="/references{% if ref %}/{{ ref.id }}{% endif %}" class="btn btn-outline-secondary">İptal</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if not ref %}
+<script>
+const EVENT_TYPE_CODES = {
+  "yi": "YI", "yd": "YD", "tk": "TK", "ut": "UT", "dk": "DK"
+};
+
+function updateRefPreview() {
+  const typeSelect = document.getElementById("eventTypeSelect");
+  const custSelect = document.getElementById("customerSelect");
+  const dateInput  = document.getElementById("checkInInput");
+  const preview    = document.getElementById("refNoPreview");
+
+  const typeCode = EVENT_TYPE_CODES[typeSelect.value] || "";
+  const custOpt  = custSelect.selectedOptions[0];
+  const custCode = custOpt ? (custOpt.dataset.code || "") : "";
+  const dateVal  = dateInput.value; // YYYY-MM-DD
+
+  if (!typeCode || !custCode || !dateVal) {
+    preview.innerHTML = '<span class="ref-code-auto-placeholder">Etkinlik tipi + müşteri + başlangıç tarihi seçilince otomatik üretilir</span>';
+    return;
+  }
+
+  // DDMMYYYY formatına çevir
+  const parts = dateVal.split("-");
+  const ddmmyyyy = parts[2] + parts[1] + parts[0];
+  preview.textContent = typeCode + "-" + custCode.toUpperCase() + "-" + ddmmyyyy + "-a (veya b, c…)";
+}
+
+document.addEventListener("DOMContentLoaded", updateRefPreview);
+</script>
+{% endif %}
+{% endblock %}

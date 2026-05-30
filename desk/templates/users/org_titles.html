@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block page_title %}Organizasyon Yapısı{% endblock %}
+{% block page_title_block %}Organizasyon Yapısı{% endblock %}
+
+{% block topbar_actions %}
+<a href="/users" class="btn btn-outline-secondary btn-sm">
+  <i class="bi bi-arrow-left me-1"></i> Kullanıcı Listesi
+</a>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .org-tree { }
+  .org-row {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    gap: 12px;
+  }
+  .org-row:hover { background: #f8fafc; }
+  .org-indent { flex-shrink: 0; }
+  .grade-badge {
+    font-size: 10px; font-weight: 700; letter-spacing: .5px;
+    padding: 2px 7px; border-radius: 20px;
+    text-transform: uppercase; flex-shrink: 0;
+  }
+  .grade-1 { background:#1e3a5f; color:#fff; }
+  .grade-2 { background:#1e5f8c; color:#fff; }
+  .grade-3 { background:#0e7490; color:#fff; }
+  .grade-4 { background:#0369a1; color:#fff; }
+  .grade-5 { background:#2563eb; color:#fff; }
+  .grade-6 { background:#7c3aed; color:#fff; }
+  .grade-7 { background:#db2777; color:#fff; }
+  .grade-8 { background:#64748b; color:#fff; }
+  .limit-input { width: 160px; font-size: 13px; }
+  .parent-label { font-size: 11px; color: #94a3b8; }
+  .user-count-badge { font-size: 11px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% if saved %}
+<div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
+  <i class="bi bi-check-circle me-2"></i>Bütçe limiti güncellendi.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="row g-4">
+
+  {# ── Sol: Limit Düzenleme Tablosu ── #}
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header fw-bold" style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
+        <i class="bi bi-cash-stack me-2 text-primary"></i>Bütçe Onay Limitleri
+        <small class="text-muted fw-normal ms-2" style="font-size:12px;">Her kademe için azami bütçe onay yetkisi</small>
+      </div>
+      <div class="org-tree">
+        {% macro render_titles(parent_id, depth) %}
+          {% for t in titles if t.parent_id == parent_id %}
+          <div class="org-row">
+            <div class="org-indent" style="width:{{ depth * 24 }}px; flex-shrink:0;"></div>
+
+            {# Bağlantı çizgisi göstergesi #}
+            {% if depth > 0 %}
+            <div style="color:#cbd5e1; flex-shrink:0; font-size:14px;">└</div>
+            {% endif %}
+
+            <span class="grade-badge grade-{{ t.grade }}">K{{ t.grade }}</span>
+
+            <div style="flex:1; min-width:0;">
+              <div class="fw-semibold" style="font-size:13px;">{{ t.name }}</div>
+              {% if t.parent %}
+              <div class="parent-label">↑ {{ t.parent.name }}</div>
+              {% endif %}
+            </div>
+
+            {# Kullanıcı sayısı #}
+            {% set cnt = user_counts.get(t.id, 0) %}
+            <div class="text-center" style="width:60px; flex-shrink:0;">
+              {% if cnt > 0 %}
+              <span class="badge bg-primary bg-opacity-10 text-primary user-count-badge">
+                <i class="bi bi-person me-1"></i>{{ cnt }}
+              </span>
+              {% else %}
+              <span class="text-muted" style="font-size:11px;">—</span>
+              {% endif %}
+            </div>
+
+            {# Limit + PM Yetki formu #}
+            <form method="post" action="/users/org-titles/{{ t.id }}" class="d-flex align-items-center gap-2" style="flex-shrink:0;">
+              <select name="pm_permission_level" class="form-select form-select-sm" style="width:110px; font-size:12px;" title="PM Yetki Grubu">
+                <option value="">— (PM değil)</option>
+                <option value="mudur"    {% if t.pm_permission_level == 'mudur'    %}selected{% endif %}>Müdür</option>
+                <option value="yonetici" {% if t.pm_permission_level == 'yonetici' %}selected{% endif %}>Yönetici</option>
+                <option value="asistan"  {% if t.pm_permission_level == 'asistan'  %}selected{% endif %}>Asistan</option>
+              </select>
+              <input type="number" name="budget_limit" class="form-control limit-input"
+                     value="{{ t.budget_limit | int if t.budget_limit is not none else '' }}"
+                     placeholder="Limitsiz" min="0" step="1000">
+              <button type="submit" class="btn btn-sm btn-outline-primary" title="Kaydet">
+                <i class="bi bi-check-lg"></i>
+              </button>
+            </form>
+          </div>
+          {{ render_titles(t.id, depth + 1) }}
+          {% endfor %}
+        {% endmacro %}
+
+        {{ render_titles(none, 0) }}
+      </div>
+    </div>
+  </div>
+
+  {# ── Sağ: Kademe Açıklamaları ── #}
+  <div class="col-lg-4">
+    <div class="card mb-3">
+      <div class="card-body">
+        <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#64748b; margin-bottom:12px;">
+          <i class="bi bi-info-circle me-1"></i>Nasıl Çalışır?
+        </div>
+        <ul class="mb-0" style="font-size:13px; color:#374151; padding-left:18px; line-height:2;">
+          <li>Her unvan için <strong>bütçe onay limiti</strong> tanımlayabilirsiniz.</li>
+          <li>Boş bırakılan limitler <strong>limitsiz</strong> olarak kabul edilir.</li>
+          <li>Kullanıcı oluştururken bu unvanlardan birini atayabilirsiniz.</li>
+          <li>Üst kademe, alt kademenin limitini <strong>devredebilir</strong>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#64748b; margin-bottom:12px;">
+          <i class="bi bi-diagram-3 me-1"></i>Kademe Özeti
+        </div>
+        {% set grade_names = {1:'Genel Müdür', 2:'GM Yardımcısı', 3:'Direktör', 4:'Müdür', 5:'Uzman/Yönetici', 6:'Yetkili', 7:'Sorumlu', 8:'Asistan'} %}
+        {% for g in range(1, 9) %}
+        {% set g_titles = titles | selectattr('grade', 'equalto', g) | list %}
+        {% if g_titles %}
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <span class="grade-badge grade-{{ g }}">K{{ g }}</span>
+          <div style="flex:1;">
+            <div style="font-size:12px; font-weight:600;">{{ grade_names.get(g, '') }}</div>
+            <div style="font-size:11px; color:#94a3b8;">{{ g_titles | length }} pozisyon</div>
+          </div>
+          <div style="text-align:right;">
+            {% set defined = g_titles | selectattr('budget_limit') | list %}
+            {% if defined %}
+            <div style="font-size:11px; color:#059669;">{{ defined | length }} limitli</div>
+            {% else %}
+            <div style="font-size:11px; color:#94a3b8;">limit yok</div>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

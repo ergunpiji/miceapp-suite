@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block page_title %}Vergi Raporları{% endblock %}
+
+{% block content %}
+<style>
+  .vat-card { background: linear-gradient(135deg, #1A3A5C 0%, #1E5F8C 100%); color:#fff;
+              border-radius: 12px; padding: 24px; }
+  .vat-net { font-size: 32px; font-weight: 800; }
+  .vat-label { font-size: 11px; opacity: .8; text-transform: uppercase; letter-spacing: .04em; }
+  .stat-row { background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:14px 18px; }
+  .stat-row .label { font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:.04em; }
+  .stat-row .value { font-size:18px; font-weight:700; color:#0f172a; }
+</style>
+
+<!-- Dönem Seçici -->
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body d-flex align-items-center gap-2 flex-wrap">
+    <span class="fw-semibold">Dönem:</span>
+    <form method="get" class="d-flex gap-2 align-items-center">
+      <select name="year" class="form-select form-select-sm" style="width:auto;">
+        {% for y in range(2024, 2031) %}
+        <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+      <select name="month" class="form-select form-select-sm" style="width:auto;">
+        {% for i in range(12) %}
+        <option value="{{ i+1 }}" {% if (i+1) == month %}selected{% endif %}>{{ month_names[i] }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn-sm btn-outline-primary">Göster</button>
+    </form>
+    <a href="/tax-reports/export?year={{ year }}&month={{ month }}" class="btn btn-sm btn-outline-success ms-auto">
+      <i class="bi bi-file-earmark-excel"></i> Tüm Raporları Excel'e Aktar
+    </a>
+  </div>
+</div>
+
+<!-- KDV Özet -->
+<h5 class="mt-2 mb-2 fw-bold">KDV Özet — {{ month_names[month-1] }} {{ year }}</h5>
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="vat-card">
+      <div class="vat-label">Net KDV</div>
+      <div class="vat-net">{{ kdv.net_payable | money }}</div>
+      <div class="small mt-1">{% if kdv.net_payable > 0 %}🔴 Ödenecek{% elif kdv.net_payable < 0 %}🟢 Devreden{% else %}— Sıfır{% endif %}</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat-row mb-2">
+      <div class="label">Hesaplanan KDV (Çıkış)</div>
+      <div class="value text-success">{{ kdv.out_vat | money }}</div>
+      <div class="text-muted small">Matrah: {{ kdv.out_base | money }}</div>
+    </div>
+    <div class="stat-row">
+      <div class="label">İade Kesilen</div>
+      <div class="value">{{ kdv.iade_kesilen_vat | money }}</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat-row mb-2">
+      <div class="label">İndirilen KDV (Giriş)</div>
+      <div class="value text-danger">{{ kdv.in_vat | money }}</div>
+      <div class="text-muted small">Matrah: {{ kdv.in_base | money }}</div>
+    </div>
+    <div class="stat-row">
+      <div class="label">İade Gelen</div>
+      <div class="value">{{ kdv.iade_gelen_vat | money }}</div>
+    </div>
+  </div>
+</div>
+
+<!-- BA / BS -->
+<h5 class="mt-3 mb-2 fw-bold">BA / BS Formu — eşik ≥ {{ babs.threshold | money }}</h5>
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent fw-semibold">
+        BA — Alımlar ({{ babs.ba | length }})
+        <span class="ms-auto float-end text-danger fw-bold">{{ babs.ba_total | money }}</span>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0 no-sort">
+          <thead class="table-light"><tr><th>Tedarikçi</th><th>Vergi No</th><th class="text-center">Adet</th><th class="text-end">Toplam</th></tr></thead>
+          <tbody>
+            {% for r in babs.ba %}
+            <tr>
+              <td>{{ r.name }}</td>
+              <td><code class="small">{{ r.tax_no or '—' }}</code></td>
+              <td class="text-center">{{ r.count }}</td>
+              <td class="text-end fw-semibold">{{ r.total | money }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-muted text-center py-3">Eşik üzeri alım yok</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent fw-semibold">
+        BS — Satışlar ({{ babs.bs | length }})
+        <span class="ms-auto float-end text-success fw-bold">{{ babs.bs_total | money }}</span>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0 no-sort">
+          <thead class="table-light"><tr><th>Müşteri</th><th>Vergi No</th><th class="text-center">Adet</th><th class="text-end">Toplam</th></tr></thead>
+          <tbody>
+            {% for r in babs.bs %}
+            <tr>
+              <td>{{ r.name }}</td>
+              <td><code class="small">{{ r.tax_no or '—' }}</code></td>
+              <td class="text-center">{{ r.count }}</td>
+              <td class="text-end fw-semibold">{{ r.total | money }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-muted text-center py-3">Eşik üzeri satış yok</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Geçici Vergi -->
+<h5 class="mt-3 mb-2 fw-bold">{{ year }} — Geçici Vergi Tahmini (%25 kurumlar oranı)</h5>
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body p-0">
+    <table class="table mb-0 no-sort">
+      <thead class="table-light">
+        <tr>
+          <th class="text-center">Çeyrek</th>
+          <th class="text-end">Net Gelir</th>
+          <th class="text-end">Net Maliyet</th>
+          <th class="text-end">Genel Gider</th>
+          <th class="text-end">Net Kâr</th>
+          <th class="text-end">Geçici Vergi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for q in quarters %}
+        <tr>
+          <td class="text-center fw-bold">Q{{ q.q }}</td>
+          <td class="text-end">{{ q.income | money }}</td>
+          <td class="text-end">{{ q.cost | money }}</td>
+          <td class="text-end">{{ q.expense | money }}</td>
+          <td class="text-end fw-bold" style="color:{% if q.net_profit >= 0 %}#16a34a{% else %}#dc2626{% endif %}">{{ q.net_profit | money }}</td>
+          <td class="text-end fw-bold" style="color:#1A3A5C">{{ q.tax_estimate | money }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="alert alert-info py-2">
+  <i class="bi bi-info-circle"></i>
+  <strong>Not:</strong> Bu raporlar webapp'in iç hesaplamalarıdır ve mali müşaviriniz GİB'e gönderirken kontrol edip imzalayacaktır.
+  Beyanname gönderim yetkisi sadece SMMM/YMM'dedir.
+</div>
+{% endblock %}

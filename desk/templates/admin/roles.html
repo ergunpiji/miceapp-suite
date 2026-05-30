@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block page_title %}Rol & İzin Yönetimi{% endblock %}
+
+{% block extra_css %}
+<style>
+  .perm-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .perm-table th { background:#1a3a5c; color:#fff; padding:9px 10px; text-align:center; white-space:nowrap; }
+  .perm-table th.perm-name { text-align:left; min-width:240px; background:#0f2540; }
+  .perm-table td { padding:7px 10px; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
+  .perm-table tbody tr:hover { background:#f8fafc; }
+  .perm-table .group-row td { background:#e8f0fe; font-weight:700; font-size:11px;
+    text-transform:uppercase; letter-spacing:.06em; color:#1a3a5c; padding:6px 10px; }
+  .perm-cb { width:18px; height:18px; cursor:pointer; accent-color:#1e5f8c; }
+  .locked { opacity:.35; pointer-events:none; }
+  .role-head { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if request.query_params.get('saved') %}
+<div class="alert alert-success alert-dismissible fade show py-2" role="alert">
+  <i class="bi bi-check-circle me-1"></i>İzin matrisi kaydedildi.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="card border-0 shadow-sm">
+  <div class="card-header d-flex align-items-center justify-content-between"
+       style="background:linear-gradient(135deg,#1a3a5c,#1e5f8c);color:#fff;border-radius:8px 8px 0 0">
+    <h6 class="mb-0"><i class="bi bi-shield-lock me-2"></i>Rol & İzin Matrisi</h6>
+    <small class="opacity-75">Checkbox işaretli = o rol bu yetkiye sahip</small>
+  </div>
+  <div class="card-body p-0">
+    <form method="post" action="/admin/roles">
+      <div class="table-responsive">
+        <table class="perm-table">
+          <thead>
+            <tr>
+              <th class="perm-name">İzin</th>
+              {% for role in roles %}
+              <th>
+                <div class="role-head">{{ role_labels[role] }}</div>
+              </th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for group_name, perms in permission_groups %}
+            <tr class="group-row">
+              <td colspan="{{ roles|length + 1 }}">{{ group_name }}</td>
+            </tr>
+            {% for perm_key, perm_label in perms %}
+            <tr>
+              <td>{{ perm_label }}</td>
+              {% for role in roles %}
+              {% set is_locked = (role == 'super_admin') or (perm_key == 'super_admin_panel' and role != 'super_admin') %}
+              <td class="text-center">
+                <input type="checkbox"
+                  class="perm-cb {% if is_locked %}locked{% endif %}"
+                  name="{{ role }}__{{ perm_key }}"
+                  {% if matrix[role][perm_key] %}checked{% endif %}
+                  {% if is_locked %}disabled{% endif %}>
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="p-3 border-top d-flex gap-2 align-items-center">
+        <button type="submit" class="btn btn-primary px-4">
+          <i class="bi bi-check-lg me-1"></i>Kaydet
+        </button>
+        <small class="text-muted">
+          <i class="bi bi-info-circle me-1"></i>
+          Süper Admin her zaman tüm yetkilere sahiptir ve matristen çıkarılamaz.
+        </small>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

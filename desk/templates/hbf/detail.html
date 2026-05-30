@@ -1,0 +1,424 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .hbf-header {
+    background: linear-gradient(135deg, #1a3a5c 0%, #1e5f8c 100%);
+    border-radius: 12px; padding: 24px 32px; margin-bottom: 20px; color: #fff;
+  }
+  .hbf-header .label { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; opacity: .7; }
+  .hbf-header h4 { margin: 4px 0 0; font-size: 22px; font-weight: 700; }
+  .hbf-header .meta { margin-top: 12px; display: flex; gap: 24px; flex-wrap: wrap; }
+  .hbf-header .meta-item { font-size: 12px; opacity: .8; }
+  .hbf-header .meta-item strong { display: block; font-size: 13px; opacity: 1; }
+
+  .section-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0; margin-bottom: 16px; overflow: hidden; }
+  .section-card .card-head { padding: 12px 20px; border-bottom: 1px solid #f1f5f9; font-weight: 700; font-size: 13px; }
+
+  .items-tbl { width: 100%; border-collapse: collapse; }
+  .items-tbl thead th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #64748b; padding: 8px 12px; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+  .items-tbl tbody td { padding: 7px 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+  .items-tbl tfoot td { padding: 8px 12px; font-size: 13px; background: #f8fafc; }
+
+  .summary-box { background: linear-gradient(135deg, #1a3a5c 0%, #1e5f8c 100%); border-radius: 10px; padding: 16px 20px; color: #fff; }
+  .summary-box .row-item { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; opacity: .85; }
+  .summary-box .grand { display: flex; justify-content: space-between; font-size: 17px; font-weight: 800; padding-top: 8px; margin-top: 6px; border-top: 1px solid rgba(255,255,255,.3); }
+  .summary-box .grand-label { letter-spacing: .06em; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+
+  .status-badge-lg { font-size: 13px; padding: 5px 14px; border-radius: 20px; font-weight: 700; }
+  .pay-badge { background: #e0f2fe; color: #0369a1; border-radius: 4px; padding: 1px 8px; font-size: 11px; font-weight: 600; }
+  .doc-badge { background: #f0fdf4; color: #15803d; border-radius: 4px; padding: 1px 8px; font-size: 11px; font-weight: 600; }
+  .att-btn { background: none; border: none; padding: 2px 5px; cursor: pointer; border-radius: 5px; line-height: 1; }
+  .att-btn.has-file { color: #2563eb; }
+  .att-btn.has-file:hover { background: #eff6ff; }
+  .att-btn.no-file { color: #94a3b8; }
+  .att-btn.no-file:hover { color: #64748b; background: #f1f5f9; }
+  #previewModal .modal-body { padding: 0; min-height: 200px; }
+  #previewModal iframe { width: 100%; height: 75vh; border: none; }
+  #previewModal img { max-width: 100%; display: block; margin: auto; }
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+{% if hbf.status == 'taslak' and (hbf.created_by == current_user.id or current_user.is_admin) %}
+<a href="/hbf/{{ hbf.id }}/edit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil me-1"></i>Düzenle</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <!-- Sol: Ana içerik -->
+  <div class="col-lg-8">
+    <!-- Header -->
+    <div class="hbf-header">
+      <div class="label">Harcama Bildirim Formu</div>
+      <h4>{{ hbf.hbf_no }}</h4>
+      <div class="meta">
+        <div class="meta-item">
+          <strong>Durum</strong>
+          {% set s = hbf.status %}
+          <span class="badge {% if s=='taslak' %}bg-secondary{% elif s=='beklemede' %}bg-warning text-dark{% elif s=='mudur_onayladi' %}bg-primary{% elif s=='onaylandi' %}bg-info text-dark{% elif s=='reddedildi' %}bg-danger{% elif s=='odendi' %}bg-success{% endif %}">
+            {{ status_labels[s] }}
+          </span>
+        </div>
+        <div class="meta-item">
+          <strong>Oluşturan</strong>
+          {{ hbf.creator.name if hbf.creator else '—' }}
+        </div>
+        <div class="meta-item">
+          <strong>Tarih</strong>
+          {{ hbf.created_at.strftime('%d.%m.%Y') }}
+        </div>
+        {% if hbf.employee %}
+        <div class="meta-item">
+          <strong>Çalışan</strong>
+          {{ hbf.employee.name }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Referans bazlı harcama bölümleri -->
+    {% set pm_map = {'nakit':'Nakit','kredi_karti':'Kredi K.','banka':'Banka/EFT','cek':'Çek'} %}
+    {% set doc_map = {'fatura':'Fatura','fis':'Fiş','gider_pusulasi':'Gider P.','diger':'Diğer'} %}
+
+    {% for sec in items %}
+    {% set sec_items = sec.get('items', []) %}
+    {% set sec_total = sec_items | sum(attribute='amount_with_vat') %}
+    <div class="section-card mb-3">
+      <!-- Bölüm başlığı -->
+      <div style="background:#f0f7ff;border-bottom:1px solid #dbeafe;padding:10px 18px;display:flex;align-items:center;gap:10px;">
+        {% if sec.get('ref_id') %}
+        <a href="/references/{{ sec.ref_id }}" class="text-decoration-none">
+          <span style="background:#1e40af;color:#fff;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:700">{{ sec.ref_no }}</span>
+        </a>
+        {% elif sec.get('ref_no') %}
+        <span style="background:#1e40af;color:#fff;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:700">{{ sec.ref_no }}</span>
+        {% endif %}
+        {% if sec.get('ref_title') %}
+        <span style="font-size:13px;color:#374151">{{ sec.ref_title }}</span>
+        {% endif %}
+      </div>
+      <!-- Kalemler -->
+      <table class="items-tbl">
+        <thead>
+          <tr>
+            <th>Tarih</th>
+            <th>Açıklama</th>
+            <th>Ödeme</th>
+            <th>Belge Türü</th>
+            <th class="text-end">Tutar (KDV Dahil)</th>
+            <th class="text-end">KDV Tutarı</th>
+            <th class="text-end">KDV Hariç</th>
+            <th class="text-center" style="width:42px">Belge</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in sec_items %}
+          {% set row_id = item.get('row_id', '') %}
+          {% set att = row_attachments.get(row_id) if row_id else none %}
+          <tr>
+            <td>{{ item.date or '—' }}</td>
+            <td>{{ item.description or '—' }}</td>
+            <td><span class="pay-badge">{{ pm_map.get(item.get('payment',''), item.get('payment','—')) }}</span></td>
+            <td><span class="doc-badge">{{ doc_map.get(item.get('document_type',''), item.get('document_type','—')) }}</span></td>
+            <td class="text-end fw-semibold">{{ item.get('amount_with_vat', item.get('amount', 0)) | money }}</td>
+            <td class="text-end text-muted">{{ item.get('vat_amount', 0) | money }}</td>
+            <td class="text-end">{{ item.get('amount_without_vat', item.get('amount', 0)) | money }}</td>
+            <td class="text-center">
+              {% if att %}
+                {% set fext = att.filename.rsplit('.',1)[-1].lower() %}
+                <button type="button" class="att-btn has-file"
+                        title="{{ att.original }}"
+                        onclick="openPreview('/files/uploads/hbf/{{ hbf.id }}/{{ att.filename }}','{{ fext }}','{{ att.original | replace("'","") }}')">
+                  <i class="bi bi-paperclip" style="font-size:16px"></i>
+                </button>
+              {% elif row_id and (current_user.is_admin or current_user.is_approver or hbf.created_by == current_user.id) %}
+                <button type="button" class="att-btn no-file"
+                        title="Belge yükle"
+                        onclick="openUpload('{{ row_id }}')">
+                  <i class="bi bi-upload" style="font-size:14px"></i>
+                </button>
+              {% else %}
+                <span class="text-muted" style="font-size:12px">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" class="text-center text-muted py-3">Kalem yok.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <!-- Bölüm toplamı -->
+      <div style="padding:7px 14px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:right;font-size:12px;color:#64748b">
+        Bölüm Toplam: <strong style="color:#1e293b">
+          {% set st = namespace(v=0) %}{% for i in sec_items %}{% set st.v = st.v + i.get('amount_with_vat', i.get('amount',0)) %}{% endfor %}
+          {{ st.v | money }}
+        </strong>
+      </div>
+    </div>
+    {% else %}
+    <div class="alert alert-secondary">Kalem yok.</div>
+    {% endfor %}
+
+    <!-- Özet -->
+    <div class="d-flex justify-content-end mb-3">
+      <div class="summary-box">
+        <div class="row-item"><span>KDV Hariç Toplam</span><span>{{ kdv_haric | money }}</span></div>
+        <div class="row-item"><span>KDV</span><span>{{ kdv_toplam | money }}</span></div>
+        <div class="grand">
+          <span class="grand-label">Genel Toplam</span>
+          <span>{{ hbf.total_amount | money }}</span>
+        </div>
+      </div>
+    </div>
+
+    {% if hbf.notes %}
+    <div class="alert alert-light border"><strong>Not:</strong> {{ hbf.notes }}</div>
+    {% endif %}
+
+    <!-- Genel belgeler (satır bağlantısı olmayan) -->
+    {% if global_attachments %}
+    <div class="section-card mb-3">
+      <div class="card-head">Diğer Belgeler</div>
+      <ul class="list-group list-group-flush">
+        {% for att in global_attachments %}
+        <li class="list-group-item d-flex align-items-center gap-2 py-2">
+          {% set ext = att.filename.rsplit('.',1)[-1].lower() %}
+          <i class="bi {% if ext == 'pdf' %}bi-file-earmark-pdf text-danger{% elif ext in ('jpg','jpeg','png','webp') %}bi-file-earmark-image text-success{% elif ext in ('xlsx','xls') %}bi-file-earmark-excel text-success{% elif ext in ('docx','doc') %}bi-file-earmark-word text-primary{% else %}bi-file-earmark text-secondary{% endif %}" style="font-size:18px;flex-shrink:0"></i>
+          <a href="/files/uploads/hbf/{{ hbf.id }}/{{ att.filename }}" target="_blank"
+             class="text-decoration-none flex-grow-1" style="font-size:13px">{{ att.original }}</a>
+          <span class="text-muted" style="font-size:11px">{{ att.uploaded_at }}</span>
+          {% if current_user.is_admin or hbf.created_by == current_user.id %}
+          <form method="post" action="/hbf/{{ hbf.id }}/attachment/{{ att.filename }}/delete" class="mb-0">
+            <button type="button" class="btn btn-link text-danger p-0" style="font-size:14px"
+                    onclick="if(confirm('Belge silinsin mi?')) this.closest('form').submit()">
+              <i class="bi bi-trash"></i>
+            </button>
+          </form>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <!-- Upload Modal -->
+    <div class="modal fade" id="uploadModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h6 class="modal-title"><i class="bi bi-upload me-2"></i>Belge Yükle</h6>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <form method="post" action="/hbf/{{ hbf.id }}/upload" enctype="multipart/form-data">
+            <input type="hidden" name="row_id" id="uploadRowId">
+            <div class="modal-body">
+              <input type="file" name="file" class="form-control" required
+                     accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.docx,.doc">
+              <div class="text-muted mt-2" style="font-size:12px">PDF, Görüntü, Excel, Word desteklenir</div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">İptal</button>
+              <button type="submit" class="btn btn-primary btn-sm">Yükle</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preview Modal -->
+    <div class="modal fade" id="previewModal" tabindex="-1">
+      <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header py-2">
+            <h6 class="modal-title" id="previewTitle" style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80%"></h6>
+            <div class="ms-auto d-flex align-items-center gap-2">
+              <a id="previewDownload" href="#" target="_blank" class="btn btn-sm btn-outline-secondary py-0">
+                <i class="bi bi-download"></i>
+              </a>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+          </div>
+          <div class="modal-body" id="previewBody"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Onay notu -->
+    {% if hbf.approval_note %}
+    <div class="alert {% if hbf.status == 'reddedildi' %}alert-danger{% else %}alert-info{% endif %}">
+      <strong>{{ hbf.approver.name if hbf.approver else '' }}</strong>
+      {% if hbf.approved_at %}({{ hbf.approved_at.strftime('%d.%m.%Y') }}){% endif %}:
+      {{ hbf.approval_note }}
+    </div>
+    {% endif %}
+
+    <!-- Ödeme bilgisi -->
+    {% if hbf.status == 'odendi' %}
+    <div class="alert alert-success">
+      <i class="bi bi-check-circle me-1"></i>
+      <strong>{{ hbf.paid_at.strftime('%d.%m.%Y') if hbf.paid_at else '' }}</strong> tarihinde
+      {{ 'nakit' if hbf.payment_method == 'nakit' else 'banka transferi' }} ile ödendi.
+      {% if hbf.bank_account %}· {{ hbf.bank_account.name }}{% endif %}
+      {% if hbf.cash_book %}· {{ hbf.cash_book.name }}{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Sağ: İşlemler -->
+  <div class="col-lg-4">
+    {% if hbf.status == 'taslak' and (hbf.created_by == current_user.id or current_user.is_admin) %}
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body">
+        <h6 class="mb-3">İşlemler</h6>
+        <form method="post" action="/hbf/{{ hbf.id }}/submit" class="mb-2">
+          <button class="btn btn-primary w-100" onclick="return confirm('Onaya gönderilsin mi?')">
+            <i class="bi bi-send me-1"></i>Onaya Gönder
+          </button>
+        </form>
+        <form method="post" action="/hbf/{{ hbf.id }}/delete">
+          <button class="btn btn-outline-danger w-100 btn-sm" onclick="return confirm('Silinsin mi?')">
+            <i class="bi bi-trash me-1"></i>Sil
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    {# Müdür birinci kademe onayı #}
+    {% if hbf.status == 'beklemede' and current_user.role == 'mudur' and hbf_creator and hbf_creator.manager_id == current_user.id %}
+    <div class="card border-warning shadow-sm mb-3">
+      <div class="card-body">
+        <h6 class="mb-3"><i class="bi bi-person-check me-1 text-warning"></i>Müdür Onayı</h6>
+        <form method="post" action="/hbf/{{ hbf.id }}/approve" class="mb-2">
+          <div class="mb-2">
+            <textarea name="approval_note" class="form-control form-control-sm" rows="2" placeholder="Onay notu (isteğe bağlı)"></textarea>
+          </div>
+          <button class="btn btn-warning w-100 text-dark">
+            <i class="bi bi-check-lg me-1"></i>Müdür Onayı Ver
+          </button>
+        </form>
+        <form method="post" action="/hbf/{{ hbf.id }}/reject">
+          <div class="mb-2">
+            <textarea name="approval_note" class="form-control form-control-sm" rows="2" placeholder="Red gerekçesi"></textarea>
+          </div>
+          <button class="btn btn-outline-danger w-100">
+            <i class="bi bi-x-lg me-1"></i>Reddet
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    {# GM / Admin nihai onayı #}
+    {% if hbf.status in ('beklemede', 'mudur_onayladi') and current_user.role in ('genel_mudur', 'admin', 'super_admin') %}
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body">
+        <h6 class="mb-3">
+          <i class="bi bi-shield-check me-1"></i>
+          {% if hbf.status == 'mudur_onayladi' %}Nihai Onay (GM){% else %}Onay{% endif %}
+        </h6>
+        <form method="post" action="/hbf/{{ hbf.id }}/approve" class="mb-2">
+          <div class="mb-2">
+            <textarea name="approval_note" class="form-control form-control-sm" rows="2" placeholder="Onay notu (isteğe bağlı)"></textarea>
+          </div>
+          <button class="btn btn-success w-100">
+            <i class="bi bi-check-lg me-1"></i>Onayla
+          </button>
+        </form>
+        <form method="post" action="/hbf/{{ hbf.id }}/reject">
+          <div class="mb-2">
+            <textarea name="approval_note" class="form-control form-control-sm" rows="2" placeholder="Red gerekçesi"></textarea>
+          </div>
+          <button class="btn btn-outline-danger w-100">
+            <i class="bi bi-x-lg me-1"></i>Reddet
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if hbf.status == 'onaylandi' and current_user.is_admin %}
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body">
+        <h6 class="mb-3">Ödeme Kaydı</h6>
+        <form method="post" action="/hbf/{{ hbf.id }}/pay">
+          <div class="mb-2">
+            <label class="form-label small">Ödeme Tarihi</label>
+            <input type="date" name="pay_date" class="form-control form-control-sm" value="{{ today.isoformat() }}">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">Ödeme Yöntemi</label>
+            <select name="payment_method" class="form-select form-select-sm" id="pm-select" onchange="togglePayFields()">
+              {% for val, lbl in payment_methods %}
+              <option value="{{ val }}">{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div id="bank-field" class="mb-2" style="display:none">
+            <label class="form-label small">Banka Hesabı</label>
+            <select name="bank_account_id" class="form-select form-select-sm">
+              <option value="">—</option>
+              {% for ba in bank_accounts %}<option value="{{ ba.id }}">{{ ba.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div id="cash-field" class="mb-2" style="display:none">
+            <label class="form-label small">Kasa</label>
+            <select name="cash_book_id" class="form-select form-select-sm">
+              <option value="">—</option>
+              {% for cb in cash_books %}<option value="{{ cb.id }}">{{ cb.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="alert alert-warning py-2 mb-2" style="font-size:13px">
+            Toplam: <strong>{{ hbf.total_amount | money }}</strong>
+          </div>
+          <button class="btn btn-success w-100" onclick="return confirm('Ödeme kaydedilsin mi?')">
+            <i class="bi bi-cash-coin me-1"></i>Ödeme Kaydet
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+function togglePayFields() {
+  const pm = document.getElementById('pm-select').value;
+  document.getElementById('bank-field').style.display = pm === 'banka' ? '' : 'none';
+  document.getElementById('cash-field').style.display = pm === 'nakit' ? '' : 'none';
+}
+document.addEventListener('DOMContentLoaded', togglePayFields);
+
+function openUpload(rowId) {
+  document.getElementById('uploadRowId').value = rowId;
+  // Reset file input
+  const form = document.querySelector('#uploadModal form');
+  if (form) form.reset();
+  document.getElementById('uploadRowId').value = rowId;
+  new bootstrap.Modal(document.getElementById('uploadModal')).show();
+}
+
+function openPreview(url, ext, name) {
+  document.getElementById('previewTitle').textContent = name;
+  document.getElementById('previewDownload').href = url;
+  const body = document.getElementById('previewBody');
+  const imgExts = ['jpg','jpeg','png','webp','heic'];
+  if (ext === 'pdf') {
+    body.innerHTML = `<iframe src="${url}"></iframe>`;
+  } else if (imgExts.includes(ext)) {
+    body.innerHTML = `<div class="p-3"><img src="${url}" alt="${name}"></div>`;
+  } else {
+    body.innerHTML = `<div class="p-4 text-center"><i class="bi bi-file-earmark" style="font-size:48px;color:#94a3b8"></i><div class="mt-3"><a href="${url}" target="_blank" class="btn btn-primary"><i class="bi bi-download me-1"></i>İndir — ${name}</a></div></div>`;
+  }
+  new bootstrap.Modal(document.getElementById('previewModal')).show();
+}
+
+// Preview modal kapanınca iframe/img temizle (bellek sızıntısı önle)
+document.getElementById('previewModal').addEventListener('hidden.bs.modal', () => {
+  document.getElementById('previewBody').innerHTML = '';
+});
+</script>
+{% endblock %}

@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ event.name }} — Konaklama Listesi</title>
+  <link rel="stylesheet" href="{{ base_url }}/static/css/style.css">
+  <style>
+    body { background: #f1f5f9; }
+    .supplier-wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+    .supplier-header { background: #1e3a5f; color: #fff; border-radius: 12px;
+                        padding: 20px 24px; margin-bottom: 20px; }
+    .supplier-header h1 { margin: 0 0 4px; font-size: 20px; }
+    .supplier-header .sub { font-size: 13px; opacity: .75; }
+    .stats-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .stat-card { background: #fff; border-radius: 10px; padding: 14px 20px;
+                  flex: 1; min-width: 140px; text-align: center; border: 1px solid #e2e8f0; }
+    .stat-card .num { font-size: 28px; font-weight: 700; }
+    .stat-card .lbl { font-size: 12px; color: #64748b; margin-top: 2px; }
+    .stat-card.green .num { color: #16a34a; }
+    .stat-card.amber .num { color: #d97706; }
+    .board-btn { padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer;
+                  font-size: 13px; font-weight: 600; background: #16a34a; color: #fff; }
+    .board-btn:hover { background: #15803d; }
+
+    /* Katılımcı adı tıklanabilir */
+    .participant-link {
+      cursor: pointer;
+      color: #1d4ed8;
+      text-decoration: underline dotted;
+      font-weight: 700;
+    }
+    .participant-link:hover { color: #1e40af; }
+
+    /* Drawer overlay */
+    #drawer-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.45);
+      z-index: 999;
+    }
+    #drawer-overlay.open { display: block; }
+
+    /* Drawer panel */
+    #drawer {
+      position: fixed;
+      bottom: -100%;
+      left: 0; right: 0;
+      background: #fff;
+      border-radius: 20px 20px 0 0;
+      box-shadow: 0 -4px 24px rgba(0,0,0,.18);
+      z-index: 1000;
+      transition: bottom .28s cubic-bezier(.4,0,.2,1);
+      max-height: 85vh;
+      overflow-y: auto;
+      padding: 0 0 32px;
+    }
+    #drawer.open { bottom: 0; }
+
+    .drawer-handle {
+      display: flex; justify-content: center; padding: 12px;
+    }
+    .drawer-handle::after {
+      content: '';
+      width: 44px; height: 5px;
+      background: #e2e8f0;
+      border-radius: 99px;
+    }
+    .drawer-header {
+      padding: 0 20px 16px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .drawer-name { font-size: 20px; font-weight: 800; color: #1e293b; margin-bottom: 2px; }
+    .drawer-company { font-size: 13px; color: #64748b; }
+    .drawer-body { padding: 16px 20px; }
+
+    .section-title {
+      font-size: 12px; font-weight: 700; color: #94a3b8;
+      text-transform: uppercase; letter-spacing: .05em;
+      margin: 16px 0 8px;
+    }
+    .section-title:first-child { margin-top: 0; }
+
+    .info-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;
+    }
+    .info-item {
+      background: #f8fafc; border-radius: 8px; padding: 10px 12px;
+    }
+    .info-item .lbl { font-size: 11px; color: #94a3b8; margin-bottom: 2px; }
+    .info-item .val { font-size: 14px; font-weight: 700; color: #1e293b; }
+
+    .flight-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+    }
+    .flight-card-title {
+      font-size: 12px; font-weight: 700; color: #64748b;
+      text-transform: uppercase; letter-spacing: .05em;
+      margin-bottom: 10px;
+    }
+    .flight-route {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+    }
+    .airport-block { text-align: center; flex: 1; }
+    .airport-code { font-size: 22px; font-weight: 800; color: #1e3a5f; }
+    .airport-time { font-size: 15px; font-weight: 600; color: #374151; margin-top: 2px; }
+    .airport-date { font-size: 11px; color: #94a3b8; }
+    .flight-arrow { color: #cbd5e1; font-size: 20px; flex-shrink: 0; }
+    .flight-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+    .flight-meta-item {
+      background: #fff; border: 1px solid #e2e8f0;
+      border-radius: 6px; padding: 4px 10px;
+      font-size: 12px; color: #475569;
+    }
+    .flight-meta-item strong { color: #1e293b; }
+    .no-flight { text-align: center; padding: 20px; color: #94a3b8; font-size: 14px; }
+    .contact-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .contact-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #f1f5f9; border-radius: 8px; padding: 8px 14px;
+      font-size: 13px; font-weight: 600; color: #1e293b; text-decoration: none;
+      border: 1px solid #e2e8f0;
+    }
+    .contact-btn:hover { background: #e2e8f0; }
+  </style>
+</head>
+<body>
+
+{# Katılımcı verileri: gizli JSON blokları #}
+{% for a in accommodations %}
+{% set p = a.participant %}
+<script type="application/json" id="pdata-{{ p.id }}" style="display:none">
+{
+  "name": {{ (p.first_name + ' ' + p.last_name) | tojson }},
+  "company": {{ (p.company or '') | tojson }},
+  "phone": {{ (p.phone or '') | tojson }},
+  "email": {{ (p.email or '') | tojson }},
+  "dietary": {{ (p.dietary or '') | tojson }},
+  "notes": {{ (p.notes or '') | tojson }},
+  "room_number": {{ (a.room_number or '') | tojson }},
+  "room_type": {{ (a.room_type or '') | tojson }},
+  "hotel": {{ (a.hotel or '') | tojson }},
+  "check_in": {{ (a.check_in.strftime('%d.%m.%Y') if a.check_in else '') | tojson }},
+  "check_out": {{ (a.check_out.strftime('%d.%m.%Y') if a.check_out else '') | tojson }},
+  "flights": [
+    {% for f in p.flights %}
+    {
+      "direction": {{ f.direction | tojson }},
+      "flight_number": {{ (f.flight_number or '') | tojson }},
+      "airline": {{ (f.airline or '') | tojson }},
+      "departure_airport": {{ (f.departure_airport or '') | tojson }},
+      "arrival_airport": {{ (f.arrival_airport or '') | tojson }},
+      "flight_date": {{ (f.flight_date.strftime('%d.%m.%Y') if f.flight_date else '') | tojson }},
+      "departure_time": {{ (f.departure_time or '') | tojson }},
+      "arrival_time": {{ (f.arrival_time or '') | tojson }},
+      "seat": {{ (f.seat or '') | tojson }},
+      "pnr": {{ (f.pnr or '') | tojson }}
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ]
+}
+</script>
+{% endfor %}
+
+<div class="supplier-wrap">
+  <div class="supplier-header">
+    <h1>🏨 {{ event.name }} — Konaklama Listesi</h1>
+    <div class="sub">
+      📅 {{ event.start_date.strftime('%d.%m.%Y') }}
+      {% if event.end_date != event.start_date %} — {{ event.end_date.strftime('%d.%m.%Y') }}{% endif %}
+      {% if event.venue %} &nbsp;·&nbsp; 📍 {{ event.venue }}{% endif %}
+    </div>
+  </div>
+
+  {# E-dem Proje Kartı #}
+  {% if edem_ref %}
+  <div style="background:#fff; border:1px solid #e2e8f0; border-radius:12px;
+              padding:16px 20px; margin-bottom:20px;">
+    <div style="display:flex; align-items:center; justify-content:space-between;
+                flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="font-size:13px; font-weight:700; color:#1e3a5f;">📋 E-dem Projesi</span>
+        <span style="background:#f0f9ff; color:#0369a1; border-radius:20px;
+                      padding:2px 10px; font-size:12px; font-weight:600;">
+          {{ edem_ref.request_no }}
+        </span>
+      </div>
+      <span style="background:#dcfce7; color:#166534; border-radius:20px;
+                    padding:2px 10px; font-size:12px; font-weight:600;">
+        {{ edem_ref.status_label }}
+      </span>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
+                gap:10px;">
+      <div>
+        <div style="font-size:11px; color:#94a3b8; margin-bottom:2px;">Müşteri</div>
+        <div style="font-size:14px; font-weight:700; color:#1e293b;">{{ edem_ref.client_name }}</div>
+      </div>
+      <div>
+        <div style="font-size:11px; color:#94a3b8; margin-bottom:2px;">Etkinlik</div>
+        <div style="font-size:14px; font-weight:700; color:#1e293b;">{{ edem_ref.event_name }}</div>
+      </div>
+      {% if edem_ref.accom_check_in %}
+      <div>
+        <div style="font-size:11px; color:#94a3b8; margin-bottom:2px;">Konaklama</div>
+        <div style="font-size:14px; font-weight:700; color:#1e293b;">
+          {{ edem_ref.accom_check_in }}
+          {% if edem_ref.accom_check_out and edem_ref.accom_check_out != edem_ref.accom_check_in %}
+            — {{ edem_ref.accom_check_out }}
+          {% endif %}
+        </div>
+      </div>
+      {% elif edem_ref.check_in %}
+      <div>
+        <div style="font-size:11px; color:#94a3b8; margin-bottom:2px;">Tarih</div>
+        <div style="font-size:14px; font-weight:700; color:#1e293b;">
+          {{ edem_ref.check_in }}
+          {% if edem_ref.check_out and edem_ref.check_out != edem_ref.check_in %}
+            — {{ edem_ref.check_out }}
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+      {% if edem_ref.city %}
+      <div>
+        <div style="font-size:11px; color:#94a3b8; margin-bottom:2px;">Şehir</div>
+        <div style="font-size:14px; font-weight:700; color:#1e293b;">{{ edem_ref.city }}</div>
+      </div>
+      {% endif %}
+      {% if edem_ref.attendee_count %}
+      <div>
+        <div style="font-size:11px; color:#94a3b8; margin-bottom:2px;">Katılımcı</div>
+        <div style="font-size:14px; font-weight:700; color:#1e293b;">{{ edem_ref.attendee_count }} kişi</div>
+      </div>
+      {% endif %}
+      {% if edem_ref.venue_name %}
+      <div>
+        <div style="font-size:11px; color:#94a3b8; margin-bottom:2px;">Mekan</div>
+        <div style="font-size:14px; font-weight:700; color:#1e293b;">{{ edem_ref.venue_name }}</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% set total_a = accommodations | length %}
+  {% set ci_a = accommodations | selectattr('checked_in') | list | length %}
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="num">{{ total_a }}</div>
+      <div class="lbl">Toplam Misafir</div>
+    </div>
+    <div class="stat-card green">
+      <div class="num">{{ ci_a }}</div>
+      <div class="lbl">Giriş Yaptı ✅</div>
+    </div>
+    <div class="stat-card amber">
+      <div class="num">{{ total_a - ci_a }}</div>
+      <div class="lbl">Bekleniyor ⏳</div>
+    </div>
+  </div>
+
+  {% if accommodations %}
+  <div class="card" style="padding:0;">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Katılımcı</th>
+            <th>Otel</th>
+            <th>Oda No</th>
+            <th>Oda Tipi</th>
+            <th>Giriş</th>
+            <th>Çıkış</th>
+            <th>Durum</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in accommodations %}
+          <tr {% if a.checked_in %}style="background:#f0fdf4;"{% endif %}>
+            <td>
+              <span class="participant-link" onclick="openDrawer('{{ a.participant.id }}')">
+                {{ a.participant.full_name }}
+              </span>
+              {% if a.participant.company %}
+              <div style="font-size:11px; color:#94a3b8;">{{ a.participant.company }}</div>
+              {% endif %}
+            </td>
+            <td>{{ a.hotel or '—' }}</td>
+            <td>{{ a.room_number or '—' }}</td>
+            <td>{{ a.room_type or '—' }}</td>
+            <td>{{ a.check_in.strftime('%d.%m.%Y') if a.check_in else '—' }}</td>
+            <td>{{ a.check_out.strftime('%d.%m.%Y') if a.check_out else '—' }}</td>
+            <td>
+              {% if a.checked_in %}
+                <span style="color:#16a34a; font-size:13px;">✅ Giriş Yaptı</span>
+                {% if a.checked_in_at %}
+                <div style="font-size:11px; color:#64748b;">
+                  {{ a.checked_in_at.strftime('%d.%m %H:%M') }}
+                  {% if a.checked_in_by %} · {{ a.checked_in_by }}{% endif %}
+                </div>
+                {% endif %}
+              {% else %}
+                <form method="post"
+                      action="{{ base_url }}/supplier/{{ token }}/accommodations/{{ a.id }}/checkin"
+                      style="display:inline;">
+                  <button type="submit" class="board-btn"
+                          onclick="return confirm('{{ a.participant.full_name }} giriş yaptı mı?')">
+                    ✅ Giriş Yaptı
+                  </button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="card"><div style="padding:32px; text-align:center; color:#64748b;">Konaklama kaydı yok.</div></div>
+  {% endif %}
+
+  <div style="text-align:center; margin-top:24px; color:#94a3b8; font-size:12px;">
+    Bu ekran yalnızca durum güncelleme içindir. Kayıtları düzenleyemezsiniz.
+  </div>
+</div>
+
+<!-- Participant Detail Drawer -->
+<div id="drawer-overlay" onclick="closeDrawer()"></div>
+<div id="drawer">
+  <div class="drawer-handle"></div>
+  <div class="drawer-header">
+    <div class="drawer-name" id="d-name"></div>
+    <div class="drawer-company" id="d-company"></div>
+  </div>
+  <div class="drawer-body" id="d-body"></div>
+</div>
+
+<script>
+function openDrawer(pid) {
+  const raw = document.getElementById('pdata-' + pid);
+  if (!raw) return;
+  const p = JSON.parse(raw.textContent);
+
+  document.getElementById('d-name').textContent = p.name;
+  document.getElementById('d-company').textContent = p.company || '';
+
+  let html = '';
+
+  // Oda bilgileri
+  if (p.room_number || p.room_type) {
+    html += '<div class="section-title">🏨 Oda Bilgisi</div>';
+    html += '<div class="info-grid">';
+    if (p.room_number) html += `<div class="info-item"><div class="lbl">Oda No</div><div class="val">${p.room_number}</div></div>`;
+    if (p.room_type)   html += `<div class="info-item"><div class="lbl">Oda Tipi</div><div class="val">${p.room_type}</div></div>`;
+    if (p.check_in)    html += `<div class="info-item"><div class="lbl">Giriş</div><div class="val">${p.check_in}</div></div>`;
+    if (p.check_out)   html += `<div class="info-item"><div class="lbl">Çıkış</div><div class="val">${p.check_out}</div></div>`;
+    html += '</div>';
+  }
+
+  // Uçuş bilgileri
+  const flights = p.flights || [];
+  html += '<div class="section-title">✈️ Uçuş Bilgileri</div>';
+  if (flights.length === 0) {
+    html += '<div class="no-flight">Uçuş bilgisi girilmemiş</div>';
+  } else {
+    flights.forEach(f => {
+      const dir = f.direction === 'in' ? '↓ Geliş Uçuşu' : '↑ Dönüş Uçuşu';
+      const fn  = f.flight_number || '—';
+      const dep = f.departure_airport || '?';
+      const arr = f.arrival_airport  || '?';
+      const dt  = f.departure_time   || '—';
+      const at  = f.arrival_time     || '—';
+      const fd  = f.flight_date      || '';
+
+      html += `
+        <div class="flight-card">
+          <div class="flight-card-title">✈️ ${dir}</div>
+          <div class="flight-route">
+            <div class="airport-block">
+              <div class="airport-code">${dep}</div>
+              <div class="airport-time">${dt}</div>
+              ${fd ? `<div class="airport-date">${fd}</div>` : ''}
+            </div>
+            <div class="flight-arrow">→</div>
+            <div class="airport-block">
+              <div class="airport-code">${arr}</div>
+              <div class="airport-time">${at}</div>
+            </div>
+          </div>
+          <div class="flight-meta">
+            <div class="flight-meta-item">✈️ <strong>${fn}</strong></div>
+            ${f.airline ? `<div class="flight-meta-item">${f.airline}</div>` : ''}
+            ${f.seat    ? `<div class="flight-meta-item">💺 Koltuk: <strong>${f.seat}</strong></div>` : ''}
+            ${f.pnr     ? `<div class="flight-meta-item">PNR: <strong>${f.pnr}</strong></div>`  : ''}
+          </div>
+        </div>`;
+    });
+  }
+
+  // İletişim & Özel notlar
+  const contacts = [];
+  if (p.phone) contacts.push(`<a href="tel:${p.phone}" class="contact-btn">📞 ${p.phone}</a>`);
+  if (p.email) contacts.push(`<a href="mailto:${p.email}" class="contact-btn">✉️ ${p.email}</a>`);
+  if (contacts.length) {
+    html += '<div class="section-title">📬 İletişim</div>';
+    html += `<div class="contact-row">${contacts.join('')}</div>`;
+  }
+  if (p.dietary) html += `<div style="margin-top:12px; font-size:13px; color:#64748b;">🍽 ${p.dietary}</div>`;
+  if (p.notes)   html += `<div style="margin-top:6px; font-size:13px; color:#64748b;">📝 ${p.notes}</div>`;
+
+  document.getElementById('d-body').innerHTML = html;
+  document.getElementById('drawer-overlay').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
+}
+
+function closeDrawer() {
+  document.getElementById('drawer-overlay').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+}
+
+// Swipe-down to close
+let startY = 0;
+document.getElementById('drawer').addEventListener('touchstart', e => { startY = e.touches[0].clientY; });
+document.getElementById('drawer').addEventListener('touchend', e => {
+  if (e.changedTouches[0].clientY - startY > 60) closeDrawer();
+});
+</script>
+</body>
+</html>

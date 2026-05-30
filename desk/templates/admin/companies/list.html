@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block page_title %}Şirket Yönetimi{% endblock %}
+{% block topbar_actions %}
+<a href="/admin/companies/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Yeni Şirket</a>
+{% endblock %}
+{% block content %}
+
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Şirket Adı</th>
+          <th>Kısa Ad</th>
+          <th>Vergi No</th>
+          <th>Telefon</th>
+          <th>Aktif Kullanıcı</th>
+          <th>Durum</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in companies %}
+        <tr>
+          <td class="fw-semibold">{{ c.name }}</td>
+          <td class="text-muted">{{ c.short_name or "—" }}</td>
+          <td class="text-muted small font-monospace">{{ c.tax_no or "—" }}</td>
+          <td class="text-muted small">{{ c.phone or "—" }}</td>
+          <td>
+            <a href="/admin/companies/{{ c.id }}/users" class="text-decoration-none">
+              {{ user_counts.get(c.id, 0) }} kullanıcı
+            </a>
+          </td>
+          <td>
+            <span class="badge {% if c.active %}bg-success{% else %}bg-secondary{% endif %}">
+              {{ "Aktif" if c.active else "Pasif" }}
+            </span>
+          </td>
+          <td class="text-end">
+            <a href="/admin/companies/{{ c.id }}/edit" class="btn btn-sm btn-outline-secondary py-0 me-1">Düzenle</a>
+            <a href="/admin/companies/{{ c.id }}/users" class="btn btn-sm btn-outline-primary py-0">Kullanıcılar</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-4">Henüz şirket kaydı yok.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

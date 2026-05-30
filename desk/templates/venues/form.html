@@ -1,0 +1,389 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .tag-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #dbeafe; color: #1d4ed8;
+    border-radius: 20px; padding: 2px 10px 2px 10px;
+    font-size: 12px; margin: 2px;
+  }
+  .tag-badge button { background: none; border: none; padding: 0; color: #1d4ed8; cursor: pointer; font-size: 13px; line-height: 1; }
+  .dynamic-table td { vertical-align: middle; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+  <a href="/venues" class="text-muted text-decoration-none" style="font-size:13px;">
+    <i class="bi bi-arrow-left me-1"></i> Tedarikçi Listesine Dön
+  </a>
+</div>
+
+{% if error %}
+<div class="alert alert-danger d-flex align-items-center gap-2 py-2 mb-3">
+  <i class="bi bi-exclamation-circle-fill"></i>
+  <small>{{ error }}</small>
+</div>
+{% endif %}
+
+<form method="post" action="{{ '/venues/' + venue.id + '/edit' if venue else '/venues/new' }}" id="venueForm">
+
+  {# ─── TEMEL BİLGİLER ─── #}
+  <div class="card mb-4">
+    <div class="card-body">
+      <h5 class="fw-bold mb-4">
+        <i class="bi bi-building me-2 text-primary"></i>
+        {% if venue %}Tedarikçi Düzenle{% else %}Yeni Tedarikçi{% endif %}
+      </h5>
+
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label fw-semibold" style="font-size:13px;">Ad <span class="text-danger">*</span></label>
+          <input type="text" name="name" class="form-control" required
+                 value="{{ venue.name if venue else '' }}" placeholder="Tedarikçi adı">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold" style="font-size:13px;">Tedarikçi Tipi</label>
+          <select name="supplier_type" id="supplierType" class="form-select">
+            {% for st in supplier_types %}
+            <option value="{{ st.value }}"
+              {% if venue and venue.supplier_type == st.value %}selected{% endif %}>
+              {{ st.label }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label fw-semibold" style="font-size:13px;">Birincil Şehir</label>
+          <select name="city" class="form-select">
+            <option value="">Şehir seçin...</option>
+            {% for city in tr_cities %}
+            <option value="{{ city }}" {% if venue and venue.city == city %}selected{% endif %}>{{ city }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-8">
+          <label class="form-label fw-semibold" style="font-size:13px;">Çoklu Şehir (birden fazla şehirde hizmet)</label>
+          <div class="border rounded p-2" style="min-height:42px; background:white;" id="citiesContainer">
+            <div id="citiesTags" class="d-inline"></div>
+            <select id="cityAdder" class="border-0 bg-transparent" style="font-size:13px; outline:none; min-width:120px;">
+              <option value="">+ Şehir ekle...</option>
+              {% for city in tr_cities %}
+              <option value="{{ city }}">{{ city }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <input type="hidden" name="cities_json" id="citiesJson" value="{{ venue.cities_json if venue else '[]' }}">
+        </div>
+
+        <div class="col-12">
+          <label class="form-label fw-semibold" style="font-size:13px;">Adres</label>
+          <textarea name="address" class="form-control" rows="2"
+                    placeholder="Tam adres...">{{ venue.address if venue else '' }}</textarea>
+        </div>
+
+        <div class="col-md-3" id="starsField">
+          <label class="form-label fw-semibold" style="font-size:13px;">Yıldız (1–5)</label>
+          <select name="stars" class="form-select">
+            <option value="">Seçin</option>
+            {% for i in range(1,6) %}
+            <option value="{{ i }}" {% if venue and venue.stars == i %}selected{% endif %}>{{ i }} Yıldız</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3" id="roomsField">
+          <label class="form-label fw-semibold" style="font-size:13px;">Toplam Oda</label>
+          <input type="number" name="total_rooms" class="form-control" min="0"
+                 value="{{ venue.total_rooms if venue else 0 }}">
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label fw-semibold" style="font-size:13px;">Website</label>
+          <input type="text" name="website" class="form-control"
+                 value="{{ venue.website if venue else '' }}" placeholder="https://...">
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label fw-semibold" style="font-size:13px;">Ödeme Vadesi</label>
+          <input type="text" name="payment_term" class="form-control"
+                 value="{{ venue.payment_term if venue else '' }}"
+                 placeholder="örn. 30 gün, 45 gün, peşin">
+        </div>
+
+        <div class="col-md-8">
+          <label class="form-label fw-semibold" style="font-size:13px;">Notlar</label>
+          <textarea name="notes" class="form-control" rows="2">{{ venue.notes if venue else '' }}</textarea>
+        </div>
+
+        {% if venue %}
+        <div class="col-12">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" name="active" id="activeCheck"
+                   {% if venue.active %}checked{% endif %}>
+            <label class="form-check-label fw-semibold" for="activeCheck" style="font-size:13px;">Aktif</label>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# ─── SALONLAR ─── #}
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h6 class="fw-bold mb-0">
+          <i class="bi bi-door-open me-2 text-success"></i>Salonlar
+        </h6>
+        <button type="button" class="btn btn-outline-success btn-sm" onclick="addHallRow()">
+          <i class="bi bi-plus-circle me-1"></i> Salon Ekle
+        </button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm dynamic-table" id="hallsTable">
+          <thead>
+            <tr>
+              <th>Salon Adı</th>
+              <th>Kapasite (kişi)</th>
+              <th>Alan (m²)</th>
+              <th style="width:50px;"></th>
+            </tr>
+          </thead>
+          <tbody id="hallsBody">
+          </tbody>
+        </table>
+      </div>
+      <p class="text-muted mb-0" id="noHallsMsg" style="font-size:13px;">Henüz salon eklenmedi.</p>
+      <input type="hidden" name="halls_json" id="hallsJson" value="{{ venue.halls_json if venue else '[]' }}">
+    </div>
+  </div>
+
+  {# ─── İLETİŞİM KİŞİLERİ ─── #}
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h6 class="fw-bold mb-0">
+          <i class="bi bi-person-lines-fill me-2 text-info"></i>İletişim Kişileri
+          <span class="text-danger ms-1" style="font-size:11px;">(en az 1 gerekli)</span>
+        </h6>
+        <button type="button" class="btn btn-outline-info btn-sm" onclick="addContactRow()">
+          <i class="bi bi-person-plus me-1"></i> Kişi Ekle
+        </button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm dynamic-table" id="contactsTable">
+          <thead>
+            <tr>
+              <th>Ad Soyad <span class="text-danger">*</span></th>
+              <th>Unvan</th>
+              <th>E-posta</th>
+              <th>Telefon</th>
+              <th style="width:50px;"></th>
+            </tr>
+          </thead>
+          <tbody id="contactsBody">
+          </tbody>
+        </table>
+      </div>
+      <p class="text-muted mb-0" id="noContactsMsg" style="font-size:13px;">Henüz iletişim kişisi eklenmedi.</p>
+      <input type="hidden" name="contacts_json" id="contactsJson" value="{{ venue.contacts_json if venue else '[]' }}">
+    </div>
+  </div>
+
+  {# ─── BUTONLAR ─── #}
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-lg me-1"></i>
+      {% if venue %}Güncelle{% else %}Kaydet{% endif %}
+    </button>
+    <a href="{{ '/venues/' + venue.id if venue else '/venues' }}" class="btn btn-outline-secondary">İptal</a>
+  </div>
+</form>
+
+{% if venue %}
+{# ─── Belgeler ─── #}
+{% set doc_list = venue.docs_list %}
+<div class="card mt-4">
+  <div class="card-header fw-bold" style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
+    <i class="bi bi-paperclip me-2 text-primary"></i>Belgeler
+    <span class="text-muted fw-normal" style="font-size:12px;">(sözleşmeler, due diligence vb.)</span>
+  </div>
+  <div class="card-body">
+    <form method="post" action="/venues/{{ venue.id }}/upload-doc"
+          enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-3">
+      <input type="file" name="doc_file" class="form-control form-control-sm"
+             required style="max-width:320px;">
+      <button type="submit" class="btn btn-sm btn-primary">
+        <i class="bi bi-upload me-1"></i>Yükle
+      </button>
+    </form>
+    {% if doc_list %}
+    <table class="table table-sm mb-0">
+      <thead>
+        <tr>
+          <th style="font-size:11px;">Dosya Adı</th>
+          <th style="font-size:11px; width:120px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for doc in doc_list %}
+        <tr>
+          <td style="font-size:13px;">
+            <i class="bi bi-file-earmark me-1 text-muted"></i>
+            <a href="/{{ doc.path }}" target="_blank">{{ doc.name }}</a>
+          </td>
+          <td>
+            <form method="post" action="/venues/{{ venue.id }}/delete-doc"
+                  onsubmit="return confirm('Dosya silinsin mi?')">
+              <input type="hidden" name="filename" value="{{ doc.name }}">
+              <button type="submit" class="btn btn-sm btn-outline-danger" style="font-size:11px;">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted mb-0" style="font-size:12px;">
+      <i class="bi bi-info-circle me-1"></i>Henüz belge yüklenmemiş.
+    </p>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ─── Şehirler (tag input) ───
+let cities = [];
+try { cities = JSON.parse(document.getElementById('citiesJson').value || '[]'); } catch(e) {}
+renderCityTags();
+
+document.getElementById('cityAdder').addEventListener('change', function() {
+  const v = this.value;
+  if (v && !cities.includes(v)) {
+    cities.push(v);
+    renderCityTags();
+    saveCitiesJson();
+  }
+  this.value = '';
+});
+
+function renderCityTags() {
+  const container = document.getElementById('citiesTags');
+  container.innerHTML = cities.map((c, i) =>
+    `<span class="tag-badge">${c}<button type="button" onclick="removeCity(${i})">×</button></span>`
+  ).join('');
+}
+function removeCity(i) {
+  cities.splice(i, 1);
+  renderCityTags();
+  saveCitiesJson();
+}
+function saveCitiesJson() {
+  document.getElementById('citiesJson').value = JSON.stringify(cities);
+}
+
+// ─── Yıldız / Oda görünürlüğü ───
+function updateFieldVisibility() {
+  const stype = document.getElementById('supplierType').value;
+  const showStars = ['otel', 'etkinlik'].includes(stype);
+  document.getElementById('starsField').style.display = showStars ? '' : 'none';
+  document.getElementById('roomsField').style.display = (stype === 'otel') ? '' : 'none';
+}
+document.getElementById('supplierType').addEventListener('change', updateFieldVisibility);
+updateFieldVisibility();
+
+// ─── Salonlar (dynamic rows) ───
+let halls = [];
+try { halls = JSON.parse(document.getElementById('hallsJson').value || '[]'); } catch(e) {}
+renderHalls();
+
+function renderHalls() {
+  const tbody = document.getElementById('hallsBody');
+  tbody.innerHTML = halls.map((h, i) => `
+    <tr>
+      <td><input type="text" class="form-control form-control-sm" value="${escHtml(h.name||'')}"
+           oninput="halls[${i}].name=this.value;saveHallsJson()"></td>
+      <td><input type="number" class="form-control form-control-sm" min="0" value="${h.capacity||''}"
+           oninput="halls[${i}].capacity=parseInt(this.value)||0;saveHallsJson()"></td>
+      <td><input type="number" class="form-control form-control-sm" min="0" value="${h.area||''}"
+           oninput="halls[${i}].area=parseInt(this.value)||0;saveHallsJson()"></td>
+      <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeHall(${i})">
+        <i class="bi bi-trash"></i></button></td>
+    </tr>`).join('');
+  document.getElementById('noHallsMsg').style.display = halls.length ? 'none' : '';
+}
+
+function addHallRow() {
+  halls.push({name:'', capacity:0, area:0});
+  renderHalls();
+  saveHallsJson();
+}
+function removeHall(i) {
+  halls.splice(i, 1);
+  renderHalls();
+  saveHallsJson();
+}
+function saveHallsJson() {
+  document.getElementById('hallsJson').value = JSON.stringify(halls);
+}
+
+// ─── İletişim Kişileri (dynamic rows) ───
+let contacts = [];
+try { contacts = JSON.parse(document.getElementById('contactsJson').value || '[]'); } catch(e) {}
+renderContacts();
+
+function renderContacts() {
+  const tbody = document.getElementById('contactsBody');
+  tbody.innerHTML = contacts.map((c, i) => `
+    <tr>
+      <td><input type="text" class="form-control form-control-sm" value="${escHtml(c.name||'')}"
+           oninput="contacts[${i}].name=this.value;saveContactsJson()" required></td>
+      <td><input type="text" class="form-control form-control-sm" value="${escHtml(c.title||'')}"
+           oninput="contacts[${i}].title=this.value;saveContactsJson()"></td>
+      <td><input type="email" class="form-control form-control-sm" value="${escHtml(c.email||'')}"
+           oninput="contacts[${i}].email=this.value;saveContactsJson()"></td>
+      <td><input type="tel" class="form-control form-control-sm" value="${escHtml(c.phone||'')}"
+           oninput="contacts[${i}].phone=this.value;saveContactsJson()"></td>
+      <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeContact(${i})">
+        <i class="bi bi-trash"></i></button></td>
+    </tr>`).join('');
+  document.getElementById('noContactsMsg').style.display = contacts.length ? 'none' : '';
+}
+
+function addContactRow() {
+  contacts.push({name:'', title:'', email:'', phone:''});
+  renderContacts();
+  saveContactsJson();
+}
+function removeContact(i) {
+  contacts.splice(i, 1);
+  renderContacts();
+  saveContactsJson();
+}
+function saveContactsJson() {
+  document.getElementById('contactsJson').value = JSON.stringify(contacts);
+}
+
+// ─── Yardımcı ───
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── Form submit: hidden inputları güncelle ───
+document.getElementById('venueForm').addEventListener('submit', function(e) {
+  saveHallsJson();
+  saveContactsJson();
+  saveCitiesJson();
+});
+</script>
+{% endblock %}

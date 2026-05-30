@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ req.event_name }} — Teklif</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --brand: #1a3a5c;
+      --brand-mid: #1e5f8c;
+      --brand-light: #eff6ff;
+    }
+    body { background:#f8fafc; font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; font-size:13px; }
+
+    /* ── Topbar ── */
+    .preview-topbar {
+      position: sticky; top:0; z-index:100;
+      background:var(--brand); color:white;
+      padding: 10px 24px;
+      display:flex; align-items:center; gap:12px;
+    }
+    .preview-topbar .brand { font-size:18px; font-weight:900; color:#93c5fd; letter-spacing:-0.5px; }
+
+    /* ── Sayfa ── */
+    .preview-page {
+      max-width: 960px;
+      margin: 28px auto 60px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 2px 16px rgba(0,0,0,.08);
+      overflow: hidden;
+    }
+
+    /* ── Belge başlığı ── */
+    .doc-header {
+      background: var(--brand);
+      color: white;
+      padding: 28px 36px 22px;
+    }
+    .doc-header .company { font-size:11px; text-transform:uppercase; letter-spacing:1.5px; opacity:.65; margin-bottom:8px; }
+    .doc-header .title   { font-size:22px; font-weight:700; margin-bottom:4px; }
+    .doc-header .subtitle{ font-size:13px; opacity:.8; }
+
+    /* ── Meta kart ── */
+    .meta-grid {
+      display:grid; grid-template-columns: repeat(4,1fr); gap:1px;
+      background:#e2e8f0; border-bottom:1px solid #e2e8f0;
+    }
+    .meta-cell {
+      background:white; padding:14px 18px;
+    }
+    .meta-cell .lbl { font-size:10px; text-transform:uppercase; letter-spacing:.8px; color:#64748b; margin-bottom:3px; }
+    .meta-cell .val { font-size:13px; font-weight:600; color:#1e293b; }
+
+    /* ── Venue bilgisi ── */
+    .venue-banner {
+      background: var(--brand-light);
+      border-left: 4px solid var(--brand-mid);
+      padding: 12px 24px;
+      display:flex; align-items:center; gap:10px;
+      font-weight:600; color:var(--brand);
+      font-size:14px;
+    }
+
+    /* ── Tablo ── */
+    .preview-body { padding: 24px 36px; }
+
+    .section-title {
+      background: var(--brand-mid);
+      color: white;
+      font-weight:700; font-size:11px;
+      text-transform:uppercase; letter-spacing:1px;
+      padding: 7px 14px;
+      border-radius:4px;
+      margin-top:20px; margin-bottom:0;
+    }
+
+    table.offer-table {
+      width:100%; border-collapse:collapse; margin-bottom:4px;
+    }
+    table.offer-table thead th {
+      background:#f1f5f9; color:#374151;
+      font-size:10px; font-weight:700;
+      text-transform:uppercase; letter-spacing:.5px;
+      padding:6px 10px; border-bottom:2px solid #e2e8f0;
+    }
+    table.offer-table tbody td {
+      padding:7px 10px; border-bottom:1px solid #f1f5f9;
+      vertical-align:middle; color:#1e293b;
+    }
+    table.offer-table tbody tr:hover td { background:#f8fafc; }
+    table.offer-table .num { text-align:right; font-variant-numeric:tabular-nums; }
+
+    .subtotal-row td {
+      background:#dbeafe; font-weight:700; border-top:1px solid #93c5fd !important;
+    }
+    .sf-row td   { background:#fffbeb; font-weight:600; }
+    .total-row td { background:var(--brand); color:white !important; font-weight:700; font-size:14px; }
+
+    /* ── Footer ── */
+    .doc-footer {
+      background:#f8fafc; border-top:1px solid #e2e8f0;
+      padding:16px 36px; color:#64748b; font-size:11px;
+      display:flex; justify-content:space-between; align-items:center;
+    }
+
+    /* ── KDV toggle ── */
+    .vat-switch { display:flex; gap:6px; align-items:center; }
+    .vat-btn {
+      padding:5px 14px; border-radius:20px; font-size:11px; font-weight:600;
+      border:1px solid rgba(255,255,255,.4); background:transparent; color:rgba(255,255,255,.7);
+      cursor:pointer; transition:.15s;
+    }
+    .vat-btn.active { background:rgba(255,255,255,.2); color:white; border-color:white; }
+
+    /* ── Print ── */
+    @media print {
+      .preview-topbar, .no-print { display:none !important; }
+      body { background:white; }
+      .preview-page { box-shadow:none; margin:0; border-radius:0; }
+      .section-title { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      .total-row td  { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    }
+  </style>
+</head>
+<body>
+
+{# ── Topbar ── #}
+<div class="preview-topbar no-print">
+  <a href="/requests/{{ req.id }}" class="btn btn-sm btn-outline-light py-1" style="font-size:12px;">
+    <i class="bi bi-arrow-left me-1"></i>Geri
+  </a>
+  <span class="brand">PrizmaDesk</span>
+  <span style="opacity:.5; font-size:11px;">{{ req.request_no }}</span>
+
+  {# Bütçe seçici (birden fazla onaylı varsa) #}
+  {% if approved_budgets | length > 1 %}
+  <select class="form-select form-select-sm" style="width:auto; font-size:12px; background:rgba(255,255,255,.1); color:white; border-color:rgba(255,255,255,.3);"
+          onchange="window.location.href='/requests/{{ req.id }}/preview?budget_id='+this.value">
+    {% for b in approved_budgets %}
+    <option value="{{ b.id }}" {% if b.id == budget.id %}selected{% endif %}>
+      {{ b.venue_name or ('Bütçe #' + loop.index|string) }}
+    </option>
+    {% endfor %}
+  </select>
+  {% endif %}
+
+  {# KDV toggle #}
+  <div class="vat-switch ms-auto">
+    <span style="font-size:11px; opacity:.7;">KDV:</span>
+    <button class="vat-btn active" id="btnExcl" onclick="setVat('exclusive')">Hariç</button>
+    <button class="vat-btn"        id="btnIncl" onclick="setVat('inclusive')">Dahil</button>
+  </div>
+
+  {% if has_cust_template %}
+  <a href="/requests/{{ req.id }}/export?vat={{ cust_vat_mode }}" class="btn btn-sm btn-light py-1" style="font-size:12px;"
+     title="Müşteriye özel şablonla doldurulacak">
+    <i class="bi bi-file-earmark-excel me-1 text-success"></i>Müşteri Şablonu ile İndir
+  </a>
+  {% else %}
+  <a href="/requests/{{ req.id }}/export?vat=exclusive" class="btn btn-sm btn-light py-1" style="font-size:12px;"
+     title="Standart E-dem format">
+    <i class="bi bi-file-earmark-excel me-1 text-success"></i>Excel İndir
+  </a>
+  {% endif %}
+  <button onclick="window.print()" class="btn btn-sm btn-outline-light py-1" style="font-size:12px;">
+    <i class="bi bi-printer me-1"></i>Yazdır
+  </button>
+</div>
+
+{# ── Belge ── #}
+<div class="preview-page">
+
+  {# Başlık #}
+  <div class="doc-header">
+    <div class="company">{{ (settings.company_name if settings else 'PrizmaDesk') }}</div>
+    <div class="title">{{ req.event_name }}</div>
+    <div class="subtitle">
+      {{ req.client_name }}
+      {% if customer and customer.sector %} · {{ customer.sector }}{% endif %}
+    </div>
+  </div>
+
+  {# Meta bilgiler #}
+  <div class="meta-grid">
+    <div class="meta-cell">
+      <div class="lbl">Referans No</div>
+      <div class="val">{{ req.request_no }}</div>
+    </div>
+    <div class="meta-cell">
+      <div class="lbl">Etkinlik Tarihleri</div>
+      <div class="val">
+        {% if req.check_in %}{{ req.check_in | string | replace('-','.')|reverse|replace('.','-',2)|reverse }}{% endif %}
+        {% if req.check_out and req.check_out != req.check_in %} – {{ req.check_out | string | replace('-','.')|reverse|replace('.','-',2)|reverse }}{% endif %}
+      </div>
+    </div>
+    <div class="meta-cell">
+      <div class="lbl">Katılımcı Sayısı</div>
+      <div class="val">{{ req.attendee_count }} kişi</div>
+    </div>
+    <div class="meta-cell">
+      <div class="lbl">Şehir</div>
+      <div class="val">{{ req.cities | join(', ') if req.cities else req.city or '—' }}</div>
+    </div>
+  </div>
+
+  {# Mekan #}
+  {% if budget.venue_name %}
+  <div class="venue-banner">
+    <i class="bi bi-building"></i>
+    {{ budget.venue_name }}
+  </div>
+  {% endif %}
+
+  {# İçerik — JS ile iki versiyonu toggle #}
+  <div class="preview-body">
+
+    {# KDV Hariç versiyonu #}
+    <div id="view-exclusive">
+      {% set d = data_excl %}
+      {% include 'requests/_preview_sections.html' %}
+    </div>
+
+    {# KDV Dahil versiyonu #}
+    <div id="view-inclusive" hidden>
+      {% set d = data_incl %}
+      {% include 'requests/_preview_sections.html' %}
+    </div>
+
+  </div>
+
+  {# Footer #}
+  <div class="doc-footer">
+    <div>
+      <strong>{{ settings.company_name if settings else 'PrizmaDesk' }}</strong>
+      {% if settings and settings.company_email %} · {{ settings.company_email }}{% endif %}
+      {% if settings and settings.company_phone %} · {{ settings.company_phone }}{% endif %}
+    </div>
+    <div>
+      Hazırlayan: {{ manager.name ~ ' ' ~ manager.surname if manager else '—' }}
+    </div>
+  </div>
+
+</div>
+
+<script>
+function setVat(mode) {
+  document.getElementById('view-exclusive').hidden = (mode !== 'exclusive');
+  document.getElementById('view-inclusive').hidden = (mode !== 'inclusive');
+  document.getElementById('btnExcl').classList.toggle('active', mode === 'exclusive');
+  document.getElementById('btnIncl').classList.toggle('active', mode === 'inclusive');
+}
+</script>
+</body>
+</html>

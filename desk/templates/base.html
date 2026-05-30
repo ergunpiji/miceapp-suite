@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}{% block page_title %}{% endblock %} — micedesk{% endblock %}</title>
+  <link rel="icon" type="image/png" href="/static/miceapp-favicon-1024.png">
+  <link rel="apple-touch-icon" href="/static/miceapp-favicon-1024.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <!-- miceapp Design Tokens -->
+  <link rel="stylesheet" href="/static/design-tokens.css">
+
+  <style>
+    :root {
+      --sidebar-width:  var(--mice-sidebar-width);
+      --topbar-height:  var(--mice-topbar-height);
+      --primary:        var(--mice-primary);
+    }
+    body { background: var(--mice-page-bg); font-family: var(--mice-font); }
+
+    .sidebar {
+      width: var(--sidebar-width);
+      background: var(--mice-sidebar-bg);
+      color: white;
+      position: fixed; top: 0; left: 0;
+      height: 100vh; overflow-y: auto;
+      display: flex; flex-direction: column;
+      z-index: 1000;
+      box-shadow: 2px 0 12px rgba(0,0,0,.25);
+    }
+    .sidebar-header { padding: 18px 20px 14px; border-bottom: 1px solid rgba(255,255,255,.10); }
+    .sidebar-logo img { max-width: 160px; height: auto; display: block; }
+    .sidebar-subtitle { font-size: 11px; color: rgba(255,255,255,.5); margin-top: 6px; font-weight: 500; letter-spacing: .02em; }
+
+    .nav-section-label {
+      padding: 18px 16px 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.35);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+    }
+    .nav-section-label:hover { color: rgba(255,255,255,.6); }
+    .nav-section-chevron { font-size: 9px; opacity: .6; transition: transform .2s; flex-shrink: 0; margin-left: 4px; }
+    .nav-section-chevron.collapsed { transform: rotate(-90deg); }
+    .nav-section-body { overflow: hidden; transition: none; }
+    .sidebar-link {
+      display: flex; align-items: center; gap: 9px;
+      padding: 7px 16px;
+      color: rgba(255,255,255,.78);
+      text-decoration: none;
+      font-size: 13.5px;
+      border-radius: 0;
+      transition: background .12s, color .12s;
+      border-left: 3px solid transparent;
+    }
+    .sidebar-link:hover { background: var(--mice-sidebar-hover); color: white; }
+    .sidebar-link.active {
+      background: var(--mice-sidebar-active-bg);
+      color: var(--mice-sidebar-active-clr);
+      border-left-color: var(--mice-sidebar-active-bdr);
+      font-weight: 600;
+    }
+    .sidebar-link .bi { font-size: 15px; flex-shrink: 0; }
+
+    .sidebar-divider { border-top: 1px solid rgba(255,255,255,.08); margin: 8px 0; }
+    .sidebar-bottom { margin-top: auto; padding: 12px 16px; border-top: 1px solid rgba(255,255,255,.10); background: rgba(0,0,0,.12); }
+    .sidebar-user-btn {
+      width: 100%; background: transparent; border: 0; padding: 6px 4px;
+      display: flex; align-items: center; gap: 10px;
+      color: rgba(255,255,255,.85); text-align: left; cursor: pointer;
+      border-radius: 6px; transition: background .12s;
+    }
+    .sidebar-user-btn:hover { background: rgba(255,255,255,.08); }
+    .sidebar-user-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: #6366f1; color: #fff; font-weight: 700; font-size: 13px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .sidebar-user-info { flex: 1; min-width: 0; line-height: 1.2; }
+    .sidebar-user-info strong { display: block; color: #fff; font-size: 13px; font-weight: 600;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sidebar-user-info span { font-size: 11px; color: rgba(255,255,255,.55); }
+    .sidebar-user-btn .bi { color: rgba(255,255,255,.5); font-size: 12px; }
+    /* Profil modal */
+    .profile-modal .modal-content { border-radius: 14px; overflow: hidden; border: 0; box-shadow: 0 10px 40px rgba(0,0,0,.25); }
+    .profile-header {
+      background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+      color: #fff; padding: 32px 22px 24px; text-align: center; position: relative;
+    }
+    .profile-header .btn-close { position: absolute; top: 14px; right: 14px; }
+    .profile-avatar-big {
+      width: 92px; height: 92px; border-radius: 50%;
+      background: #6366f1; box-shadow: 0 0 0 6px rgba(99,102,241,.18);
+      color: #fff; font-weight: 700; font-size: 32px;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .profile-name { font-size: 18px; font-weight: 700; margin-top: 14px; }
+    .profile-role { font-size: 13px; color: rgba(255,255,255,.55); margin-top: 2px; }
+    .profile-form-label { font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .04em; color: #64748b; margin-bottom: 4px; }
+    .profile-logout {
+      display: block; text-align: center; padding: 14px;
+      color: #dc2626; font-weight: 600; text-decoration: none;
+    }
+    .profile-logout:hover { color: #b91c1c; background: #fef2f2; }
+
+    .main-content { margin-left: var(--sidebar-width); min-height: 100vh; }
+    .topbar {
+      position: sticky; top: 0; z-index: 900;
+      background: white;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 0 28px;
+      height: var(--topbar-height);
+      display: flex; align-items: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    .page-content { padding: 28px; }
+
+    .badge-nav {
+      background: #ef4444; color: white;
+      font-size: 10px; padding: 1px 6px;
+      border-radius: 10px; font-weight: 600;
+    }
+
+    /* Topbar sağ köşe */
+    .topbar-avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: #6366f1; color: #fff; font-weight: 700; font-size: 12px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .topbar-user-btn {
+      display: flex; align-items: center; gap: 8px;
+      background: transparent; border: 0; cursor: pointer;
+      padding: 4px 8px; border-radius: 8px; transition: background .12s;
+    }
+    .topbar-user-btn:hover { background: #f1f5f9; }
+    .topbar-user-name { font-size: 13px; font-weight: 600; color: #1e293b; line-height: 1.2; }
+    .topbar-user-role { font-size: 11px; color: #64748b; line-height: 1.2; }
+
+    /* Çan dropdown */
+    .bell-btn {
+      position: relative; background: transparent; border: 0; padding: 6px 8px;
+      border-radius: 8px; cursor: pointer; transition: background .12s;
+      color: #374151;
+    }
+    .bell-btn:hover { background: #f1f5f9; }
+    .bell-btn .bi-bell-fill { font-size: 18px; color: #1a3a5c; transition: color .2s; }
+    .bell-btn.has-pending .bi-bell-fill {
+      color: #ef4444;
+      animation: bell-ring 1.2s ease-in-out infinite;
+      transform-origin: top center;
+    }
+    @keyframes bell-ring {
+      0%, 100% { transform: rotate(0deg); }
+      10%       { transform: rotate(14deg); }
+      20%       { transform: rotate(-12deg); }
+      30%       { transform: rotate(10deg); }
+      40%       { transform: rotate(-8deg); }
+      50%       { transform: rotate(6deg); }
+      60%       { transform: rotate(-4deg); }
+      70%       { transform: rotate(2deg); }
+      80%       { transform: rotate(0deg); }
+    }
+    .bell-badge {
+      position: absolute; top: 2px; right: 2px;
+      background: #ef4444; color: #fff; font-size: 9px; font-weight: 700;
+      width: 16px; height: 16px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid #fff;
+    }
+    .bell-dropdown {
+      min-width: 300px; padding: 0; border: 0;
+      box-shadow: 0 8px 30px rgba(0,0,0,.14); border-radius: 12px; overflow: hidden;
+    }
+    .bell-dropdown-header {
+      background: #1a3a5c; color: #fff; padding: 12px 16px;
+      font-size: 13px; font-weight: 700; letter-spacing: .02em;
+    }
+    .bell-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 11px 16px; font-size: 13px; color: #1e293b;
+      text-decoration: none; border-bottom: 1px solid #f1f5f9;
+      transition: background .1s;
+    }
+    .bell-item:hover { background: #f8fafc; color: #1e293b; }
+    .bell-item:last-child { border-bottom: 0; }
+    .bell-item-icon {
+      width: 34px; height: 34px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; flex-shrink: 0;
+    }
+    .bell-item-count {
+      margin-left: auto; background: #ef4444; color: #fff;
+      font-size: 11px; font-weight: 700; padding: 1px 7px;
+      border-radius: 10px; flex-shrink: 0;
+    }
+
+    @media (max-width: 768px) {
+      .sidebar { transform: translateX(-100%); transition: transform .25s; }
+      .sidebar.open { transform: translateX(0); }
+      .main-content { margin-left: 0; }
+    }
+
+    /* ── Toast ── */
+    #prizma-toasts {
+      position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+      display: flex; flex-direction: column; gap: 10px; pointer-events: none;
+    }
+    .pz-toast {
+      display: flex; align-items: center; gap: 10px;
+      padding: 13px 18px; border-radius: 10px;
+      font-size: 13.5px; font-weight: 500; color: #fff;
+      opacity: 0; transform: translateY(10px) scale(.97);
+      transition: opacity .35s, transform .35s;
+      pointer-events: auto; max-width: 360px;
+      box-shadow: 0 6px 24px rgba(0,0,0,.18);
+    }
+    .pz-toast.show { opacity: 1; transform: translateY(0) scale(1); }
+    .pz-toast .bi { font-size: 16px; flex-shrink: 0; }
+    .pz-toast-success { background: #16a34a; }
+    .pz-toast-error   { background: #dc2626; }
+    .pz-toast-warning { background: #d97706; }
+    .pz-toast-info    { background: #1a3a5c; }
+
+    /* ── Empty state ── */
+    .pz-empty {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 8px; padding: 32px 16px; color: #94a3b8;
+    }
+    .pz-empty .bi { font-size: 36px; opacity: .45; }
+    .pz-empty span { font-size: 13px; font-weight: 500; }
+  </style>
+  {% set is_popup = request.query_params.get('popup') == '1' %}
+  {% if is_popup %}
+  <style>
+    .sidebar, .topbar { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    .page-content { padding: 16px; }
+  </style>
+  {% endif %}
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <style>
+    .flatpickr-input.form-control { background: #fff !important; }
+    .flatpickr-calendar { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .flatpickr-day.selected, .flatpickr-day.selected:hover { background: #1a3a5c; border-color: #1a3a5c; }
+    .flatpickr-day.today { border-color: #1a3a5c; }
+    .flatpickr-day.today:hover { background: #1a3a5c; border-color: #1a3a5c; color: #fff; }
+    .flatpickr-months .flatpickr-prev-month:hover svg,
+    .flatpickr-months .flatpickr-next-month:hover svg { fill: #1a3a5c; }
+    .flatpickr-calendar { z-index: 99999 !important; }
+  </style>
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+{% if current_user %}
+{% set _full_name = (current_user.name or '') ~ (' ' ~ current_user.surname if current_user.surname else '') %}
+{% set _first = (current_user.name or 'U')[0] %}
+{% set _second = ((current_user.surname or '')[0] if current_user.surname else ((current_user.name or '')[1] if (current_user.name or '')|length > 1 else '')) %}
+{% set _initials = (_first ~ _second) | upper %}
+{% set _role_map = {'kullanici':'Kullanıcı','mudur':'Müdür','genel_mudur':'Genel Müdür','admin':'Admin','super_admin':'Süper Admin'} %}
+{% set _role_label = _role_map.get(current_user.role, current_user.role) %}
+{% endif %}
+
+{% if not is_popup %}
+<!-- Sidebar -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">
+      {% if company('logo_path', request=request) %}
+        <img src="{{ company('logo_path', request=request) }}" alt="{{ company('short_name', 'Logo', request=request) }}"
+             onerror="this.onerror=null;this.src='/static/micedesk-logo-white-transparent.png';"
+             style="max-width:180px;max-height:48px;width:auto;height:auto;">
+      {% else %}
+        <img src="/static/micedesk-logo-white-transparent.png" alt="micedesk"
+             style="max-width:180px;max-height:48px;width:auto;height:auto;">
+      {% endif %}
+    </div>
+    <div class="sidebar-subtitle">{{ company('short_name', 'micedesk', request=request) }} · Finans & İK Yönetimi</div>
+  </div>
+
+  <div id="sidebar-scroll" style="flex:1; overflow-y:auto;">
+    {# RBAC v2: tüm linkler can_see(request, 'modul_key') ile sarılı.
+       GM / admin / super_admin: can_see her zaman True (bypass).
+       Departman atanmamış normal user: yalnızca dashboard görünür. #}
+    <!-- Dashboard -->
+    <a href="/dashboard" class="sidebar-link {% if request.url.path == '/dashboard' %}active{% endif %}">
+      <i class="bi bi-speedometer2"></i> Dashboard
+    </a>
+    {% if can_see(request, 'references') %}
+    <a href="/references" class="sidebar-link {% if request.url.path == '/references' or request.url.path.startswith('/references/') %}active{% endif %}">
+      <i class="bi bi-folder2-open"></i> Referanslar
+    </a>
+    {% endif %}
+
+    <!-- Satış -->
+    {% set has_sales_sec = can_see(request, 'sales_requests') %}
+    {% if has_sales_sec %}
+    <div class="nav-section-label">Satış</div>
+    {% if can_see(request, 'sales_requests') %}
+    <a href="/sales/invoice-requests" class="sidebar-link {% if '/sales/invoice-requests' in request.url.path %}active{% endif %}">
+      <i class="bi bi-file-earmark-text"></i> Fatura Talepleri
+      {% set pending_sreqs = request.state.nav_counts.get('pending_invoice_requests', 0) %}
+      {% if pending_sreqs %}<span class="ms-auto badge-nav" style="background:#f59e0b;">{{ pending_sreqs }}</span>{% endif %}
+    </a>
+    {% endif %}
+    {% if can_see(request, 'invoices') %}
+    {% set pool_cnt = request.state.nav_counts.get('pool_invoices', 0) %}
+    {% if pool_cnt %}
+    <a href="/invoices/pool" class="sidebar-link {% if request.url.path == '/invoices/pool' %}active{% endif %}">
+      <i class="bi bi-inbox"></i> Fatura Havuzu
+      <span class="ms-auto badge-nav" style="background:#6366f1;">{{ pool_cnt }}</span>
+    </a>
+    {% endif %}
+    {% endif %}
+    {% endif %}
+
+    <!-- Faturalar / Cari -->
+    {% set has_invoice_sec = can_see(request, 'invoices') or can_see(request, 'vendors') or can_see(request, 'customers') %}
+    {% if has_invoice_sec %}
+    <div class="nav-section-label">Faturalar &amp; Cari</div>
+    {% if can_see(request, 'invoices') %}
+    <a href="/invoices" class="sidebar-link {% if request.url.path == '/invoices' %}active{% endif %}">
+      <i class="bi bi-receipt"></i> Faturalar
+      {% set unpaid = request.state.nav_counts.get('invoices_unpaid', 0) %}
+      {% if unpaid %}<span class="ms-auto badge-nav">{{ unpaid }}</span>{% endif %}
+    </a>
+    {% set my_pending = request.state.nav_counts.get('my_pending_invoices', 0) %}
+    {% if my_pending %}
+    <a href="/invoices?approval=pending_mine" class="sidebar-link ps-4 {% if request.query_params.get('approval') == 'pending_mine' %}active{% endif %}" style="font-size:12px">
+      <i class="bi bi-hourglass-split"></i> Onayımı Bekleyenler
+      <span class="ms-auto badge-nav" style="background:#f59e0b;">{{ my_pending }}</span>
+    </a>
+    {% endif %}
+    {% endif %}
+    {% if can_see(request, 'vendors') %}
+    <a href="/vendors" class="sidebar-link {% if '/vendors' in request.url.path %}active{% endif %}">
+      <i class="bi bi-building"></i> Tedarikçiler
+    </a>
+    {% endif %}
+    {% endif %}
+
+    <!-- Kasa & Banka -->
+    {% set has_finance = can_see(request, 'cash') or can_see(request, 'banks') or can_see(request, 'credit_cards') or can_see(request, 'cheques') %}
+    {% if has_finance %}
+    <div class="nav-section-label">Kasa &amp; Banka</div>
+    {% if can_see(request, 'banks') %}
+    <a href="/bank-accounts" class="sidebar-link {% if '/bank-accounts' in request.url.path %}active{% endif %}">
+      <i class="bi bi-bank"></i> Banka Hesapları
+    </a>
+    {% endif %}
+    {% if can_see(request, 'cash') %}
+    <a href="/cash" class="sidebar-link {% if request.url.path.startswith('/cash') %}active{% endif %}">
+      <i class="bi bi-wallet2"></i> Nakit Kasalar
+    </a>
+    {% endif %}
+    {% if can_see(request, 'credit_cards') %}
+    <a href="/credit-cards" class="sidebar-link {% if '/credit-cards' in request.url.path %}active{% endif %}">
+      <i class="bi bi-credit-card"></i> Kredi Kartları
+    </a>
+    {% endif %}
+    {% if can_see(request, 'cheques') %}
+    <a href="/cheques" class="sidebar-link {% if '/cheques' in request.url.path %}active{% endif %}">
+      <i class="bi bi-cash-coin"></i> Çekler
+    </a>
+    {% endif %}
+    {% endif %}
+
+    <!-- Genel Giderler -->
+    {% if can_see(request, 'general_expenses') %}
+    <div class="nav-section-label">Genel Giderler</div>
+    <a href="/general-expenses" class="sidebar-link {% if request.url.path == '/general-expenses' %}active{% endif %}">
+      <i class="bi bi-list-ul"></i> Tüm Giderler
+    </a>
+    <a href="/general-expenses/summary" class="sidebar-link {% if '/general-expenses/summary' in request.url.path %}active{% endif %}">
+      <i class="bi bi-pie-chart"></i> Özet
+    </a>
+    {% endif %}
+
+    <!-- Ödemeler -->
+    {% set has_payments = can_see(request, 'payments_weekly') or can_see(request, 'payment_instructions') %}
+    {% if has_payments %}
+    <div class="nav-section-label">Ödemeler</div>
+    {% if can_see(request, 'payments_weekly') %}
+    <a href="/payments/weekly" class="sidebar-link {% if '/payments/weekly' in request.url.path %}active{% endif %}">
+      <i class="bi bi-calendar-check"></i> Haftalık Ödeme Listesi
+    </a>
+    {% endif %}
+    {% if can_see(request, 'payment_instructions') %}
+    <a href="/payment-instructions/inbox" class="sidebar-link {% if '/payment-instructions' in request.url.path %}active{% endif %}">
+      <i class="bi bi-inbox"></i> Bekleyen Talimatlar
+      {% set pending_count = request.state.nav_counts.get('pending_instructions', 0) %}
+      {% if pending_count %}<span class="ms-auto badge-nav">{{ pending_count }}</span>{% endif %}
+    </a>
+    {% endif %}
+    {% endif %}
+
+    {# E-Fatura modülü hem aktif hem departman erişimi #}
+    {% if module_enabled(request, 'einvoice') and can_see(request, 'einvoice') %}
+    <div class="nav-section-label">E-Fatura</div>
+    <a href="/einvoice-ui" class="sidebar-link {% if request.url.path == '/einvoice-ui' %}active{% endif %}">
+      <i class="bi bi-receipt-cutoff"></i> E-Fatura Paneli
+    </a>
+    <a href="/einvoice-ui/inbox" class="sidebar-link {% if '/einvoice-ui/inbox' in request.url.path %}active{% endif %}">
+      <i class="bi bi-envelope-arrow-down"></i> Gelen E-Faturalar
+    </a>
+    {% endif %}
+
+    {# E-Defter / Vergi Raporları — sadece müdür+ (muhasebe elemanı görmez) #}
+    {% set has_tax_sec = current_user and current_user.has_role_min('mudur') and (
+        (module_enabled(request, 'edefter') and can_see(request, 'edefter'))
+        or (module_enabled(request, 'tax_reports') and can_see(request, 'tax_reports'))
+    ) %}
+    {% if has_tax_sec %}
+    <div class="nav-section-label">Vergi &amp; Defter</div>
+    {% if module_enabled(request, 'tax_reports') and can_see(request, 'tax_reports') %}
+    <a href="/tax-reports" class="sidebar-link {% if request.url.path.startswith('/tax-reports') %}active{% endif %}">
+      <i class="bi bi-file-earmark-bar-graph"></i> Vergi Raporları
+    </a>
+    {% endif %}
+    {% if module_enabled(request, 'edefter') and can_see(request, 'edefter') %}
+    <a href="/edefter" class="sidebar-link {% if request.url.path.startswith('/edefter') %}active{% endif %}">
+      <i class="bi bi-journal-text"></i> E-Defter
+    </a>
+    {% endif %}
+    {% endif %}
+
+    <!-- Raporlar
+         Genel P&L ve Faaliyet Raporu: sadece müdür+ (muhasebe elemanı görmez).
+         Nakit Akışı muhasebe elemanı için açık. -->
+    {% set is_mudur_plus = current_user and current_user.has_role_min('mudur') %}
+    {% set has_reports = can_see(request, 'reports_financial') or can_see(request, 'reports_hr') %}
+    {% if has_reports %}
+    <div class="nav-section-label">Raporlar</div>
+    {% if can_see(request, 'reports_financial') and is_mudur_plus %}
+    <a href="/reports/pl" class="sidebar-link {% if '/reports/pl' in request.url.path %}active{% endif %}">
+      <i class="bi bi-graph-up"></i> Genel P&amp;L
+    </a>
+    {% endif %}
+    {% if can_see(request, 'reports_financial') %}
+    <a href="/reports/cash-flow" class="sidebar-link {% if '/reports/cash-flow' in request.url.path %}active{% endif %}">
+      <i class="bi bi-arrow-left-right"></i> Nakit Akışı
+    </a>
+    {% endif %}
+    {% if can_see(request, 'reports_hr') %}
+    <a href="/reports/payroll" class="sidebar-link {% if '/reports/payroll' in request.url.path %}active{% endif %}">
+      <i class="bi bi-people"></i> Bordro Raporu
+    </a>
+    {% endif %}
+    {% if (can_see(request, 'reports_financial') or can_see(request, 'reports_hr')) and is_mudur_plus %}
+    <a href="/reports/activity" class="sidebar-link {% if '/reports/activity' in request.url.path %}active{% endif %}">
+      <i class="bi bi-bar-chart-steps"></i> Faaliyet Raporu
+    </a>
+    {% endif %}
+    {% endif %}
+
+    <!-- Çalışanlar -->
+    {% set has_hr_sec = can_see(request, 'employees') or can_see(request, 'hbf') or can_see(request, 'advances') or can_see(request, 'leaves') or (module_enabled(request, 'bordro') and can_see(request, 'bordro')) %}
+    {% if has_hr_sec %}
+    <div class="nav-section-label">Çalışanlar</div>
+    {% if can_see(request, 'employees') %}
+    <a href="/employees" class="sidebar-link {% if request.url.path == '/employees' %}active{% endif %}">
+      <i class="bi bi-person-badge"></i> Çalışan Listesi
+    </a>
+    {% endif %}
+    {% if can_see(request, 'hbf') %}
+    <a href="/hbf" class="sidebar-link {% if request.url.path.startswith('/hbf') %}active{% endif %}">
+      <i class="bi bi-receipt"></i> Harcama Bildirimleri
+      {% set _ph = request.state.nav_counts.get('pending_hbf', 0) %}
+      {% if _ph %}<span class="ms-auto badge-nav">{{ _ph }}</span>{% endif %}
+    </a>
+    {% endif %}
+    {% if can_see(request, 'advances') %}
+    <a href="/advances" class="sidebar-link {% if request.url.path.startswith('/advances') %}active{% endif %}">
+      <i class="bi bi-cash-stack"></i> Avans Talepleri
+      {% set _pa = request.state.nav_counts.get('pending_advances', 0) %}
+      {% if _pa %}<span class="ms-auto badge-nav">{{ _pa }}</span>{% endif %}
+    </a>
+    {% endif %}
+    {% if can_see(request, 'leaves') %}
+    <a href="/leaves" class="sidebar-link {% if request.url.path == '/leaves' or request.url.path.startswith('/leaves/') and 'balances' not in request.url.path %}active{% endif %}">
+      <i class="bi bi-calendar-check"></i> İzin Yönetimi
+      {% set _pl = request.state.nav_counts.get('pending_leaves', 0) %}
+      {% if _pl %}<span class="ms-auto badge-nav">{{ _pl }}</span>{% endif %}
+    </a>
+    {# Bakiye Tanımla: müdür+ (kendi takımı) veya HR/admin/GM #}
+    {% if current_user and (current_user.has_role_min('mudur') or current_user.has_department_key('hr')) %}
+    <a href="/leaves/balances/manage" class="sidebar-link ps-4 {% if 'balances' in request.url.path %}active{% endif %}" style="font-size:12px">
+      <i class="bi bi-sliders"></i> Bakiye Tanımla
+    </a>
+    {% endif %}
+    {% endif %}
+    {% if module_enabled(request, 'bordro') %}
+      {% if can_see(request, 'bordro') %}
+      <a href="/bordro" class="sidebar-link {% if request.url.path.startswith('/bordro') and 'pusulalarim' not in request.url.path %}active{% endif %}">
+        <i class="bi bi-people-fill"></i> Bordro
+      </a>
+      {% endif %}
+      <a href="/bordro/pusulalarim" class="sidebar-link {% if 'pusulalarim' in request.url.path %}active{% endif %}">
+        <i class="bi bi-file-earmark-text"></i> Pusulalarım
+      </a>
+    {% endif %}
+    {% endif %}
+
+    <!-- Fon Havuzları -->
+    {% if can_see(request, 'fund_pools') %}
+    <div class="nav-section-label">Fon Havuzları</div>
+    <a href="/fund-pools" class="sidebar-link {% if '/fund-pools' in request.url.path %}active{% endif %}">
+      <i class="bi bi-wallet2"></i> Fon Havuzları
+    </a>
+    {% endif %}
+
+    <!-- Yönetim (admin only) -->
+    {% if current_user and current_user.is_admin %}
+    <div class="sidebar-divider"></div>
+    <div class="nav-section-label">Yönetim</div>
+    <a href="/customers" class="sidebar-link {% if '/customers' in request.url.path %}active{% endif %}">
+      <i class="bi bi-briefcase"></i> Müşteriler
+    </a>
+    <a href="/users" class="sidebar-link {% if '/users' in request.url.path and '/admin' not in request.url.path %}active{% endif %}">
+      <i class="bi bi-people"></i> Kullanıcılar
+    </a>
+    <a href="/admin/roles" class="sidebar-link {% if '/admin/roles' in request.url.path %}active{% endif %}">
+      <i class="bi bi-shield-lock"></i> Rol & İzinler
+    </a>
+    <a href="/admin/departments" class="sidebar-link {% if '/admin/departments' in request.url.path %}active{% endif %}">
+      <i class="bi bi-diagram-3"></i> Departmanlar
+    </a>
+    <a href="/admin/approval-limits" class="sidebar-link {% if '/admin/approval-limits' in request.url.path %}active{% endif %}">
+      <i class="bi bi-shield-check"></i> Onay Limitleri
+    </a>
+    <a href="/admin/leaves/types" class="sidebar-link {% if '/admin/leaves' in request.url.path %}active{% endif %}">
+      <i class="bi bi-calendar-week"></i> İzin Türleri & Tatiller
+    </a>
+    <a href="/admin/vendor-types" class="sidebar-link {% if '/admin/vendor-types' in request.url.path %}active{% endif %}">
+      <i class="bi bi-tags"></i> Tedarikçi Tipleri
+    </a>
+    <a href="/admin/modules" class="sidebar-link {% if '/admin/modules' in request.url.path %}active{% endif %}">
+      <i class="bi bi-puzzle"></i> Modüller
+    </a>
+    <a href="/admin/company-profile" class="sidebar-link {% if '/admin/company-profile' in request.url.path %}active{% endif %}">
+      <i class="bi bi-building-fill"></i> Şirket Profili
+    </a>
+    {% if current_user.role == 'super_admin' %}
+    <a href="/admin/companies" class="sidebar-link {% if '/admin/companies' in request.url.path %}active{% endif %}">
+      <i class="bi bi-buildings"></i> Şirket Yönetimi
+    </a>
+    {% endif %}
+    {% endif %}
+    <div class="sidebar-divider"></div>
+    <a href="/help" class="sidebar-link {% if '/help' in request.url.path %}active{% endif %}">
+      <i class="bi bi-question-circle"></i> Yardım
+    </a>
+    <a href="/faq" class="sidebar-link {% if '/faq' in request.url.path %}active{% endif %}">
+      <i class="bi bi-chat-square-text"></i> SSS
+    </a>
+  </div>
+
+  <div style="padding-bottom:8px"></div>
+</nav>
+{% endif %}
+
+<!-- Main Content -->
+<div class="main-content">
+  {% if not is_popup %}
+  <div class="topbar">
+    <button onclick="history.back()"
+            class="btn btn-sm btn-outline-secondary me-3 d-flex align-items-center"
+            style="padding:3px 9px;font-size:13px;border-radius:6px;flex-shrink:0;"
+            title="Geri">
+      <i class="bi bi-arrow-left" style="font-size:14px;"></i>
+    </button>
+    <h5 class="mb-0 fw-semibold" style="color:#1e293b; font-size:15px;">
+      {% block topbar_title %}{{ page_title | default("") }}{% endblock %}
+    </h5>
+    <div class="ms-auto d-flex align-items-center gap-2">
+      {% block topbar_actions %}{% endblock %}
+
+      {% if current_user %}
+      {% set _ptotal = request.state.nav_counts.get('pending_total', 0) %}
+      {% set _pl    = request.state.nav_counts.get('pending_leaves', 0) %}
+      {% set _pa    = request.state.nav_counts.get('pending_advances', 0) %}
+      {% set _ph    = request.state.nav_counts.get('pending_hbf', 0) %}
+      {% set _pins  = request.state.nav_counts.get('pending_instructions', 0) %}
+      {% set _prefs = request.state.nav_counts.get('pending_refs', 0) %}
+
+      <!-- Çan -->
+      <div class="dropdown">
+        <button class="bell-btn {% if _ptotal or _pins %}has-pending{% endif %}" data-bs-toggle="dropdown" aria-expanded="false" title="Bekleyen işlemler"
+                data-server-count="{{ _ptotal + _pins }}">
+          <i class="bi bi-bell-fill"></i>
+          {% if _ptotal or _pins %}<span class="bell-badge">{{ (_ptotal + _pins) if (_ptotal + _pins) < 100 else '99+' }}</span>{% endif %}
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end bell-dropdown">
+          <li><div class="bell-dropdown-header"><i class="bi bi-bell me-2"></i>Bekleyen İşlemler</div></li>
+          {% if _prefs %}
+          <li>
+            <a class="bell-item" href="/references?approval_status=pending">
+              <div class="bell-item-icon" style="background:#fff7ed"><i class="bi bi-folder-check" style="color:#ea580c"></i></div>
+              <div>
+                <div class="fw-semibold">Referans Onayı</div>
+                <div class="text-muted" style="font-size:11px">Kapanış / aktifleştirme talebi</div>
+              </div>
+              <span class="bell-item-count">{{ _prefs }}</span>
+            </a>
+          </li>
+          {% endif %}
+          {% if _pl %}
+          <li>
+            <a class="bell-item" href="/leaves/team/requests">
+              <div class="bell-item-icon" style="background:#eff6ff"><i class="bi bi-calendar-check" style="color:#3b82f6"></i></div>
+              <div>
+                <div class="fw-semibold">İzin Onayı</div>
+                <div class="text-muted" style="font-size:11px">Ekibinizden bekleyen talep</div>
+              </div>
+              <span class="bell-item-count">{{ _pl }}</span>
+            </a>
+          </li>
+          {% endif %}
+          {% if _pa %}
+          <li>
+            <a class="bell-item" href="/advances">
+              <div class="bell-item-icon" style="background:#f0fdf4"><i class="bi bi-cash-stack" style="color:#22c55e"></i></div>
+              <div>
+                <div class="fw-semibold">Avans Talebi</div>
+                <div class="text-muted" style="font-size:11px">Onay bekleyen avans</div>
+              </div>
+              <span class="bell-item-count">{{ _pa }}</span>
+            </a>
+          </li>
+          {% endif %}
+          {% if _ph %}
+          <li>
+            <a class="bell-item" href="/hbf">
+              <div class="bell-item-icon" style="background:#fffbeb"><i class="bi bi-receipt" style="color:#f59e0b"></i></div>
+              <div>
+                <div class="fw-semibold">Harcama Bildirimi</div>
+                <div class="text-muted" style="font-size:11px">Onay bekleyen HBF</div>
+              </div>
+              <span class="bell-item-count">{{ _ph }}</span>
+            </a>
+          </li>
+          {% endif %}
+          {% if _pins %}
+          <li>
+            <a class="bell-item" href="/payment-instructions/inbox">
+              <div class="bell-item-icon" style="background:#fdf4ff"><i class="bi bi-inbox" style="color:#a855f7"></i></div>
+              <div>
+                <div class="fw-semibold">Ödeme Talimatı</div>
+                <div class="text-muted" style="font-size:11px">Bekleyen talimat</div>
+              </div>
+              <span class="bell-item-count">{{ _pins }}</span>
+            </a>
+          </li>
+          {% endif %}
+          {% if not _ptotal and not _pins and not _prefs %}
+          <li>
+            <div class="bell-item text-muted" style="cursor:default">
+              <div class="bell-item-icon" style="background:#f8fafc"><i class="bi bi-check-circle" style="color:#94a3b8"></i></div>
+              Bekleyen işlem yok
+            </div>
+          </li>
+          {% endif %}
+          <!-- Kullanıcıya gelen bildirimler (JS ile yüklenir) -->
+          <li id="notif-divider" style="display:none">
+            <div style="background:#f8fafc;padding:8px 16px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;">
+              Bildirimler
+            </div>
+          </li>
+          <div id="notif-list"></div>
+          <li id="notif-read-all-row" style="display:none">
+            <div style="padding:8px 16px;text-align:right">
+              <button onclick="notifReadAll()" class="btn btn-link btn-sm p-0 text-muted" style="font-size:11px">Tümünü okundu işaretle</button>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Profil -->
+      <button type="button" class="topbar-user-btn" data-bs-toggle="modal" data-bs-target="#profileModal">
+        <div class="topbar-avatar">{{ _initials }}</div>
+        <div class="d-none d-lg-block text-start">
+          <div class="topbar-user-name">{{ _full_name }}</div>
+          <div class="topbar-user-role">{{ _role_label }}</div>
+        </div>
+        <i class="bi bi-chevron-down" style="font-size:11px;color:#94a3b8"></i>
+      </button>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="page-content">
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+<!-- Profil modal -->
+{% if current_user %}
+<div class="modal fade profile-modal" id="profileModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 420px;">
+    <div class="modal-content">
+      <div class="profile-header">
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        <div class="profile-avatar-big">{{ _initials }}</div>
+        <div class="profile-name">{{ _full_name }}</div>
+        <div class="profile-role">{{ _role_label }}</div>
+      </div>
+      <form method="post" action="/profile" class="p-3">
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="profile-form-label">Ad</label>
+            <input type="text" name="name" class="form-control" value="{{ current_user.name or '' }}" required>
+          </div>
+          <div class="col-6">
+            <label class="profile-form-label">Soyad</label>
+            <input type="text" name="surname" class="form-control" value="{{ current_user.surname or '' }}">
+          </div>
+          <div class="col-12">
+            <label class="profile-form-label">Ünvan</label>
+            <input type="text" name="title" class="form-control" value="{{ current_user.title or '' }}">
+          </div>
+          <div class="col-12">
+            <label class="profile-form-label">Telefon</label>
+            <input type="tel" name="phone" class="form-control" value="{{ current_user.phone or '' }}" placeholder="+90 5XX XXX XX XX">
+          </div>
+          <div class="col-12 mt-3">
+            <button class="btn btn-primary w-100"><i class="bi bi-check-lg"></i> Kaydet</button>
+          </div>
+        </div>
+      </form>
+      <hr class="m-0">
+      <a href="/logout" class="profile-logout"><i class="bi bi-box-arrow-right"></i> Çıkış Yap</a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/tr.js"></script>
+<script src="/static/js/table-sort.js"></script>
+<script src="/static/js/prizmaui.js"></script>
+<script>
+  // Sidebar scroll pozisyonunu sayfalar arası koru (sessionStorage)
+  (function () {
+    var sc = document.getElementById('sidebar-scroll');
+    if (!sc) return;
+    try {
+      var saved = sessionStorage.getItem('sidebarScrollTop');
+      if (saved !== null) {
+        sc.scrollTop = parseInt(saved, 10) || 0;
+      }
+    } catch (e) { /* sessionStorage yoksa görmezden gel */ }
+    var saveTimer = null;
+    sc.addEventListener('scroll', function () {
+      // 60ms throttle — gereksiz yazımı azalt
+      if (saveTimer) return;
+      saveTimer = setTimeout(function () {
+        try { sessionStorage.setItem('sidebarScrollTop', sc.scrollTop); } catch (e) {}
+        saveTimer = null;
+      }, 60);
+    }, { passive: true });
+  })();
+</script>
+{% block extra_js %}{% endblock %}
+<script>
+(function () {
+  var labels = document.querySelectorAll('.nav-section-label');
+  labels.forEach(function (label) {
+    // Chevron ikonu ekle
+    var chev = document.createElement('span');
+    chev.className = 'nav-section-chevron';
+    chev.innerHTML = '<i class="bi bi-chevron-down"></i>';
+    label.appendChild(chev);
+
+    // Hemen sonraki kardeş elemanları section bitene kadar topla
+    var items = [];
+    var next = label.nextElementSibling;
+    while (next && !next.classList.contains('nav-section-label') && !next.classList.contains('sidebar-divider')) {
+      items.push(next);
+      next = next.nextElementSibling;
+    }
+    if (!items.length) return;
+
+    // Wrapper div ile sar
+    var wrap = document.createElement('div');
+    wrap.className = 'nav-section-body';
+    label.after(wrap);
+    items.forEach(function (el) { wrap.appendChild(el); });
+
+    // localStorage anahtarı — başlık metnini kullan
+    var key = 'nav_sec_' + label.textContent.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_ÇçĞğİıÖöŞşÜü]/g, '');
+
+    // Aktif link varsa section'ı her zaman açık bırak
+    var hasActive = wrap.querySelector('.sidebar-link.active');
+    var collapsed = !hasActive && localStorage.getItem(key) === '1';
+
+    function apply(c, animate) {
+      if (c) {
+        wrap.style.display = 'none';
+        chev.classList.add('collapsed');
+      } else {
+        wrap.style.display = '';
+        chev.classList.remove('collapsed');
+      }
+    }
+    apply(collapsed, false);
+
+    label.addEventListener('click', function () {
+      collapsed = !collapsed;
+      apply(collapsed, true);
+      try { localStorage.setItem(key, collapsed ? '1' : '0'); } catch (e) {}
+    });
+  });
+})();
+</script>
+
+<script>
+// ── Flatpickr — tüm sayfadaki tarih inputlarını iyileştir ─────────────
+document.addEventListener('DOMContentLoaded', function () {
+  if (typeof flatpickr === 'undefined') return;
+  flatpickr.localize(flatpickr.l10ns.tr);
+  var todayIso = new Date().toISOString().slice(0, 10);
+  document.querySelectorAll('input[type="date"]').forEach(function (el) {
+    if (el.dataset.noFlatpickr) return;
+    var isSm = el.classList.contains('form-control-sm');
+    var inGetForm = !!el.closest('form[method="get"], form[method="GET"]');
+    var defaultDate = el.value || (!inGetForm ? todayIso : null);
+    flatpickr(el, {
+      dateFormat: 'Y-m-d',
+      altInput: true,
+      altFormat: 'd.m.Y',
+      allowInput: true,
+      disableMobile: false,
+      defaultDate: defaultDate,
+      onReady: function (_, __, fp) {
+        if (isSm) fp.altInput.classList.add('form-control-sm');
+        fp.altInput.style.minWidth = isSm ? '110px' : '130px';
+      },
+    });
+  });
+});
+</script>
+
+<script>
+// ── Bildirim sistemi ────────────────────────────────────────────────────────
+(function () {
+  var bellBtn   = document.querySelector('.bell-btn');
+  var bellBadge = document.querySelector('.bell-badge');
+  var notifList = document.getElementById('notif-list');
+  var divider   = document.getElementById('notif-divider');
+  var readAllRow= document.getElementById('notif-read-all-row');
+  if (!bellBtn) return;
+
+  var unreadCount = 0;
+
+  var TYPE_STYLE = {
+    success: { bg: '#f0fdf4', icon: 'bi-check-circle-fill', color: '#16a34a' },
+    danger:  { bg: '#fef2f2', icon: 'bi-x-circle-fill',     color: '#dc2626' },
+    warning: { bg: '#fffbeb', icon: 'bi-exclamation-circle-fill', color: '#d97706' },
+    info:    { bg: '#eff6ff', icon: 'bi-info-circle-fill',   color: '#2563eb' },
+  };
+
+  function updateBadge() {
+    var serverCount = parseInt(bellBtn.dataset.serverCount || '0') || 0;
+    var total = serverCount + unreadCount;
+    if (!bellBadge) {
+      if (total > 0) {
+        var b = document.createElement('span');
+        b.className = 'bell-badge';
+        bellBtn.appendChild(b);
+        bellBadge = b;
+      }
+    }
+    if (bellBadge) {
+      bellBadge.textContent = total > 99 ? '99+' : total;
+      bellBadge.style.display = total > 0 ? '' : 'none';
+    }
+    if (unreadCount > 0) {
+      bellBtn.classList.add('has-pending');
+    }
+  }
+
+  function renderNotifs(notifs) {
+    if (!notifList) return;
+    notifList.innerHTML = '';
+    var unread = notifs.filter(function (n) { return !n.read; });
+    unreadCount = unread.length;
+    if (!notifs.length) { divider.style.display = 'none'; readAllRow.style.display = 'none'; return; }
+    divider.style.display = '';
+    readAllRow.style.display = unread.length ? '' : 'none';
+    notifs.forEach(function (n) {
+      var s = TYPE_STYLE[n.type] || TYPE_STYLE.info;
+      var li = document.createElement('li');
+      li.innerHTML =
+        '<a class="bell-item' + (n.read ? ' opacity-60' : '') + '" href="' + (n.link || '#') + '" onclick="notifRead(' + n.id + ')">' +
+        '<div class="bell-item-icon" style="background:' + s.bg + '"><i class="bi ' + s.icon + '" style="color:' + s.color + '"></i></div>' +
+        '<div style="flex:1;min-width:0"><div class="fw-semibold" style="font-size:12px">' + n.title + '</div>' +
+        (n.message ? '<div class="text-muted" style="font-size:11px;white-space:normal;line-height:1.3">' + n.message + '</div>' : '') +
+        '<div class="text-muted" style="font-size:10px;margin-top:2px">' + n.created_at + '</div></div>' +
+        (n.read ? '' : '<span style="width:7px;height:7px;border-radius:50%;background:#3b82f6;flex-shrink:0;margin-left:4px"></span>') +
+        '</a>';
+      notifList.appendChild(li);
+    });
+    updateBadge();
+  }
+
+  function loadNotifs() {
+    fetch('/notifications').then(function (r) { return r.json(); }).then(renderNotifs).catch(function () {});
+  }
+
+  window.notifRead = function (id) {
+    fetch('/notifications/' + id + '/read', { method: 'POST' }).catch(function () {});
+  };
+
+  window.notifReadAll = function () {
+    fetch('/notifications/read-all', { method: 'POST' })
+      .then(function () { loadNotifs(); })
+      .catch(function () {});
+  };
+
+  // Dropdown açılınca yükle
+  var dropdown = bellBtn.closest('.dropdown');
+  if (dropdown) {
+    dropdown.addEventListener('show.bs.dropdown', loadNotifs);
+  }
+
+  // Sayfa yüklenince unread count'ı al (badge için)
+  fetch('/notifications/count').then(function (r) { return r.json(); }).then(function (d) {
+    unreadCount = d.count || 0;
+    updateBadge();
+  }).catch(function () {});
+
+  // 60 sn'de bir sessizce güncelle
+  setInterval(function () {
+    fetch('/notifications/count').then(function (r) { return r.json(); }).then(function (d) {
+      unreadCount = d.count || 0;
+      updateBadge();
+    }).catch(function () {});
+  }, 60000);
+}());
+</script>
+</body>
+</html>

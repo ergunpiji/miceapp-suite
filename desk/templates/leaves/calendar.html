@@ -1,0 +1,415 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .cal-wrapper {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 120px);
+    min-height: 520px;
+  }
+
+  /* ── Navigasyon ── */
+  .cal-nav-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0 10px;
+    flex-shrink: 0;
+  }
+  .cal-nav-bar h4 {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+    color: #1a3a5c;
+  }
+
+  /* ── Filtre çubuğu ── */
+  .cal-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 0 0 10px;
+    flex-shrink: 0;
+  }
+  .cal-filter-bar input[type=search] {
+    border: 1px solid #e2e8f0;
+    border-radius: 7px;
+    padding: 5px 10px;
+    font-size: 12.5px;
+    outline: none;
+    width: 170px;
+    transition: border-color .15s;
+  }
+  .cal-filter-bar input[type=search]:focus { border-color: #1a3a5c; }
+  .cal-type-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #fff;
+    cursor: pointer;
+    opacity: .45;
+    transition: opacity .15s;
+    border: none;
+    user-select: none;
+  }
+  .cal-type-chip.active { opacity: 1; }
+  .cal-type-chip:hover { opacity: .8; }
+
+  /* ── Legend ── */
+  .cal-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    font-size: 12px;
+    padding: 0 0 10px;
+    flex-shrink: 0;
+  }
+  .cal-legend-dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+
+  /* ── Tablo ── */
+  .cal-card {
+    flex: 1 1 0;
+    overflow: hidden;
+    border-radius: 10px;
+    box-shadow: 0 1px 6px rgba(0,0,0,.08);
+    display: flex;
+    flex-direction: column;
+  }
+  .cal-table-wrap {
+    flex: 1 1 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .cal-grid {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 560px;
+    table-layout: fixed;
+    height: 100%;
+  }
+  .cal-grid th {
+    background: #1a3a5c;
+    color: #fff;
+    text-align: center;
+    padding: 9px 4px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  .cal-grid th.weekend-hd { background: #243d5c; }
+
+  .cal-grid tbody { height: 100%; }
+  .cal-grid td {
+    border: 1px solid #e2e8f0;
+    vertical-align: top;
+    padding: 5px 6px;
+    width: 14.285714%;
+  }
+  .cal-grid tr { height: 16.666%; }
+  .cal-grid tr:last-child td { border-bottom: none; }
+  .cal-grid td:first-child { border-left: none; }
+  .cal-grid td:last-child { border-right: none; }
+
+  .cal-grid td.other-month  { background: #f8fafc; }
+  .cal-grid td.today-cell   { background: #fffbeb; }
+  .cal-grid td.holiday-cell { background: #fef2f2; }
+  .cal-grid td.weekend-col  { background: #f9fafb; }
+  .cal-grid td.other-month.weekend-col { background: #f4f5f6; }
+
+  .day-num {
+    font-size: 12px;
+    font-weight: 700;
+    color: #374151;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .day-num.weekend { color: #9ca3af; }
+  .day-num.today-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    background: #1a3a5c;
+    color: #fff;
+    border-radius: 50%;
+    font-size: 11px;
+    margin-bottom: 4px;
+  }
+
+  .holiday-label {
+    font-size: 10px;
+    color: #dc2626;
+    font-style: italic;
+    margin-bottom: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .leave-chip {
+    display: block;
+    font-size: 10px;
+    border-radius: 4px;
+    padding: 2px 6px;
+    color: #fff;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-decoration: none;
+    line-height: 1.4;
+    cursor: pointer;
+    transition: opacity .1s;
+  }
+  .leave-chip:hover  { opacity: .85; color: #fff; }
+  .leave-chip.hidden { display: none !important; }
+
+  /* ── Tooltip ── */
+  .cal-tooltip {
+    position: fixed;
+    z-index: 9999;
+    background: #1e293b;
+    color: #fff;
+    border-radius: 9px;
+    padding: 10px 14px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    pointer-events: none;
+    max-width: 220px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.22);
+    opacity: 0;
+    transition: opacity .15s;
+  }
+  .cal-tooltip.visible { opacity: 1; }
+  .cal-tooltip-name  { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  .cal-tooltip-type  { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; margin-bottom: 5px; }
+  .cal-tooltip-dates { font-size: 11.5px; color: rgba(255,255,255,.75); }
+  .cal-tooltip-half  { font-size: 11px; color: #fbbf24; margin-top: 2px; }
+
+  @media (max-width: 576px) {
+    .cal-wrapper { height: auto; min-height: unset; }
+    .cal-grid td { padding: 3px 2px; }
+    .day-num { font-size: 11px; }
+    .leave-chip { font-size: 9px; padding: 1px 3px; }
+    .cal-legend, .cal-filter-bar { font-size: 11px; }
+  }
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+{% if current_user.role in ['mudur','genel_mudur','admin','super_admin'] %}
+<a href="/leaves/team/requests" class="btn btn-outline-secondary btn-sm"><i class="bi bi-people me-1"></i>Ekip Liste</a>
+{% endif %}
+<a href="/leaves" class="btn btn-outline-secondary btn-sm ms-1"><i class="bi bi-person me-1"></i>İzinlerim</a>
+{% endblock %}
+
+{% block content %}
+<div class="cal-wrapper">
+
+  <!-- Navigasyon -->
+  <div class="cal-nav-bar">
+    <a href="/leaves/calendar/view?year={{ prev_year }}&month={{ prev_month }}"
+       class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-left"></i></a>
+    <div class="d-flex align-items-center gap-2">
+      <h4>{{ month_name }} {{ year }}</h4>
+      {% set today_year = today.year %}
+      {% set today_month = today.month %}
+      {% if year != today_year or month != today_month %}
+      <a href="/leaves/calendar/view" class="btn btn-sm btn-outline-primary" style="font-size:11px;padding:3px 10px">Bugün</a>
+      {% endif %}
+    </div>
+    <a href="/leaves/calendar/view?year={{ next_year }}&month={{ next_month }}"
+       class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-right"></i></a>
+  </div>
+
+  <!-- Filtre çubuğu -->
+  {% if lt_map %}
+  <div class="cal-filter-bar">
+    <input type="search" id="empSearch" placeholder="Kişi ara…" oninput="applyFilter()">
+    <div id="typeChips" class="d-flex gap-1 flex-wrap">
+      {% for lt in lt_map.values() %}
+      <button class="cal-type-chip active" data-type="{{ lt.id }}" style="background:{{ lt.color }}"
+              onclick="toggleType(this)">
+        {{ lt.name }}
+      </button>
+      {% endfor %}
+    </div>
+    <button class="btn btn-sm btn-link text-muted py-0" onclick="resetFilter()" style="font-size:12px">Temizle</button>
+  </div>
+  {% endif %}
+
+  <!-- Legend -->
+  {% if lt_map %}
+  <div class="cal-legend">
+    {% for lt in lt_map.values() %}
+    <div>
+      <span class="cal-legend-dot" style="background:{{ lt.color }}"></span>{{ lt.name }}
+    </div>
+    {% endfor %}
+    <div>
+      <span class="cal-legend-dot" style="background:#fef2f2;border:1px solid #fca5a5"></span>Resmi Tatil
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Takvim kartı -->
+  <div class="cal-card">
+    <div class="cal-table-wrap">
+      <table class="cal-grid">
+        <thead>
+          <tr>
+            {% for d in [('Pzt',False),('Sal',False),('Çar',False),('Per',False),('Cum',False),('Cmt',True),('Paz',True)] %}
+            <th {% if d[1] %}class="weekend-hd"{% endif %}>{{ d[0] }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for week in cal %}
+          <tr>
+            {% for day_num in week %}
+            {% if day_num == 0 %}
+            <td class="other-month"></td>
+            {% else %}
+              {% set cur_date = [year, month, day_num] | make_date %}
+              {% set is_holiday = cur_date in holiday_map %}
+              {% set is_today = cur_date == today %}
+              {% set wday = cur_date.weekday() %}
+              {% set is_weekend = wday >= 5 %}
+              <td class="{% if is_today %}today-cell{% elif is_holiday %}holiday-cell{% elif is_weekend %}weekend-col{% endif %}">
+                <div class="day-num {% if is_weekend %}weekend{% endif %}{% if is_today %} today-num{% endif %}">{{ day_num }}</div>
+                {% if is_holiday %}
+                <div class="holiday-label" title="{{ holiday_map[cur_date].name }}">
+                  {{ holiday_map[cur_date].name }}{% if holiday_map[cur_date].is_half %} (½){% endif %}
+                </div>
+                {% endif %}
+                {% for r in leaves %}
+                  {% if r.start_date <= cur_date <= r.end_date %}
+                  {% set lt = lt_map.get(r.leave_type_id) %}
+                  <a href="/leaves/{{ r.id }}" class="leave-chip"
+                     style="background:{{ lt.color if lt else '#6b7280' }}"
+                     data-emp="{{ r.employee.name }}"
+                     data-type="{{ r.leave_type_id }}"
+                     data-type-name="{{ lt.name if lt else '' }}"
+                     data-type-color="{{ lt.color if lt else '#6b7280' }}"
+                     data-start="{{ r.start_date.strftime('%d.%m.%Y') }}"
+                     data-end="{{ r.end_date.strftime('%d.%m.%Y') }}"
+                     data-half="{{ 1 if r.half_day else 0 }}">
+                    {{ r.employee.name }}{% if r.half_day %} ½{% endif %}
+                    <span style="opacity:.8;font-size:9px;display:block;margin-top:1px">{{ lt.name if lt else '' }}</span>
+                  </a>
+                  {% endif %}
+                {% endfor %}
+              </td>
+            {% endif %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Tooltip -->
+<div class="cal-tooltip" id="calTooltip"></div>
+
+<script>
+// ── Tooltip ───────────────────────────────────────────────────────────
+(function () {
+  var tip = document.getElementById('calTooltip');
+  var MARGIN = 14;
+
+  document.querySelectorAll('.leave-chip').forEach(function (chip) {
+    chip.addEventListener('mouseenter', function (e) {
+      var emp   = chip.dataset.emp;
+      var type  = chip.dataset.typeName;
+      var color = chip.dataset.typeColor;
+      var start = chip.dataset.start;
+      var end   = chip.dataset.end;
+      var half  = chip.dataset.half === '1';
+      var sameDayStr = start === end ? start : start + ' – ' + end;
+
+      tip.innerHTML =
+        '<div class="cal-tooltip-name">' + emp + '</div>' +
+        '<span class="cal-tooltip-type" style="background:' + color + '">' + type + '</span>' +
+        '<div class="cal-tooltip-dates"><i class="bi bi-calendar3 me-1"></i>' + sameDayStr + '</div>' +
+        (half ? '<div class="cal-tooltip-half"><i class="bi bi-scissors me-1"></i>Yarım gün</div>' : '');
+      positionTip(e);
+      tip.classList.add('visible');
+    });
+
+    chip.addEventListener('mousemove', positionTip);
+
+    chip.addEventListener('mouseleave', function () {
+      tip.classList.remove('visible');
+    });
+  });
+
+  function positionTip(e) {
+    var x = e.clientX + MARGIN;
+    var y = e.clientY + MARGIN;
+    if (x + 230 > window.innerWidth)  x = e.clientX - 230 - MARGIN;
+    if (y + 120 > window.innerHeight) y = e.clientY - 120 - MARGIN;
+    tip.style.left = x + 'px';
+    tip.style.top  = y + 'px';
+  }
+})();
+
+// ── Filtre ────────────────────────────────────────────────────────────
+var _activeTypes = new Set(
+  Array.from(document.querySelectorAll('.cal-type-chip')).map(function (b) {
+    return b.dataset.type;
+  })
+);
+
+function applyFilter() {
+  var query = (document.getElementById('empSearch').value || '').toLowerCase().trim();
+  document.querySelectorAll('.leave-chip').forEach(function (chip) {
+    var empMatch  = !query || chip.dataset.emp.toLowerCase().includes(query);
+    var typeMatch = _activeTypes.has(chip.dataset.type);
+    chip.classList.toggle('hidden', !(empMatch && typeMatch));
+  });
+}
+
+function toggleType(btn) {
+  var t = btn.dataset.type;
+  if (_activeTypes.has(t)) {
+    _activeTypes.delete(t);
+    btn.classList.remove('active');
+  } else {
+    _activeTypes.add(t);
+    btn.classList.add('active');
+  }
+  applyFilter();
+}
+
+function resetFilter() {
+  document.getElementById('empSearch').value = '';
+  document.querySelectorAll('.cal-type-chip').forEach(function (b) {
+    _activeTypes.add(b.dataset.type);
+    b.classList.add('active');
+  });
+  applyFilter();
+}
+</script>
+{% endblock %}

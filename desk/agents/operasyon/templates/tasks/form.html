@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}{% if task %}Görevi Düzenle{% else %}Yeni Görev{% endif %} — {{ event.name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">
+    {% if task %}✏️ Görevi Düzenle{% else %}📋 Yeni Görev Ekle{% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <form method="post" action="{{ base_url }}/events/{{ event.id }}/tasks/{% if task %}{{ task.id }}/edit{% else %}new{% endif %}">
+    <div class="form-grid cols-3">
+
+      <div class="form-group">
+        <label>Tedarikçi Adı <span style="color:#dc2626">*</span></label>
+        <input type="text" name="supplier_name" required list="supplier-list"
+               value="{{ task.supplier_name if task else '' }}"
+               placeholder="Örn: Otel Adı, Transfer Firması...">
+        <datalist id="supplier-list">
+          {% for s in existing_suppliers %}
+          <option value="{{ s }}">
+          {% endfor %}
+        </datalist>
+      </div>
+
+      <div class="form-group">
+        <label>Tedarikçi Türü</label>
+        <select name="supplier_type">
+          {% for type_key, type_label in supplier_task_types %}
+          <option value="{{ type_key }}"
+            {% if task and task.supplier_type == type_key %}selected
+            {% elif not task and type_key == 'other' %}selected{% endif %}>
+            {{ type_label }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Durum</label>
+        <select name="status">
+          {% for s_key, (s_icon, s_label, s_bg, s_color) in task_statuses.items() %}
+          <option value="{{ s_key }}"
+            {% if task and task.status == s_key %}selected
+            {% elif not task and s_key == 'pending' %}selected{% endif %}>
+            {{ s_icon }} {{ s_label }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group full">
+        <label>Görev / Teslimat <span style="color:#dc2626">*</span></label>
+        <input type="text" name="task" required
+               value="{{ task.task if task else '' }}"
+               placeholder="Örn: 25 kişilik VIP transfer, Sahne kurulumu, Menü onayı...">
+      </div>
+
+      <div class="form-group">
+        <label>Tarih</label>
+        <input type="date" name="task_date"
+               value="{{ task.task_date if task else '' }}">
+      </div>
+
+      <div class="form-group">
+        <label>Saat</label>
+        <input type="time" name="task_time"
+               value="{{ task.task_time if task else '' }}">
+      </div>
+
+      <div class="form-group"></div>
+
+      <div class="form-group full">
+        <label>Notlar</label>
+        <textarea name="notes" rows="3"
+                  placeholder="Detaylar, iletişim bilgisi, özel talepler...">{{ task.notes if task else '' }}</textarea>
+      </div>
+    </div>
+
+    <br>
+    <div class="btn-group">
+      <button type="submit" class="btn btn-primary">Kaydet</button>
+      <a href="{{ base_url }}/events/{{ event.id }}/tasks" class="btn btn-secondary">İptal</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

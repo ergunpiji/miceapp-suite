@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Raporlar{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">📈 Gelir / Gider Raporları</div>
+    <div class="page-subtitle">{{ period_start | fmtdate }} — {{ period_end | fmtdate }}</div>
+  </div>
+</div>
+
+<!-- Dönem seçici -->
+<form method="get" class="filters-bar" style="margin-bottom:20px">
+  <div class="form-group">
+    <label>Yıl</label>
+    <select name="year">
+      {% for y in years %}
+      <option value="{{ y }}" {{ 'selected' if y == year }}>{{ y }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-group">
+    <label>Ay</label>
+    <select name="month">
+      {% for m in months %}
+      <option value="{{ m.value }}" {{ 'selected' if m.value == month }}>{{ m.label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="btn btn-primary" style="margin-top:auto">Görüntüle</button>
+</form>
+
+<!-- KPI'lar -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Kasa Girişi</div>
+    <div class="stat-value positive">{{ total_cash_in | currency }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Kasa Çıkışı</div>
+    <div class="stat-value negative">{{ total_cash_out | currency }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Net Nakit</div>
+    <div class="stat-value {% if net_cash >= 0 %}positive{% else %}negative{% endif %}">{{ net_cash | currency }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Kesilen Fatura</div>
+    <div class="stat-value">{{ satis_toplam | currency }}</div>
+    <div class="stat-sub">Satış faturaları (KDV dahil)</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Alış Faturası</div>
+    <div class="stat-value">{{ alis_toplam | currency }}</div>
+    <div class="stat-sub">Tedarikçi faturaları (KDV dahil)</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Tedarikçi Ödemesi</div>
+    <div class="stat-value negative">{{ supplier_payment_total | currency }}</div>
+    <div class="stat-sub">Bu dönem yapılan ödemeler</div>
+  </div>
+</div>
+
+<div class="grid-2">
+
+  <!-- Kategori bazlı giderler -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">💸 Kategori Bazlı Giderler</span></div>
+    <div class="card-body" style="padding:0">
+      {% if by_category %}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Kategori</th><th class="text-right">Tutar</th></tr></thead>
+          <tbody>
+            {% set total = namespace(val=0) %}
+            {% for cat, amount in by_category.items() %}
+            {% set total.val = total.val + amount %}
+            <tr>
+              <td>{{ cat }}</td>
+              <td class="text-right font-mono">{{ amount | currency }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr class="totals-row">
+              <td>Toplam</td>
+              <td class="text-right font-mono amount-negative">{{ total.val | currency }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state"><div class="empty-state-icon">📊</div><div class="empty-state-text">Bu dönemde gider yok</div></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Proje bazlı bütçe özeti -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">📋 Proje Bütçe Özeti</span>
+      <a href="/projects" class="btn btn-sm btn-outline">Tüm Projeler</a>
+    </div>
+    <div class="card-body" style="padding:0">
+      {% if project_summary %}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Proje</th><th class="text-right">Bütçe</th><th class="text-right">Gerç.</th><th>%</th></tr></thead>
+          <tbody>
+            {% for p in project_summary %}
+            <tr>
+              <td>{{ p.name }}</td>
+              <td class="text-right font-mono">{{ p.budgeted | currency }}</td>
+              <td class="text-right font-mono">{{ p.actual | currency }}</td>
+              <td style="min-width:80px">
+                <div class="progress">
+                  <div class="progress-bar {% if p.pct > 100 %}over{% endif %}" style="width:{{ [p.pct, 100] | min }}%"></div>
+                </div>
+                <div style="font-size:11px;color:var(--text-muted)">{{ p.pct }}%</div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-text">Proje yok</div></div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- Aylık trend -->
+<div class="card mt-6">
+  <div class="card-header"><span class="card-title">📊 Aylık Nakit Akışı Trendi (Son 12 Ay)</span></div>
+  <div class="card-body" style="padding:0">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Ay</th><th class="text-right">Giriş</th><th class="text-right">Çıkış</th><th class="text-right">Net</th></tr>
+        </thead>
+        <tbody>
+          {% for row in monthly_trend %}
+          <tr>
+            <td>{{ row.label }}</td>
+            <td class="text-right font-mono amount-positive">{{ row.in | currency }}</td>
+            <td class="text-right font-mono amount-negative">{{ row.out | currency }}</td>
+            <td class="text-right font-mono {% if row.net >= 0 %}amount-positive{% else %}amount-negative{% endif %}">{{ row.net | currency }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

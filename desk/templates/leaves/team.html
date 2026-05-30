@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block page_title %}Ekip İzin Talepleri{% endblock %}
+
+{% block topbar_actions %}
+<a href="/leaves/calendar/view" class="btn btn-outline-secondary btn-sm"><i class="bi bi-calendar3 me-1"></i>Takvim</a>
+{% endblock %}
+
+{% block content %}
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-transparent border-0">
+    <form class="d-flex gap-2" method="get">
+      <select name="status_filter" class="form-select form-select-sm" style="max-width:180px" onchange="this.form.submit()">
+        <option value="pending" {% if status_filter=='pending' %}selected{% endif %}>Bekleyenler</option>
+        <option value="onaylandi" {% if status_filter=='onaylandi' %}selected{% endif %}>Onaylananlar</option>
+        <option value="reddedildi" {% if status_filter=='reddedildi' %}selected{% endif %}>Reddedilenler</option>
+        <option value="all" {% if status_filter=='all' %}selected{% endif %}>Tümü</option>
+      </select>
+    </form>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0" style="font-size:13px">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Çalışan</th>
+          <th>Tür</th>
+          <th>Başlangıç</th>
+          <th>Bitiş</th>
+          <th class="text-center">Gün</th>
+          <th>Durum</th>
+          <th>Talep Tarihi</th>
+          <th class="pe-3"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in requests_list %}
+        {% set sl = status_labels.get(r.status, ('secondary', r.status)) %}
+        <tr>
+          <td class="ps-3 fw-semibold">{{ r.employee.name }}</td>
+          <td>
+            <span class="me-1" style="color:{{ r.leave_type.color }}">&#9679;</span>
+            {{ r.leave_type.name }}
+          </td>
+          <td>{{ r.start_date | date_tr }}</td>
+          <td>{{ r.end_date | date_tr }}</td>
+          <td class="text-center">
+            {{ r.total_days }}{% if r.half_day %} <small class="text-muted">(½)</small>{% endif %}
+          </td>
+          <td><span class="badge bg-{{ sl[0] }}">{{ sl[1] }}</span></td>
+          <td class="text-muted">{{ r.created_at.strftime('%d.%m.%Y') }}</td>
+          <td class="pe-3 text-end">
+            <a href="/leaves/{{ r.id }}" class="btn btn-sm btn-outline-secondary py-0">İncele</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="text-center text-muted py-4">Talep bulunamadı.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

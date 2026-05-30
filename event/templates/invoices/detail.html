@@ -1,0 +1,344 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ request.headers.get('referer', '/invoices') }}" class="btn btn-sm btn-outline-secondary">
+  <i class="bi bi-arrow-left me-1"></i>Geri
+</a>
+{% if current_user.role in ('admin','muhasebe_muduru','muhasebe') %}
+<a href="/invoices/{{ inv.id }}/edit" class="btn btn-sm btn-outline-primary ms-1">
+  <i class="bi bi-pencil me-1"></i>Düzenle
+</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<style>
+.inv-card      { background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.08); padding:24px; margin-bottom:20px; }
+.inv-label     { font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:.5px; margin-bottom:2px; }
+.inv-value     { font-size:14px; color:#1e293b; font-weight:500; }
+.status-pill   { display:inline-block; padding:3px 12px; border-radius:99px; font-size:12px; font-weight:600; }
+/* timeline */
+.tl            { position:relative; padding-left:36px; }
+.tl::before    { content:''; position:absolute; left:14px; top:0; bottom:0; width:2px; background:#e2e8f0; }
+.tl-item       { position:relative; margin-bottom:20px; }
+.tl-dot        { position:absolute; left:-28px; top:3px; width:14px; height:14px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 2px #cbd5e1; }
+.tl-dot.success{ background:#22c55e; box-shadow:0 0 0 2px #86efac; }
+.tl-dot.danger { background:#ef4444; box-shadow:0 0 0 2px #fca5a5; }
+.tl-dot.primary{ background:#3b82f6; box-shadow:0 0 0 2px #93c5fd; }
+.tl-dot.warning{ background:#f59e0b; box-shadow:0 0 0 2px #fcd34d; }
+.tl-dot.info   { background:#06b6d4; box-shadow:0 0 0 2px #67e8f9; }
+.tl-dot.secondary{ background:#94a3b8; box-shadow:0 0 0 2px #cbd5e1; }
+.tl-time       { font-size:11px; color:#94a3b8; }
+.tl-title      { font-size:13px; font-weight:600; color:#1e293b; }
+.tl-note       { font-size:12px; color:#64748b; margin-top:2px; }
+.pay-method-badge { display:inline-flex; align-items:center; gap:4px; padding:2px 10px;
+                    border-radius:99px; font-size:11px; font-weight:600; }
+.section-title { font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase;
+                 letter-spacing:.6px; margin-bottom:12px; padding-bottom:6px;
+                 border-bottom:1px solid #f1f5f9; }
+</style>
+
+<div class="container-fluid px-3 py-3" style="max-width:960px;">
+
+  {# ── Başlık satırı ─────────────────────────────────────────────────────── #}
+  <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
+    <div>
+      <h4 class="mb-0 fw-bold">{{ inv.invoice_no or '(no belirtilmedi)' }}</h4>
+      <span class="text-muted" style="font-size:13px;">{{ inv.type_label }}</span>
+    </div>
+    {% set sc = {
+      'pending':        ('warning',   'Onay Bekliyor'),
+      'mudur_approved': ('info',      'Müdür Onayladı'),
+      'gm_approved':    ('primary',   'GM Onayladı'),
+      'approved':       ('success',   'Onaylandı'),
+      'rejected':       ('danger',    'Reddedildi'),
+      'cancelled':      ('secondary', 'İptal'),
+    } %}
+    {% set _sc = sc.get(inv.status, ('secondary', inv.status)) %}
+    <span class="status-pill bg-{{ _sc[0] }} bg-opacity-15 text-{{ _sc[0] }}">{{ _sc[1] }}</span>
+
+    {% set pc = {'unpaid':('danger','Ödenmedi'), 'partial':('warning','Kısmi Ödendi'), 'paid':('success','Ödendi')} %}
+    {% set _pc = pc.get(inv.payment_status, ('secondary', inv.payment_status)) %}
+    <span class="status-pill bg-{{ _pc[0] }} bg-opacity-15 text-{{ _pc[0] }}">{{ _pc[1] }}</span>
+  </div>
+
+  <div class="row g-3">
+
+    {# ── Sol kolon: fatura detayları ───────────────────────────────────────── #}
+    <div class="col-12 col-lg-7">
+
+      {# Temel bilgiler #}
+      <div class="inv-card">
+        <div class="section-title">Fatura Bilgileri</div>
+        <div class="row g-3">
+          <div class="col-6 col-md-4">
+            <div class="inv-label">Fatura No</div>
+            <div class="inv-value">{{ inv.invoice_no or '—' }}</div>
+          </div>
+          <div class="col-6 col-md-4">
+            <div class="inv-label">Fatura Tarihi</div>
+            <div class="inv-value">{{ inv.invoice_date or '—' }}</div>
+          </div>
+          <div class="col-6 col-md-4">
+            <div class="inv-label">Vade Tarihi</div>
+            <div class="inv-value {% if inv.due_date and inv.due_date < today_str %}text-danger fw-semibold{% endif %}">
+              {{ inv.due_date or '—' }}
+            </div>
+          </div>
+          <div class="col-6 col-md-6">
+            <div class="inv-label">{{ 'Müşteri' if inv.invoice_type in ('kesilen','iade_kesilen') else 'Tedarikçi' }}</div>
+            <div class="inv-value">
+              {% if inv.vendor %}
+              <a href="/vendors/{{ inv.vendor.id }}" class="text-decoration-none">{{ inv.vendor.name }}</a>
+              {% else %}
+              {{ inv.vendor_name or '—' }}
+              {% endif %}
+            </div>
+          </div>
+          <div class="col-6 col-md-6">
+            <div class="inv-label">Referans</div>
+            <div class="inv-value">
+              {% if inv.request %}
+              <a href="/requests/{{ inv.request.id }}#tab-financial" class="text-decoration-none">
+                {{ inv.request.request_no }}
+              </a>
+              {% else %}—{% endif %}
+            </div>
+          </div>
+          {% if inv.description %}
+          <div class="col-12">
+            <div class="inv-label">Açıklama</div>
+            <div class="inv-value">{{ inv.description }}</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      {# Tutar satırları #}
+      <div class="inv-card">
+        <div class="section-title">Tutar</div>
+        {% set lines = inv.lines %}
+        {% if lines %}
+        <table class="table table-sm mb-3" style="font-size:13px;">
+          <thead style="background:#f8fafc;">
+            <tr>
+              <th>Açıklama</th>
+              <th class="text-end">Tutar (KDV hariç)</th>
+              <th class="text-end">KDV %</th>
+              <th class="text-end">KDV</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for ln in lines %}
+            <tr>
+              <td>{{ ln.description or '—' }}</td>
+              <td class="text-end">₺{{ '{:,.2f}'.format(ln.amount|float) }}</td>
+              <td class="text-end">%{{ ln.vat_rate|int }}</td>
+              <td class="text-end">₺{{ '{:,.2f}'.format(ln.vat_amount|float) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+        <div class="d-flex justify-content-end gap-4 flex-wrap" style="font-size:13px;">
+          <div class="text-end">
+            <div class="inv-label">KDV Hariç</div>
+            <div class="inv-value">₺{{ '{:,.2f}'.format(inv.amount or 0) }}</div>
+          </div>
+          <div class="text-end">
+            <div class="inv-label">KDV</div>
+            <div class="inv-value">₺{{ '{:,.2f}'.format(inv.vat_amount or 0) }}</div>
+          </div>
+          <div class="text-end">
+            <div class="inv-label">KDV Dahil Toplam</div>
+            <div class="fw-bold" style="font-size:18px;">₺{{ '{:,.2f}'.format(inv.total_amount or 0) }}</div>
+          </div>
+        </div>
+      </div>
+
+      {# Ödeme özeti #}
+      {% if inv.status == 'approved' %}
+      <div class="inv-card">
+        <div class="section-title">Ödeme Durumu</div>
+        <div class="row g-3" style="font-size:13px;">
+          <div class="col-4">
+            <div class="inv-label">Toplam</div>
+            <div class="inv-value fw-bold">₺{{ '{:,.0f}'.format(inv.total_amount or 0) }}</div>
+          </div>
+          <div class="col-4">
+            <div class="inv-label">Ödenen</div>
+            <div class="inv-value" style="color:#16a34a;">₺{{ '{:,.0f}'.format(inv.paid_amount or 0) }}</div>
+            {# Ödeme yöntemi badge #}
+            {% if inv.paid_amount and inv.paid_amount > 0 %}
+              {% if inv.payment_method == 'kredi_karti' %}
+              <div class="mt-1">
+                <span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:99px;background:#ede9fe;color:#6d28d9;font-size:10px;font-weight:600;">
+                  <i class="bi bi-credit-card"></i> Kredi Kartı
+                </span>
+                {% if inv.cc_due_date %}
+                <div style="font-size:10px;color:#7c3aed;margin-top:2px;">Son ödeme: {{ inv.cc_due_date }}</div>
+                {% endif %}
+              </div>
+              {% elif inv.payment_method == 'cek' %}
+              <div class="mt-1">
+                <span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:99px;background:#f1f5f9;color:#475569;font-size:10px;font-weight:600;">
+                  <i class="bi bi-file-text"></i> Çek
+                </span>
+              </div>
+              {% elif inv.payment_method == 'on_odeme' %}
+              <div class="mt-1">
+                <span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:99px;background:#fef9c3;color:#854d0e;font-size:10px;font-weight:600;">
+                  <i class="bi bi-arrow-up-circle"></i> Ön Ödeme
+                </span>
+              </div>
+              {% else %}
+              <div class="mt-1">
+                <span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:99px;background:#f0fdf4;color:#166534;font-size:10px;font-weight:600;">
+                  <i class="bi bi-bank"></i> Banka Havalesi
+                </span>
+              </div>
+              {% endif %}
+            {% endif %}
+          </div>
+          <div class="col-4">
+            <div class="inv-label">Kalan</div>
+            {% set remaining = (inv.total_amount or 0) - (inv.paid_amount or 0) %}
+            <div class="inv-value {% if remaining > 0 %}text-danger{% endif %}">₺{{ '{:,.0f}'.format(remaining|abs) }}</div>
+          </div>
+          {% if inv.cc_pending_amount and inv.cc_pending_amount > 0 %}
+          <div class="col-12">
+            <div style="background:#f5f3ff;border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;font-size:12px;">
+              <i class="bi bi-credit-card-2-front" style="color:#7c3aed;font-size:16px;"></i>
+              <div>
+                <span style="color:#6d28d9;font-weight:600;">KK Taahhüdü: ₺{{ '{:,.0f}'.format(inv.cc_pending_amount) }}</span>
+                {% if inv.cc_due_date %}
+                <span class="text-muted ms-2">— Kart son ödeme: {{ inv.cc_due_date }}</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+        {% if inv.total_amount and inv.total_amount > 0 %}
+        {% set pct = [(inv.paid_amount or 0) / inv.total_amount * 100, 100]|min %}
+        <div class="mt-3">
+          <div class="progress" style="height:6px;border-radius:3px;">
+            <div class="progress-bar bg-success" style="width:{{ pct|int }}%;"></div>
+          </div>
+          <div class="text-muted mt-1" style="font-size:11px;">%{{ pct|int }} ödendi</div>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {# Belge #}
+      {% if inv.document_path %}
+      <div class="inv-card">
+        <div class="section-title">Belge</div>
+        <a href="/static/{{ inv.document_path }}" target="_blank"
+           class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-file-earmark me-1"></i>{{ inv.document_name or 'Belgeyi Görüntüle' }}
+        </a>
+      </div>
+      {% endif %}
+
+    </div>{# /col-lg-7 #}
+
+    {# ── Sağ kolon: işlem geçmişi ──────────────────────────────────────────── #}
+    <div class="col-12 col-lg-5">
+      <div class="inv-card">
+        <div class="section-title">İşlem Geçmişi</div>
+
+        {% if logs %}
+        <div class="tl">
+          {% for lg in logs|reverse %}
+          {% set _la = log_actions.get(lg.action, ('İşlem', 'secondary', 'bi-circle')) %}
+          <div class="tl-item">
+            <div class="tl-dot {{ _la[1] }}"></div>
+            <div class="tl-time">
+              {{ lg.created_at | datetime_tr }}
+            </div>
+            <div class="tl-title">
+              <i class="bi {{ _la[2] }} me-1"></i>{{ _la[0] }}
+              {% if lg.actor %}
+              <span class="text-muted fw-normal" style="font-size:12px;">— {{ lg.actor.full_name }}</span>
+              {% endif %}
+            </div>
+
+            {# Ödeme detayları #}
+            {% if lg.action == 'payment' and lg.amount %}
+            <div class="mt-1 d-flex flex-wrap gap-1 align-items-center">
+              <span class="fw-semibold" style="color:#16a34a;font-size:13px;">₺{{ '{:,.0f}'.format(lg.amount) }}</span>
+              {% if lg.payment_method == 'kredi_karti' %}
+              <span class="pay-method-badge" style="background:#ede9fe;color:#6d28d9;">
+                <i class="bi bi-credit-card"></i> Kredi Kartı
+              </span>
+              {% if lg.cc_due_date %}
+              <span class="text-muted" style="font-size:11px;">Son ödeme: {{ lg.cc_due_date }}</span>
+              {% endif %}
+              {% elif lg.payment_method == 'cek' %}
+              <span class="pay-method-badge" style="background:#f1f5f9;color:#475569;">
+                <i class="bi bi-file-text"></i> Çek
+              </span>
+              {% else %}
+              <span class="pay-method-badge" style="background:#f0fdf4;color:#166534;">
+                <i class="bi bi-bank"></i> Banka
+              </span>
+              {% endif %}
+              {% if lg.note %}
+              <span class="text-muted" style="font-size:11px;">{{ lg.note }}</span>
+              {% endif %}
+            </div>
+            {% elif lg.note %}
+            <div class="tl-note">{{ lg.note }}</div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-4 text-muted" style="font-size:13px;">
+          <i class="bi bi-clock-history" style="font-size:2rem;opacity:.3;"></i>
+          <p class="mt-2 mb-0">Henüz işlem geçmişi yok.</p>
+          <p style="font-size:11px;">Bundan sonraki onay ve ödeme işlemleri burada görünecek.</p>
+        </div>
+        {% endif %}
+      </div>
+
+      {# Ret notu #}
+      {% if inv.status == 'rejected' and inv.rejection_note %}
+      <div class="inv-card" style="border-left:3px solid #ef4444;">
+        <div class="section-title" style="color:#dc2626;">Red Nedeni</div>
+        <p class="mb-0" style="font-size:13px;">{{ inv.rejection_note }}</p>
+      </div>
+      {% endif %}
+
+      {# Onaylayan #}
+      {% if inv.approver and inv.approved_at %}
+      <div class="inv-card">
+        <div class="section-title">Onay Bilgisi</div>
+        <div class="d-flex align-items-center gap-2">
+          <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white"
+               style="width:32px;height:32px;background:#22c55e;font-size:12px;flex-shrink:0;">
+            {{ inv.approver.full_name[:1] }}
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:600;">{{ inv.approver.full_name }}</div>
+            <div class="text-muted" style="font-size:11px;">{{ inv.approved_at | datetime_tr }}</div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+    </div>{# /col-lg-5 #}
+  </div>{# /row #}
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// today_str from template context
+</script>
+{% endblock %}

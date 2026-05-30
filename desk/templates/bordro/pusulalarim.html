@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid py-3" style="max-width:800px">
+
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <div>
+      <h4 class="mb-0 fw-bold">Ücret Pusulalarım</h4>
+      <div class="text-muted" style="font-size:13px;">{{ emp.name }} · {{ emp.title or emp.department or "" }}</div>
+    </div>
+  </div>
+
+  {% if not records %}
+  <div class="alert alert-info">Henüz onaylanmış veya ödenmiş pusulaz bulunmuyor.</div>
+  {% else %}
+  <div class="card shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" style="font-size:13px;">
+        <thead style="background:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:.5px;">
+          <tr>
+            <th>Dönem</th>
+            <th>Brüt</th>
+            <th>SGK Kesinti</th>
+            <th>Gelir Vergisi</th>
+            <th>Net (Ele Geçen)</th>
+            <th>Durum</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in records %}
+          <tr>
+            <td class="fw-semibold">{{ r.period }}</td>
+            <td>{{ r.total_gross | money }}</td>
+            <td class="text-danger">−{{ (r.sgk_employee + r.unemployment_emp) | money }}</td>
+            <td class="text-danger">−{{ r.income_tax | money }}</td>
+            <td class="fw-bold text-success">{{ r.ele_gecen | money }}</td>
+            <td>
+              {% if r.status == "odendi" %}
+              <span class="badge bg-success">Ödendi</span>
+              {% else %}
+              <span class="badge bg-warning text-dark">Onaylandı</span>
+              {% endif %}
+            </td>
+            <td>
+              <a href="/bordro/{{ r.id }}/print" class="btn btn-sm btn-outline-primary" style="font-size:11px;">
+                <i class="bi bi-printer me-1"></i>Pusulam
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

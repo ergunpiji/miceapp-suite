@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block page_title %}Fon Havuzu Aç{% endblock %}
+{% block page_title_block %}Fon Havuzu Aç{% endblock %}
+
+{% block content %}
+<div class="card mb-4" style="max-width: 720px;">
+  <div class="card-body p-4">
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <i class="bi bi-piggy-bank text-primary" style="font-size:22px;"></i>
+      <h5 class="mb-0">Yeni Fon Havuzu</h5>
+    </div>
+    <p class="text-muted small mb-4">
+      Müşteriye toplu bir fatura kesildikten sonra fonun bakiyesi bu havuzda tutulur.
+      Yıl içinde alt etkinliklere <strong>iki yönlü transfer</strong> (dağıtım ve iade) yapabilirsiniz.
+      Tutar <strong>KDV dahil</strong> girilmelidir.
+    </p>
+
+    <form method="post" action="/requests/fund-pools/new" enctype="multipart/form-data">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label fw-semibold" style="font-size:13px;">Müşteri <span class="text-danger">*</span></label>
+          <select name="customer_id" class="form-select" required>
+            <option value="">— Seçin —</option>
+            {% for c in customers %}
+            <option value="{{ c.id }}">{{ c.name }} ({{ c.code|upper }})</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label fw-semibold" style="font-size:13px;">Fon Adı <span class="text-danger">*</span></label>
+          <input type="text" name="fund_name" class="form-control" required
+                 placeholder="Örn: Eczacıbaşı 2026 Yıllık Fon">
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label fw-semibold" style="font-size:13px;">Para Birimi</label>
+          <select name="fund_currency" class="form-select">
+            <option value="TRY" selected>TRY ₺</option>
+            <option value="USD">USD $</option>
+            <option value="EUR">EUR €</option>
+          </select>
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label fw-semibold" style="font-size:13px;">
+            Başlangıç Tutarı <span class="text-muted fw-normal" style="font-size:11px;">(KDV dahil)</span>
+            <span class="text-danger">*</span>
+          </label>
+          <input type="number" name="initial_amount" class="form-control" required
+                 min="0.01" step="0.01" placeholder="1200000.00">
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label fw-semibold" style="font-size:13px;">KDV %</label>
+          <select name="vat_rate" class="form-select">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="8">8</option>
+            <option value="10">10</option>
+            <option value="18">18</option>
+            <option value="20" selected>20</option>
+          </select>
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label fw-semibold" style="font-size:13px;">Yıl</label>
+          <input type="number" name="fund_year" class="form-control" min="2020" max="2099" placeholder="2026">
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label fw-semibold" style="font-size:13px;">Fatura No</label>
+          <input type="text" name="invoice_no" class="form-control" placeholder="2026/12345">
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label fw-semibold" style="font-size:13px;">Fatura Tarihi</label>
+          <input type="date" name="invoice_date" class="form-control">
+        </div>
+
+        <div class="col-md-9">
+          <label class="form-label fw-semibold" style="font-size:13px;">
+            Fatura Belgesi <span class="text-muted fw-normal" style="font-size:11px;">(PDF / JPG / PNG · max 10 MB)</span>
+          </label>
+          <input type="file" name="document" class="form-control"
+                 accept=".pdf,.jpg,.jpeg,.png,.gif,.webp">
+        </div>
+
+        <div class="col-12 mt-4 d-flex gap-2">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg me-1"></i> Fon Havuzunu Oluştur
+          </button>
+          <a href="/requests?view=fund_pools" class="btn btn-outline-secondary">İptal</a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="alert alert-info" style="max-width: 720px; font-size:13px;">
+  <i class="bi bi-info-circle me-1"></i>
+  Fon havuzu kurulunca otomatik olarak müşteriye ait bir <strong>"kesilen" fatura</strong> oluşturulur
+  ve bu fon ana referansına bağlanır. Şirket geneli raporlarda bu fatura ciroya
+  yansımaz — yalnızca alt referanslara yapılan transferler ciro olarak sayılır.
+</div>
+{% endblock %}

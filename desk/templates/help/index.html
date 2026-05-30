@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Yardım Merkezi — PrizmaDesk</title>
+  <link rel="icon" type="image/png" href="/static/prizmatik-logo.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    body { background: #f1f5f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .hero { background: linear-gradient(135deg, #1a3a5c 0%, #1e5f8c 100%); color: white; padding: 60px 0 40px; }
+    .search-box { max-width: 560px; margin: 0 auto; }
+    .category-card { border: none; border-radius: 12px; transition: transform .15s, box-shadow .15s; cursor: pointer; }
+    .category-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+    .category-icon { font-size: 2rem; width: 56px; height: 56px; border-radius: 12px;
+                     display: flex; align-items: center; justify-content: center; }
+    .popular-link { display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+                    border-radius: 8px; text-decoration: none; color: #334155;
+                    background: white; border: 1px solid #e2e8f0; transition: border-color .15s; }
+    .popular-link:hover { border-color: #1e5f8c; color: #1e5f8c; }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-dark" style="background: #1a3a5c;">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="/">
+        <img src="/static/prizmatik-logo-beyaz.png" height="28" alt="PrizmaDesk">
+        PrizmaDesk
+      </a>
+      <div class="d-flex gap-2">
+        <a href="/faq" class="btn btn-outline-light btn-sm">SSS</a>
+        <a href="/login" class="btn btn-light btn-sm">Giriş Yap</a>
+        <a href="/demo" class="btn btn-warning btn-sm fw-semibold">Ücretsiz Dene</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <div class="hero text-center">
+    <div class="container">
+      <h1 class="fw-bold mb-2">Nasıl yardımcı olabiliriz?</h1>
+      <p class="text-white-50 mb-4">Aradığınız konuyu aşağıdan seçin veya doğrudan arayın.</p>
+      <div class="search-box">
+        <div class="input-group input-group-lg shadow">
+          <span class="input-group-text bg-white border-0"><i class="bi bi-search text-muted"></i></span>
+          <input type="text" id="helpSearch" class="form-control border-0"
+                 placeholder="Örn: fatura nasıl eklenir, HBF nedir...">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Kategoriler -->
+  <div class="container py-5">
+    <h5 class="fw-semibold text-muted mb-4">Konular</h5>
+    <div class="row g-3 mb-5">
+      {% set categories = [
+        ("bi-receipt", "#0d6efd", "bg-primary bg-opacity-10", "Fatura & Ödeme",
+         "Fatura oluşturma, ödeme kaydetme, e-fatura gönderimi",
+         [("Fatura nasıl eklenir?", "#fatura-ekleme"),
+          ("Kısmi ödeme nasıl yapılır?", "#kismi-odeme"),
+          ("E-fatura modülü nedir?", "#efatura")]),
+        ("bi-file-earmark-text", "#198754", "bg-success bg-opacity-10", "HBF (Harcama Bildirimi)",
+         "Form oluşturma, belge ekleme, onay süreci",
+         [("HBF nedir?", "#hbf-nedir"),
+          ("HBF nasıl oluşturulur?", "#hbf-olustur"),
+          ("Onay akışı nasıl işler?", "#onay-akisi")]),
+        ("bi-people", "var(--bs-purple)", "bg-purple-subtle", "Personel & İK",
+         "Çalışan ekleme, izin talepleri, bordro",
+         [("Çalışan nasıl eklenir?", "#calisan-ekle"),
+          ("İzin talebi nasıl açılır?", "#izin-talebi"),
+          ("Bordro nasıl hazırlanır?", "#bordro")]),
+        ("bi-bank", "#dc3545", "bg-danger bg-opacity-10", "Kasa & Banka",
+         "Kasa girişi, banka hareketi, çek takibi",
+         [("Kasa girişi nasıl yapılır?", "#kasa"),
+          ("Çek nasıl eklenir?", "#cek"),
+          ("Banka hareketi?", "#banka")]),
+        ("bi-graph-up", "#fd7e14", "bg-warning bg-opacity-10", "Raporlar",
+         "Gelir-gider raporu, Excel dışa aktarım",
+         [("Gelir-gider raporu?", "#gelir-gider"),
+          ("Excel dışa aktarım?", "#excel"),
+          ("KDV raporu?", "#kdv")]),
+        ("bi-gear", "#6c757d", "bg-secondary bg-opacity-10", "Yönetim & Ayarlar",
+         "Kullanıcı ekleme, rol yönetimi, şirket profili",
+         [("Kullanıcı nasıl eklenir?", "#kullanici"),
+          ("Rol ve izinler?", "#roller"),
+          ("Şirket bilgileri?", "#sirket")]),
+      ] %}
+      {% for icon, color, bg, title, desc, links in categories %}
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="card category-card h-100 p-4">
+          <div class="category-icon {{ bg }} mb-3" style="color: {{ color }}">
+            <i class="bi {{ icon }}"></i>
+          </div>
+          <h6 class="fw-bold mb-1">{{ title }}</h6>
+          <p class="text-muted small mb-3">{{ desc }}</p>
+          <ul class="list-unstyled mb-0">
+            {% for link_text, link_href in links %}
+            <li class="mb-1">
+              <a href="/faq{{ link_href }}" class="small text-primary text-decoration-none">
+                <i class="bi bi-arrow-right-short"></i> {{ link_text }}
+              </a>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Popüler makaleler -->
+    <h5 class="fw-semibold text-muted mb-3">En Çok Sorulanlar</h5>
+    <div class="row g-2">
+      {% set popular = [
+        ("HBF nedir ve nasıl oluşturulur?", "bi-file-earmark-text", "/faq#hbf-nedir"),
+        ("Onay akışı nasıl çalışır?", "bi-check2-circle", "/faq#onay-akisi"),
+        ("Demo hesap ne kadar süre geçerlidir?", "bi-clock", "/faq#demo"),
+        ("Fatura nasıl eklenir?", "bi-receipt", "/faq#fatura-ekleme"),
+        ("Kullanıcı nasıl eklenir?", "bi-person-plus", "/faq#kullanici"),
+        ("Verilerim güvende mi?", "bi-shield-check", "/faq#guvenlik"),
+      ] %}
+      {% for text, icon, href in popular %}
+      <div class="col-12 col-md-6">
+        <a href="{{ href }}" class="popular-link">
+          <i class="bi {{ icon }} text-primary fs-5"></i>
+          <span class="small">{{ text }}</span>
+          <i class="bi bi-chevron-right ms-auto text-muted small"></i>
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="bg-white border-top py-5 text-center">
+    <p class="text-muted mb-3">Aradığınızı bulamadınız mı?</p>
+    <a href="mailto:destek@prizmadesk.com" class="btn btn-outline-primary me-2">
+      <i class="bi bi-envelope me-1"></i> Bize Yazın
+    </a>
+    <a href="/faq" class="btn btn-primary">
+      <i class="bi bi-question-circle me-1"></i> Tüm SSS
+    </a>
+  </div>
+
+  <script>
+    document.getElementById('helpSearch').addEventListener('input', function() {
+      const q = this.value.toLowerCase().trim();
+      if (q.length < 2) return;
+      window.location.href = '/faq?q=' + encodeURIComponent(q);
+    });
+  </script>
+</body>
+</html>

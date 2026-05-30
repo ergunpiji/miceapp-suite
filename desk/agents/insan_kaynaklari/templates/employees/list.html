@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Çalışanlar — HR Ajanı{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Çalışanlar</div>
+    <div class="page-subtitle">{{ employees | length }} kayıt</div>
+  </div>
+  {% if user.role == 'hr_admin' %}
+  <a href="/employees/new" class="btn btn-primary">+ Yeni Çalışan</a>
+  {% endif %}
+</div>
+
+<!-- Filtreler -->
+<div class="filters-bar">
+  <form method="get" style="display:contents">
+    <input type="text" name="q" value="{{ q }}" placeholder="Ad, e-posta, sicil..." style="min-width:200px">
+    <select name="dept">
+      <option value="">Tüm Departmanlar</option>
+      {% for d in departments %}
+      <option value="{{ d }}" {% if dept == d %}selected{% endif %}>{{ d }}</option>
+      {% endfor %}
+    </select>
+    <select name="status">
+      <option value="">Tüm Durumlar</option>
+      {% for s in statuses %}
+      <option value="{{ s.value }}" {% if status_filter == s.value %}selected{% endif %}>{{ s.label }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-outline">Filtrele</button>
+    <a href="/employees" class="btn btn-secondary">Temizle</a>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-body" style="padding:0">
+    {% if employees %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Sicil No</th>
+            <th>Ad Soyad</th>
+            <th>Departman</th>
+            <th>Ünvan</th>
+            <th>İşe Giriş</th>
+            <th>Çalışma Tipi</th>
+            <th>Durum</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for emp in employees %}
+          <tr>
+            <td class="font-mono">{{ emp.employee_no }}</td>
+            <td>
+              <a href="/employees/{{ emp.id }}" style="color:var(--accent);font-weight:500">
+                {{ emp.full_name }}
+              </a><br>
+              <small style="color:var(--text-muted)">{{ emp.email }}</small>
+            </td>
+            <td>{{ emp.department or '—' }}</td>
+            <td>{{ emp.title or '—' }}</td>
+            <td class="nowrap">{{ emp.hire_date | fmtdate }}</td>
+            <td>
+              <span class="badge badge-neutral">{{ emp.employment_type_label }}</span>
+            </td>
+            <td>
+              <span class="badge badge-{% if emp.status == 'aktif' %}success{% elif emp.status == 'izinli' %}warning{% else %}neutral{% endif %}">
+                {{ emp.status_label }}
+              </span>
+            </td>
+            <td>
+              <a href="/employees/{{ emp.id }}" class="btn btn-xs btn-outline">Detay</a>
+              {% if user.role == 'hr_admin' %}
+              <a href="/employees/{{ emp.id }}/edit" class="btn btn-xs btn-outline">Düzenle</a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">👥</div>
+      <div class="empty-state-text">Çalışan bulunamadı</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

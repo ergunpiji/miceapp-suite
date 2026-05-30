@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+{% if request.query_params.get('saved') %}
+<div class="alert alert-success py-2"><i class="bi bi-check-circle me-1"></i>Onay limitleri kaydedildi.</div>
+{% endif %}
+
+<div class="card border-0 shadow-sm" style="max-width:720px;">
+  <div class="card-header" style="background:linear-gradient(135deg,#1a3a5c,#1e5f8c);color:#fff;border-radius:8px 8px 0 0">
+    <h6 class="mb-0"><i class="bi bi-shield-check me-2"></i>Fatura Onay Limitleri</h6>
+  </div>
+  <div class="card-body p-4">
+    <p class="text-muted small mb-4">
+      <i class="bi bi-info-circle me-1"></i>
+      Muhasebe bir fatura girdiğinde önce müşteri temsilcisine düşer. Tutar
+      bu kademenin limitine eşit veya altındaysa fatura otomatik onaylanır.
+      Aksi takdirde bir üst kademeye (müdür → GM) yönlendirilir.
+      <br><strong>Tutar KDV dahil TL'dir.</strong>
+    </p>
+    <form method="post">
+      {% for role, label in roles %}
+      <div class="mb-3">
+        <label class="form-label fw-semibold">{{ label }}</label>
+        <div class="input-group">
+          <input type="number" name="limit_{{ role }}" class="form-control"
+                 value="{{ limits[role] }}" min="0" step="1000"
+                 placeholder="Limit (TL)">
+          <span class="input-group-text">TL</span>
+        </div>
+        <small class="text-muted">
+          {% if role == 'genel_mudur' %}
+          Genel Müdür için sınırsız limit için 999999999 girin.
+          {% endif %}
+        </small>
+      </div>
+      {% endfor %}
+
+      <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary px-4">
+          <i class="bi bi-check-lg me-1"></i>Kaydet
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

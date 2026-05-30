@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Etkinlikler{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Etkinlikler</div>
+    <div class="page-subtitle">Yönetmek istediğiniz etkinliği seçin</div>
+  </div>
+  <a href="{{ base_url }}/events/new" class="btn btn-primary">+ Yeni Etkinlik</a>
+</div>
+
+{% if events %}
+<div class="card" style="padding:0">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Etkinlik Adı</th>
+          <th>Tarihler</th>
+          <th>Mekan / Şehir</th>
+          <th>Katılımcı</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in events %}
+        <tr>
+          <td>
+            <a href="{{ base_url }}/events/{{ e.id }}" class="table-link">{{ e.name }}</a>
+            {% if e.edem_request_no %}
+            <span style="font-size:10px; background:#eff6ff; color:#1d4ed8; padding:1px 6px; border-radius:999px; margin-left:6px;">
+              🔗 {{ e.edem_request_no }}
+            </span>
+            {% endif %}
+          </td>
+          <td>
+            {{ e.start_date.strftime('%d.%m.%Y') }}
+            {% if e.end_date != e.start_date %}
+              — {{ e.end_date.strftime('%d.%m.%Y') }}
+            {% endif %}
+          </td>
+          <td>{{ e.venue or '' }}{% if e.venue and e.city %}, {% endif %}{{ e.city or '—' }}</td>
+          <td>{{ e.participant_count }}</td>
+          <td>
+            <div class="btn-group">
+              <a href="{{ base_url }}/events/{{ e.id }}" class="btn btn-secondary btn-sm">Aç</a>
+              <a href="{{ base_url }}/events/{{ e.id }}/edit" class="btn btn-secondary btn-sm">Düzenle</a>
+              <form method="post" action="{{ base_url }}/events/{{ e.id }}/delete" data-confirm="Bu etkinliği silmek istediğinize emin misiniz? Tüm katılımcı verileri de silinir.">
+                <button type="submit" class="btn btn-danger btn-sm">Sil</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <div class="empty-state-icon">📅</div>
+    <div class="empty-state-title">Henüz etkinlik yok</div>
+    <div class="empty-state-text">İlk etkinliğinizi oluşturun.</div>
+    <br>
+    <a href="{{ base_url }}/events/new" class="btn btn-primary">+ Yeni Etkinlik</a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

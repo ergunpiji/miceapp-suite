@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/email-templates" class="btn btn-outline-secondary btn-sm">
+  <i class="bi bi-arrow-left me-1"></i> Şablonlar
+</a>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .var-chip {
+    display: inline-block; cursor: pointer;
+    background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;
+    border-radius: 4px; padding: 2px 8px; font-size: 11px; font-family: monospace;
+    margin: 2px; transition: background .15s;
+  }
+  .var-chip:hover { background: #dbeafe; }
+  #bodyPreview {
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+    padding: 16px; white-space: pre-wrap; font-size: 13px; color: #1e293b;
+    min-height: 200px; font-family: inherit; line-height: 1.6;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+
+  {# ── Sol: Form ── #}
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header py-2" style="background:#f8fafc;">
+        <h6 class="fw-bold mb-0">
+          <i class="bi bi-envelope-open me-2 text-primary"></i>
+          {{ tpl.name }}
+          <code class="badge bg-secondary bg-opacity-10 text-secondary ms-2"
+                style="font-size:11px;">{{ tpl.slug }}</code>
+        </h6>
+      </div>
+      <div class="card-body">
+        <form method="post" action="/email-templates/{{ tpl.id }}" id="tplForm">
+
+          {# Şablon Adı #}
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:13px;">Şablon Adı</label>
+            <input type="text" name="name" class="form-control"
+                   value="{{ tpl.name }}" required>
+          </div>
+
+          {# Açıklama #}
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:13px;">Açıklama
+              <span class="text-muted fw-normal">(opsiyonel)</span></label>
+            <input type="text" name="description" class="form-control form-control-sm"
+                   value="{{ tpl.description or '' }}"
+                   placeholder="Bu şablonun ne zaman kullanıldığını açıklayın">
+          </div>
+
+          {# Konu Satırı #}
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:13px;">
+              Konu Satırı
+              <span class="text-muted fw-normal ms-1" style="font-size:11px;">— değişken eklemek için sağ panelden tıklayın</span>
+            </label>
+            <input type="text" name="subject_tpl" id="subjectInput" class="form-control"
+                   value="{{ tpl.subject_tpl }}" required
+                   oninput="updatePreview()">
+          </div>
+
+          {# İçerik #}
+          <div class="mb-4">
+            <label class="form-label fw-semibold" style="font-size:13px;">
+              E-posta İçeriği
+              <span class="text-muted fw-normal ms-1" style="font-size:11px;">— düz metin, {değişken} kullanabilirsiniz</span>
+            </label>
+            <textarea name="body_tpl" id="bodyInput" class="form-control"
+                      rows="14" required
+                      oninput="updatePreview()"
+                      style="font-family: 'Courier New', monospace; font-size:12px; line-height:1.7;">{{ tpl.body_tpl }}</textarea>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg me-1"></i>Kaydet
+            </button>
+            <a href="/email-templates" class="btn btn-outline-secondary">İptal</a>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {# ── Sağ: Değişkenler + Önizleme ── #}
+  <div class="col-lg-5">
+
+    {# Değişken Referansı #}
+    <div class="card mb-3">
+      <div class="card-header py-2" style="background:#fefce8;">
+        <h6 class="fw-semibold mb-0" style="font-size:13px;">
+          <i class="bi bi-braces me-2 text-warning"></i>Değişkenler
+          <span class="text-muted fw-normal ms-1" style="font-size:11px;">— tıklayarak imleç konumuna ekle</span>
+        </h6>
+      </div>
+      <div class="card-body py-2 px-3">
+        {% for v in vars %}
+        <span class="var-chip" onclick="insertVar('{{ v.key }}')"
+              title="{{ v.label }}">{{"{"}}{{ v.key }}{{"}"}}
+        </span>
+        {% endfor %}
+      </div>
+    </div>
+
+    {# Canlı Önizleme #}
+    <div class="card">
+      <div class="card-header py-2" style="background:#f0fdf4;">
+        <h6 class="fw-semibold mb-0" style="font-size:13px;">
+          <i class="bi bi-eye me-2 text-success"></i>Önizleme
+          <span class="text-muted fw-normal ms-1" style="font-size:11px;">— örnek verilerle</span>
+        </h6>
+      </div>
+      <div class="card-body p-3">
+        <div class="mb-2">
+          <span class="text-muted" style="font-size:11px; text-transform:uppercase; letter-spacing:.5px;">KONU:</span>
+          <div id="subjectPreview" class="fw-semibold mt-1" style="font-size:13px; color:#1e293b;"></div>
+        </div>
+        <hr class="my-2">
+        <div class="text-muted" style="font-size:11px; text-transform:uppercase; letter-spacing:.5px;">İÇERİK:</div>
+        <div id="bodyPreview" class="mt-2"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Örnek önizleme verileri
+const PREVIEW_DATA = {
+  event_name:      'Yıllık Strateji Toplantısı',
+  request_no:      'yi-abc-260510-a',
+  client_name:     'ABC Teknoloji A.Ş.',
+  check_in:        '12.05.2026',
+  check_out:       '14.05.2026',
+  accom_check_in:  '12.05.2026',
+  accom_check_out: '14.05.2026',
+  attendee_count:  '85',
+  venue_name:      'Hilton İstanbul Bomonti',
+  contact_name:    'Ahmet Yılmaz',
+  quote_deadline:  '05.05.2026',
+  company_name:    'E-dem Etkinlik Yönetimi',
+  company_email:   'info@edem.com',
+  company_phone:   '+90 212 555 0000',
+  email_signature: 'Saygılarımızla,\nE-dem Etkinlik Yönetimi\ninfo@edem.com | +90 212 555 0000',
+};
+
+function renderTpl(tpl) {
+  return tpl.replace(/\{(\w+)\}/g, (_, key) => PREVIEW_DATA[key] ?? `{${key}}`);
+}
+
+function updatePreview() {
+  const subj = document.getElementById('subjectInput').value;
+  const body = document.getElementById('bodyInput').value;
+  document.getElementById('subjectPreview').textContent = renderTpl(subj);
+  document.getElementById('bodyPreview').textContent    = renderTpl(body);
+}
+
+// Değişken ekle — aktif alana imlecin bulunduğu yere
+let _lastFocus = null;
+document.getElementById('subjectInput').addEventListener('focus', () => _lastFocus = 'subject');
+document.getElementById('bodyInput').addEventListener('focus', () => _lastFocus = 'body');
+
+function insertVar(key) {
+  const target = _lastFocus === 'subject'
+    ? document.getElementById('subjectInput')
+    : document.getElementById('bodyInput');
+  const start = target.selectionStart;
+  const end   = target.selectionEnd;
+  const val   = target.value;
+  const ins   = `{${key}}`;
+  target.value = val.slice(0, start) + ins + val.slice(end);
+  target.selectionStart = target.selectionEnd = start + ins.length;
+  target.focus();
+  updatePreview();
+}
+
+updatePreview();
+</script>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Bildirimler — {{ event.name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">🔔 Bildirimler</div>
+</div>
+
+{% if notifications %}
+<div class="card" style="padding:0;">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Zaman</th>
+          <th>Kim</th>
+          <th>İşlem</th>
+          <th>Katılımcı</th>
+          <th>Detay</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for n in notifications %}
+        <tr>
+          <td style="color:#64748b; font-size:12px; white-space:nowrap;">
+            {{ n.created_at.strftime('%d.%m.%Y %H:%M') }}
+          </td>
+          <td style="font-size:13px;">{{ n.actor }}</td>
+          <td>
+            {% if n.action == 'checked_in' %}
+              <span style="color:#16a34a; font-size:13px;">✅ Giriş Yaptı</span>
+            {% elif n.action == 'boarded' %}
+              <span style="color:#2563eb; font-size:13px;">🚌 Araca Bindi</span>
+            {% else %}
+              {{ n.action }}
+            {% endif %}
+          </td>
+          <td><strong>{{ n.participant_name }}</strong></td>
+          <td style="color:#64748b; font-size:12px;">{{ n.detail or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <div class="empty-state-icon">🔔</div>
+    <div class="empty-state-title">Bildirim yok</div>
+    <div class="empty-state-text">Tedarikçi veya PM check-in/biniş işlemi yaptığında burada görünür.</div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

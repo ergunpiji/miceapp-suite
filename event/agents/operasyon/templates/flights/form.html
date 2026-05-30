@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Uçuş Bilgisi — {{ participant.full_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">
+    {% if direction == 'in' %}↓ Geliş{% else %}↑ Dönüş{% endif %} Uçuşu —
+    {{ participant.full_name }}
+  </div>
+</div>
+
+{% if direction == 'in' %}
+<div class="alert alert-info">💡 Geliş uçuşu kaydedildiğinde varış transferi saati otomatik hesaplanır (iniş + 1 saat).</div>
+{% else %}
+<div class="alert alert-info">💡 Dönüş uçuşu kaydedildiğinde dönüş transferi saati otomatik hesaplanır (kalkış - 2 saat).</div>
+{% endif %}
+
+<div class="card">
+  <form method="post" action="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}/flights/new">
+    <input type="hidden" name="direction" value="{{ direction }}">
+
+    <div class="form-grid cols-3">
+      <div class="form-group">
+        <label>Uçuş Numarası</label>
+        <div style="display:flex; gap:6px;">
+          <input type="text" name="flight_number" id="f-flight-number"
+                 value="{{ flight.flight_number if flight else '' }}"
+                 placeholder="TK 2341" style="flex:1;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="lookupFlight()"
+                  id="lookup-btn" title="Uçuş kodundan detayları otomatik doldur">
+            🔍 Doldur
+          </button>
+        </div>
+        <span class="form-hint" id="lookup-status"></span>
+      </div>
+      <div class="form-group">
+        <label>Havayolu</label>
+        <input type="text" name="airline" id="f-airline"
+               value="{{ flight.airline if flight else '' }}" placeholder="Türk Hava Yolları">
+      </div>
+      <div class="form-group">
+        <label>Uçuş Tarihi</label>
+        <input type="date" name="flight_date" id="f-flight-date"
+               value="{{ flight.flight_date if flight else '' }}">
+      </div>
+      <div class="form-group">
+        <label>Kalkış Havalimanı</label>
+        <input type="text" name="departure_airport" id="f-dep-airport"
+               value="{{ flight.departure_airport if flight else '' }}" placeholder="IST">
+      </div>
+      <div class="form-group">
+        <label>Varış Havalimanı</label>
+        <input type="text" name="arrival_airport" id="f-arr-airport"
+               value="{{ flight.arrival_airport if flight else '' }}" placeholder="AYT">
+      </div>
+      <div class="form-group"></div>
+      <div class="form-group">
+        <label>Kalkış Saati</label>
+        <input type="text" name="departure_time" id="f-dep-time"
+               value="{{ flight.departure_time if flight else '' }}" placeholder="10:30">
+      </div>
+      <div class="form-group">
+        <label>Varış Saati</label>
+        <input type="text" name="arrival_time" id="f-arr-time"
+               value="{{ flight.arrival_time if flight else '' }}" placeholder="12:05">
+      </div>
+      <div class="form-group"></div>
+      <div class="form-group">
+        <label>Koltuk</label>
+        <input type="text" name="seat" value="{{ flight.seat if flight else '' }}" placeholder="14A">
+      </div>
+      <div class="form-group">
+        <label>PNR</label>
+        <input type="text" name="pnr" value="{{ flight.pnr if flight else '' }}" placeholder="ABC123">
+      </div>
+      <div class="form-group"></div>
+      <div class="form-group full">
+        <label>Notlar</label>
+        <textarea name="notes">{{ flight.notes if flight else '' }}</textarea>
+      </div>
+    </div>
+
+    <br>
+    <div class="btn-group">
+      <button type="submit" class="btn btn-primary">Kaydet</button>
+      <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}" class="btn btn-secondary">İptal</a>
+    </div>
+  </form>
+</div>
+
+<script>
+async function lookupFlight() {
+  const btn    = document.getElementById('lookup-btn');
+  const status = document.getElementById('lookup-status');
+  const num    = document.getElementById('f-flight-number').value.trim();
+  const date   = document.getElementById('f-flight-date').value;
+
+  if (!num) { status.textContent = 'Önce uçuş numarası girin.'; return; }
+
+  btn.textContent = '⏳';
+  btn.disabled = true;
+  status.textContent = 'Sorgulanıyor...';
+
+  try {
+    const params = new URLSearchParams({ flight_number: num });
+    if (date) params.append('flight_date', date);
+
+    const res  = await fetch(`/events/{{ event.id }}/flights/lookup?${params}`);
+    const data = await res.json();
+
+    if (!res.ok || data.error) {
+      status.style.color = '#dc2626';
+      status.textContent = data.error || 'Bulunamadı.';
+    } else {
+      const fill = (id, val) => {
+        const el = document.getElementById(id);
+        if (el && val && val !== 'null' && !el.value) el.value = val;
+      };
+      fill('f-airline',     data.airline);
+      fill('f-dep-airport', data.departure_airport);
+      fill('f-arr-airport', data.arrival_airport);
+      fill('f-dep-time',    data.departure_time);
+      fill('f-arr-time',    data.arrival_time);
+
+      const conf = data.confidence === 'high' ? '✅' : data.confidence === 'medium' ? '⚠️' : '❓';
+      status.style.color = '#374151';
+      status.textContent = `${conf} ${data.note || 'Dolduruldu'} (güven: ${data.confidence})`;
+    }
+  } catch(e) {
+    status.style.color = '#dc2626';
+    status.textContent = 'Bağlantı hatası.';
+  } finally {
+    btn.textContent = '🔍 Doldur';
+    btn.disabled = false;
+  }
+}
+</script>
+{% endblock %}

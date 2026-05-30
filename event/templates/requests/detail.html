@@ -1,0 +1,3782 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+{# ── Compact durum güncelle ── #}
+{% if can_edit_status or can_direct_manage %}
+<form method="post" action="/requests/{{ req.id }}/status"
+      class="d-flex align-items-center gap-1">
+  <select name="new_status" class="form-select form-select-sm"
+          style="width:auto; min-width:150px; font-size:12px;">
+    {% for s in statuses %}
+    {% if can_edit_status or s.value in ('in_progress','venues_contacted','budget_ready','completed','cancelled') %}
+    <option value="{{ s.value }}" {% if req.status == s.value %}selected{% endif %}>{{ s.label }}</option>
+    {% endif %}
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-warning btn-sm" style="font-size:12px; white-space:nowrap;">
+    <i class="bi bi-arrow-repeat me-1"></i>Güncelle
+  </button>
+</form>
+{% endif %}
+{% if can_edit_req and req.status == 'draft' %}
+<a href="/requests/{{ req.id }}/edit" class="btn btn-outline-secondary btn-sm">
+  <i class="bi bi-pencil me-1"></i> Düzenle
+</a>
+{% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .info-label { font-size: 12px; font-weight: 600; color: #64748b; white-space: nowrap; }
+  .info-value { font-size: 13px; color: #1e293b; }
+  /* Fatura satırları collapse ok ikonu */
+  [data-bs-target="#invoicesTableCollapse"] .bi-chevron-down {
+    transition: transform .2s;
+  }
+  [data-bs-target="#invoicesTableCollapse"][aria-expanded="true"] .bi-chevron-down {
+    transform: rotate(180deg);
+  }
+  /* rfq-card artık inline style ile tanımlı */
+  /* Venue search dropdown (paylaşılan) */
+  .vs-wrapper { position: relative; }
+  .vs-dropdown {
+    position: absolute; z-index: 500; width: 100%;
+    background: #fff; border: 1px solid #cbd5e1;
+    border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
+    max-height: 220px; overflow-y: auto; margin-top: 2px;
+  }
+  .vs-item { display:flex; align-items:center; gap:8px; padding:7px 12px; cursor:pointer; font-size:13px; border-bottom:1px solid #f1f5f9; }
+  .vs-item:last-child { border-bottom: none; }
+  .vs-item:hover { background: #f1f5f9; }
+  .vs-item.vs-sel { background: #eff6ff; }
+  .vs-item .vsi-name { font-weight:600; color:#1e293b; }
+  .vs-item .vsi-city { font-size:11px; color:#64748b; }
+  .vs-no-res { padding:12px; text-align:center; color:#94a3b8; font-size:12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="mb-3">
+  <a href="/requests" class="text-muted text-decoration-none" style="font-size:13px;">
+    <i class="bi bi-arrow-left me-1"></i> Talep Listesine Dön
+  </a>
+</div>
+
+{# ─── BAŞLIK KARTI ─── #}
+<div class="card mb-4{% if req.status == 'closed' %} border-success{% endif %}"
+     {% if req.status == 'closed' %}style="background:linear-gradient(135deg,#dcfce7 0%,#f0fdf4 100%); border-color:#16a34a !important;"{% endif %}>
+  <div class="card-body">
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+      <div>
+        <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+          <span class="badge bg-primary fw-bold font-monospace" style="font-size:14px; letter-spacing:.5px;">{{ req.request_no }}</span>
+          <span class="badge badge-status-{{ req.status }}" style="font-size:12px;">{{ req.status_label }}</span>
+        </div>
+        <h4 class="fw-bold mb-1">{{ req.event_name }}</h4>
+        <div class="text-muted" style="font-size:13px;">
+          <span class="badge bg-secondary bg-opacity-10 text-secondary me-2">
+            {{ et_map.get(req.event_type, req.event_type) }}
+          </span>
+          {% if req.cities_display %}<i class="bi bi-geo-alt me-1"></i>{{ req.cities_display }}{% endif %}
+        </div>
+        {% if req.status == 'cancelled' and req.cancellation_reason %}
+        <div class="mt-1 text-danger" style="font-size:12px;">
+          <i class="bi bi-x-circle me-1"></i><strong>İptal Nedeni:</strong> {{ req.cancellation_reason }}
+        </div>
+        {% endif %}
+        {% if req.status == 'revision' and req.revision_count %}
+        <div class="mt-1" style="font-size:12px; color:#92400e;">
+          <i class="bi bi-arrow-repeat me-1"></i>Revizyon {{ req.revision_count }} — Yeni tarih: {{ req.check_in | date_tr if req.check_in else '?' }} → {{ req.check_out | date_tr if req.check_out else '?' }}
+        </div>
+        {% endif %}
+        {% if req.status == 'confirmed' and req.confirmed_at %}
+        <div class="mt-1 text-success" style="font-size:12px;">
+          <i class="bi bi-check-circle me-1"></i>{{ req.confirmed_at.strftime('%d.%m.%Y') }} tarihinde onaylandı
+        </div>
+        {% endif %}
+        {% if req.status == 'closing' and req.closure_request %}
+        {% set cr = req.closure_request %}
+        <div class="mt-2 p-2 rounded" style="font-size:12px; background:#fef9c3; border:1px solid #fde047;">
+          <i class="bi bi-hourglass-split me-1 text-warning"></i>
+          <strong>Kapama Onayında</strong> —
+          {% if cr.status == 'pending_manager' %}
+            Müdür onayı bekleniyor
+            {% if closure_pending_approver %}
+              — <strong>{{ closure_pending_approver.full_name }}</strong>
+            {% endif %}
+          {% elif cr.status == 'pending_gm' %}
+            <i class="bi bi-check2 text-success me-1"></i>Müdür onayladı →
+            <span style="color:#7c3aed; font-weight:600;">Genel Müdür onayı bekleniyor</span>
+            {% if closure_pending_approver %}
+              — <strong style="color:#7c3aed;">{{ closure_pending_approver.full_name }}</strong>
+            {% endif %}
+          {% elif cr.status == 'pending_finance' %}
+            <i class="bi bi-check2 text-success me-1"></i>
+            {% if cr.needs_gm %}Müdür + Genel Müdür onayladı{% else %}Müdür onayladı{% endif %} →
+            Muhasebe Müdürü final onayı bekleniyor
+            {% if closure_pending_approver %}
+              — <strong>{{ closure_pending_approver.full_name }}</strong>
+            {% endif %}
+          {% endif %}
+          ({{ cr.submitted_at.strftime('%d.%m.%Y') if cr.submitted_at else '' }})
+        </div>
+        {% endif %}
+        {% if req.status == 'closed' and req.closure_request %}
+        {% set cr = req.closure_request %}
+        {% set closed_at = cr.gm_approved_at or cr.l2_approved_at or cr.updated_at %}
+        {% set closed_by = cr.gm_approver or cr.l2_approver %}
+        <div class="mt-2 d-flex align-items-center gap-2">
+          <i class="bi bi-lock-fill text-success" style="font-size:1.2rem;"></i>
+          <span style="font-size:15px; font-weight:700; color:#15803d;">Dosya Kapandı</span>
+          <span class="text-muted" style="font-size:13px;">
+            {{ closed_at.strftime('%d.%m.%Y') if closed_at else '' }}
+            {% if closed_by %} — {{ closed_by.full_name }}{% endif %}
+          </span>
+        </div>
+        {% if cr.gm_note %}
+        <div class="mt-1 text-muted" style="font-size:12px;"><em>{{ cr.gm_note }}</em></div>
+        {% endif %}
+        {% endif %}
+        {% if req.closure_request and req.closure_request.status == 'rejected' %}
+        <div class="mt-2 p-2 rounded" style="font-size:12px; background:#fee2e2; border:1px solid #fca5a5;">
+          <i class="bi bi-x-circle me-1 text-danger"></i>
+          <strong>Kapama Reddedildi</strong>
+          {% if req.closure_request.rejection_note %} — {{ req.closure_request.rejection_note }}{% endif %}
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="d-flex flex-column gap-2 align-items-end">
+        {# E-dem işlemleri #}
+        {% if can_edit_status %}
+          {% if req.status == 'pending' %}
+          <form method="post" action="/requests/{{ req.id }}/status">
+            <input type="hidden" name="new_status" value="in_progress">
+            <button type="submit" class="btn btn-primary btn-sm">
+              <i class="bi bi-play-circle me-1"></i> İşleme Al
+            </button>
+          </form>
+          {% endif %}
+          {# E-dem/Admin bütçe oluşturabilir #}
+          {% if req.status in ('in_progress', 'venues_contacted', 'budget_ready', 'revision') %}
+          <a href="/budgets/new?req_id={{ req.id }}" class="btn btn-success btn-sm">
+            <i class="bi bi-calculator me-1"></i>
+            {% if req.budgets %}Yeni Bütçe{% else %}Bütçe Oluştur{% endif %}
+          </a>
+          {% endif %}
+          {# Teklif gönder butonu #}
+          {% if req.status in ('budget_ready', 'in_progress', 'venues_contacted') %}
+          <form method="post" action="/requests/{{ req.id }}/offer-sent">
+            <button type="submit" class="btn btn-outline-teal btn-sm"
+                    onclick="return confirm('Teklif müşteriye gönderildi olarak işaretlensin mi?')"
+                    style="color:#0d9488; border-color:#0d9488;">
+              <i class="bi bi-send me-1"></i> Teklif Gönderildi
+            </button>
+          </form>
+          {% endif %}
+        {% endif %}
+        {# Müşteriye Teklif Gönder — manager onayladıktan sonra, henüz confirmed değilse #}
+        {% if req.status not in ('cancelled', 'completed', 'confirmed') %}
+        {% set ns_approv2 = namespace(found=false) %}
+        {% for b in req.budgets %}{% if b.budget_status == 'approved' %}{% set ns_approv2.found = true %}{% endif %}{% endfor %}
+        {% if ns_approv2.found %}
+        <button type="button" class="btn btn-primary btn-sm"
+                onclick="sendOfferEmail('{{ req.id }}', '{{ (customer.email if customer else '') | e }}', '{{ req.event_name | e }}', '{{ req.request_no | e }}')">
+          <i class="bi bi-envelope-arrow-up me-1"></i> Müşteriye Teklif Gönder
+        </button>
+        {% endif %}
+        {% endif %}
+        {# Manager / Asistan bütçe oluşturma #}
+        {% if can_budget_ops %}
+          {% if req.status in ('in_progress', 'venues_contacted', 'budget_ready', 'revision') %}
+          <a href="/budgets/new?req_id={{ req.id }}" class="btn btn-success btn-sm">
+            <i class="bi bi-calculator me-1"></i>
+            {% if req.budgets %}Yeni Bütçe{% else %}Bütçe Oluştur{% endif %}
+          </a>
+          {% endif %}
+          {# Tüm taslak bütçeleri toplu manager'a gönder #}
+          {% set ns_draft = namespace(count=0) %}
+          {% for b in req.budgets %}{% if b.budget_status == 'draft_edem' %}{% set ns_draft.count = ns_draft.count + 1 %}{% endif %}{% endfor %}
+          {% if ns_draft.count > 0 %}
+          <form method="post" action="/requests/{{ req.id }}/send-all-to-manager" style="margin:0;">
+            <button type="submit" class="btn btn-primary btn-sm"
+                    onclick="return confirm('{{ ns_draft.count }} taslak bütçe manager onayına gönderilsin mi?')">
+              <i class="bi bi-send me-1"></i> Manager'a Gönder
+              {% if ns_draft.count > 1 %}<span class="badge bg-white text-primary ms-1">{{ ns_draft.count }}</span>{% endif %}
+            </button>
+          </form>
+          {% endif %}
+        {% endif %}
+        {# Tüm roller: bütçe listesi — birden fazlaysa görüntüle butonu #}
+        {% if req.budgets and req.budgets | length == 1 %}
+          {% set b = req.budgets[0] %}
+          <a href="/budgets/{{ b.id }}" class="btn btn-outline-info btn-sm">
+            <i class="bi bi-file-earmark-spreadsheet me-1"></i> Bütçeyi Görüntüle
+          </a>
+        {% endif %}
+
+        {# Proje Durumu — aktif statülerde göster, kapama ve sonrasında gizle #}
+        {% if current_user.role in ('admin', 'mudur', 'yonetici', 'e_dem') and req.status not in ('cancelled', 'completed', 'postponed', 'closing', 'closed') %}
+        <button type="button" class="btn btn-primary btn-sm"
+                data-bs-toggle="modal" data-bs-target="#projectStatusModal">
+          <i class="bi bi-flag me-1"></i> Proje Durumu
+        </button>
+        {% endif %}
+
+        {# Etkinliği Tamamla kaldırıldı — Dosyayı Kapat o işi yapıyor #}
+
+        {# Hesap Dökümü — confirmed/completed/closing/closed, onaylı bütçe varsa #}
+        {% set ns_offer_bgt = namespace(found=false) %}
+        {% for b in req.budgets %}
+          {% if b.budget_status in ('approved','confirmed') and b.budget_type != 'statement' %}
+            {% set ns_offer_bgt.found = true %}
+          {% endif %}
+        {% endfor %}
+        {% if req.status in ('confirmed','completed')
+              and current_user.role in ('admin','mudur','yonetici')
+              and ns_offer_bgt.found %}
+        {% set ns_stmt = namespace(existing=none) %}
+        {% for b in req.budgets %}{% if b.budget_type == 'statement' %}{% set ns_stmt.existing = b %}{% endif %}{% endfor %}
+        {% if ns_stmt.existing %}
+          {% set stmt = ns_stmt.existing %}
+          {% if stmt.statement_status == 'customer_approved' %}
+          {# Onaylandı — fatura oluştur #}
+          <a href="/budgets/{{ stmt.id }}/statement"
+             class="btn btn-sm" style="background:#1a3a5c; color:white; border-color:#1a3a5c;">
+            <i class="bi bi-receipt me-1"></i> Hesap Dökümü
+          </a>
+          {# Fatura: muhasebe direkt oluşturur; PM/mudur/yonetici fatura talebi oluşturur #}
+          {% if current_user.role in ('admin', 'muhasebe_muduru', 'muhasebe') %}
+          <a href="/invoices/new?request_id={{ req.id }}&statement_id={{ stmt.id }}"
+             class="btn btn-success btn-sm">
+            <i class="bi bi-file-earmark-text me-1"></i> Fatura Oluştur
+          </a>
+          {% elif current_user.role in ('mudur', 'yonetici') %}
+          <a href="/invoices/new?request_id={{ req.id }}&statement_id={{ stmt.id }}"
+             class="btn btn-outline-success btn-sm">
+            <i class="bi bi-file-earmark-plus me-1"></i> Fatura Talebi Oluştur
+          </a>
+          {% else %}
+          <span class="badge bg-success px-2 py-2" style="font-size:11px;">
+            <i class="bi bi-check2-circle me-1"></i>Müşteri Onayladı
+          </span>
+          {% endif %}
+          {% elif stmt.statement_status == 'sent' %}
+          {# Gönderildi — düzenle veya onay al #}
+          <a href="/budgets/{{ stmt.id }}/statement"
+             class="btn btn-sm" style="background:#0d9488; color:white; border-color:#0d9488;">
+            <i class="bi bi-send-check me-1"></i> Hesap Dökümü Gönderildi
+          </a>
+          {% else %}
+          {# Taslak — düzenle #}
+          <a href="/budgets/{{ stmt.id }}/statement"
+             class="btn btn-sm" style="background:#1a3a5c; color:white; border-color:#1a3a5c;">
+            <i class="bi bi-receipt me-1"></i> Hesap Dökümü Düzenle
+          </a>
+          {% endif %}
+        {% else %}
+        <form method="post" action="/requests/{{ req.id }}/create-statement" style="display:inline;">
+          <button type="submit" class="btn btn-sm"
+                  style="background:#1a3a5c; color:white; border-color:#1a3a5c;">
+            <i class="bi bi-receipt me-1"></i> Hesap Dökümü Hazırla
+          </button>
+        </form>
+        {% endif %}
+        {% endif %}
+
+        {# Dosyayı Kapat — confirmed veya completed, PM/mudur/admin #}
+        {% if req.status in ('confirmed', 'completed') and
+              (current_user.role in ('admin', 'mudur') or req.created_by == current_user.id) and
+              not (req.closure_request and req.closure_request.status in ('pending_manager','pending_gm','pending_finance')) %}
+        <button type="button" class="btn btn-dark btn-sm"
+                data-bs-toggle="modal" data-bs-target="#closureModal">
+          <i class="bi bi-lock me-1"></i> Dosyayı Kapat
+        </button>
+        {% endif %}
+
+        {# Kapama onay butonları — Müdür (L1) #}
+        {% if req.status == 'closing' and req.closure_request and req.closure_request.status == 'pending_manager'
+              and current_user.role in ('admin', 'mudur') %}
+        {% set cr = req.closure_request %}
+        <form method="post" action="/closure/{{ cr.id }}/approve-l1"
+              onsubmit="return confirm('Kapama talebini onaylıyorsunuz?')">
+          <button type="submit" class="btn btn-success btn-sm">
+            <i class="bi bi-check2 me-1"></i> Müdür Olarak Onayla
+          </button>
+        </form>
+        <button class="btn btn-outline-danger btn-sm"
+                onclick="openClosureRejectModal('{{ cr.id }}')">
+          <i class="bi bi-x me-1"></i> Reddet
+        </button>
+        {% endif %}
+
+        {# Kapama onay butonları — Genel Müdür (GM) #}
+        {% if req.closure_request and req.closure_request.status == 'pending_gm'
+              and current_user.role in ('admin', 'mudur') %}
+        {% set cr = req.closure_request %}
+        <form method="post" action="/closure/{{ cr.id }}/approve-gm"
+              onsubmit="return confirm('Genel Müdür onayı veriyorsunuz?')">
+          <button type="submit" class="btn btn-sm text-white" style="background:#7c3aed; border-color:#7c3aed;">
+            <i class="bi bi-check2 me-1"></i> Genel Müdür Olarak Onayla
+          </button>
+        </form>
+        <button class="btn btn-outline-danger btn-sm"
+                onclick="openClosureRejectModal('{{ cr.id }}')">
+          <i class="bi bi-x me-1"></i> Reddet
+        </button>
+        {% endif %}
+
+        {# Kapama onay butonları — Muhasebe Müdürü (Final) #}
+        {% if req.status == 'closing' and req.closure_request and req.closure_request.status == 'pending_finance'
+              and current_user.role in ('admin', 'muhasebe_muduru') %}
+        {% set cr = req.closure_request %}
+        <form method="post" action="/closure/{{ cr.id }}/approve-final"
+              onsubmit="return confirm('Dosyayı kesin olarak kapatıyorsunuz. Emin misiniz?')">
+          <button type="submit" class="btn btn-dark btn-sm">
+            <i class="bi bi-lock-fill me-1"></i> Dosyayı Kapat (Final)
+          </button>
+        </form>
+        <button class="btn btn-outline-danger btn-sm"
+                onclick="openClosureRejectModal('{{ cr.id }}')">
+          <i class="bi bi-x me-1"></i> Reddet
+        </button>
+        {% endif %}
+
+
+        {# İşi İptal Et butonu kaldırıldı — "Proje Durumu" modalına taşındı #}
+
+        {% if can_edit_req and (req.status == 'draft' or current_user.role == 'admin') %}
+        <form method="post" action="/requests/{{ req.id }}/delete"
+              onsubmit="return confirm('Bu talebi silmek istediğinizden emin misiniz?')">
+          <button type="submit" class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-trash me-1"></i> Sil
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ─── DOSYA KAPANDI BANNER ─── #}
+{% if req.status == 'closed' %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const card = document.querySelector('.card.border-success');
+  const financial = document.getElementById('tab-financial');
+  if (card && financial) { card.after(financial); }
+});
+</script>
+{% endif %}
+
+<div class="row g-4">
+
+  {# ─── SOL: Bilgi Kartı + Durum ─── #}
+  <div class="col-lg-4">
+
+    {# Bilgi kartı #}
+    <div class="card mb-4">
+      <div class="card-body">
+        <h6 class="fw-bold mb-3">
+          <i class="bi bi-info-circle me-2 text-primary"></i>Etkinlik Bilgileri
+        </h6>
+        <table class="table table-sm mb-0">
+          <tbody>
+            <tr>
+              <td class="info-label" style="width:130px;">Müşteri</td>
+              <td class="info-value">{{ req.client_name }}</td>
+            </tr>
+            {% set cp = req.contact_person %}
+            {% if cp and cp.name %}
+            <tr>
+              <td class="info-label">Kontak</td>
+              <td class="info-value">
+                {{ cp.name }}
+                {% if cp.title %}<div class="text-muted" style="font-size:11px;">{{ cp.title }}</div>{% endif %}
+                {% if cp.email %}<div style="font-size:11px;"><a href="mailto:{{ cp.email }}">{{ cp.email }}</a></div>{% endif %}
+              </td>
+            </tr>
+            {% endif %}
+            <tr>
+              <td class="info-label">Etkinlik Tipi</td>
+              <td class="info-value">{{ et_map.get(req.event_type, req.event_type) }}</td>
+            </tr>
+            <tr>
+              <td class="info-label">Şehir(ler)</td>
+              <td class="info-value">{{ req.cities_display or '—' }}</td>
+            </tr>
+            <tr>
+              <td class="info-label">Katılımcı</td>
+              <td class="info-value">{{ req.attendee_count or '—' }} kişi</td>
+            </tr>
+            <tr>
+              <td class="info-label">Etkinlik Başlangıç</td>
+              <td class="info-value">{% if req.check_in %}{{ req.check_in | date_tr }}{% else %}—{% endif %}</td>
+            </tr>
+            <tr>
+              <td class="info-label">Etkinlik Bitiş</td>
+              <td class="info-value">{% if req.check_out %}{{ req.check_out | date_tr }}{% else %}—{% endif %}</td>
+            </tr>
+            {% if req.quote_deadline %}
+            <tr>
+              <td class="info-label">Teklif Son Tarihi</td>
+              <td class="info-value fw-semibold text-danger">{{ req.quote_deadline | date_tr }}</td>
+            </tr>
+            {% endif %}
+            <tr>
+              <td class="info-label">Oluşturan</td>
+              <td class="info-value">{{ req.creator.full_name if req.creator else '—' }}</td>
+            </tr>
+            <tr>
+              <td class="info-label">Oluşturma</td>
+              <td class="info-value" style="font-size:12px;">{{ req.created_at | date_tr }}</td>
+            </tr>
+          </tbody>
+        </table>
+        {% if req.description %}
+        <hr>
+        <p class="text-muted mb-1" style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.5px;">Açıklama</p>
+        <p style="font-size:13px;" class="mb-0">{{ req.description }}</p>
+        {% endif %}
+        {% if req.notes %}
+        <hr>
+        <p class="text-muted mb-1" style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.5px;">Notlar</p>
+        <p style="font-size:13px;" class="mb-0">{{ req.notes }}</p>
+        {% endif %}
+      </div>
+    </div>
+
+
+  </div>
+
+  {# ─── SAĞ: Hizmetler + Mekanlar + RFQ ─── #}
+  <div class="col-lg-8">
+
+    {# Talep Edilen Hizmetler #}
+    {% set items = req.items %}
+    {% set pref_venues = req.preferred_venues %}
+    {% set can_rfq = (can_edit_status or can_direct_manage) and req.status in ('in_progress', 'venues_contacted', 'budget_ready') %}
+
+    <div class="card mb-4">
+      <div class="card-header d-flex align-items-center justify-content-between py-2"
+           style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
+        <h6 class="fw-bold mb-0">
+          <i class="bi bi-list-check me-2 text-success"></i>Talep Edilen Hizmetler
+        </h6>
+        <div class="d-flex gap-2">
+          {% if can_edit_req %}
+          <a href="/requests/{{ req.id }}/edit" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-pencil me-1"></i> Düzenle
+          </a>
+          {% endif %}
+        </div>
+      </div>
+      <div class="card-body">
+
+        {% if items %}
+        <ul class="nav nav-tabs mb-3" id="detailTabs" role="tablist">
+          {% set first_shown = namespace(val=true) %}
+          {% for tab in request_tabs %}
+          {% for section in tab.sections %}
+          {% if items.get(section) %}
+          <li class="nav-item" role="presentation">
+            <button class="nav-link {% if first_shown.val %}active{% set first_shown.val = false %}{% endif %}"
+                    data-bs-toggle="tab"
+                    data-bs-target="#dtpane-{{ section }}"
+                    data-section="{{ section }}"
+                    type="button"
+                    onclick="onSectionTabClick('{{ section }}')">
+              {% if section == 'accommodation' %}🛏 Konaklama
+              {% elif section == 'meeting' %}🏛 Toplantı
+              {% elif section == 'fb' %}🍽 F&B
+              {% elif section == 'teknik' %}🔧 Teknik
+              {% elif section == 'dekor' %}🎨 Dekor
+              {% elif section == 'transfer' %}🚌 Transfer
+              {% elif section == 'tasarim' %}🖨 Tasarım
+              {% else %}📦 Diğer{% endif %}
+              <span class="badge bg-secondary ms-1" style="font-size:10px;">{{ items[section] | length }}</span>
+            </button>
+          </li>
+          {% endif %}
+          {% endfor %}
+          {% endfor %}
+        </ul>
+
+        <div class="tab-content">
+          {% set first_pane = namespace(val=true) %}
+          {% for tab in request_tabs %}
+          {% for section in tab.sections %}
+          {% if items.get(section) %}
+          <div class="tab-pane fade {% if first_pane.val %}show active{% set first_pane.val = false %}{% endif %}"
+               id="dtpane-{{ section }}">
+
+            {# Konaklama tarih bandı #}
+            {% if section == 'accommodation' and (req.accom_check_in or req.accom_check_out) %}
+            <div class="d-flex align-items-center gap-2 mb-2 px-1"
+                 style="background:#eff6ff; border-left:3px solid #3b82f6; padding:6px 10px; border-radius:0 4px 4px 0; font-size:12px;">
+              <i class="bi bi-calendar-range text-primary"></i>
+              <span class="text-primary fw-semibold">Konaklama:</span>
+              <span>{{ req.accom_check_in | date_tr if req.accom_check_in else '?' }} →
+                    {{ req.accom_check_out | date_tr if req.accom_check_out else '?' }}</span>
+            </div>
+            {% endif %}
+
+            {# Bu sekme için ilgili tedarikçiler #}
+            {% if pref_venues %}
+            {% set sec_suppliers = [] %}
+            {% for venue in venues %}
+            {% if venue.id in pref_venues %}
+            {# section → supplier_type eşleştirmesi #}
+            {% if (section == 'accommodation' and venue.supplier_type in ('otel', 'etkinlik'))
+               or (section == 'meeting'       and venue.supplier_type in ('otel', 'etkinlik'))
+               or (section == 'fb'            and venue.supplier_type in ('otel', 'etkinlik', 'restaurant'))
+               or (section == 'teknik'        and venue.supplier_type == 'teknik')
+               or (section == 'dekor'         and venue.supplier_type in ('dekor', 'susleme'))
+               or (section == 'transfer'      and venue.supplier_type == 'transfer')
+               or (section == 'tasarim'       and venue.supplier_type == 'tasarim')
+               or (section == 'other'         and venue.supplier_type in ('ik', 'diger', 'restaurant', 'susleme')) %}
+            <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 me-1 mb-1"
+                  style="font-size:11px; padding:4px 10px;">
+              <i class="bi bi-building me-1"></i>{{ venue.name }}
+              {% if can_rfq %}
+              <span class="text-muted"> · {{ venue.city }}</span>
+              {% endif %}
+            </span>
+            {% endif %}
+            {% endif %}
+            {% endfor %}
+            {% endif %}
+
+            <div class="table-responsive mt-2">
+              <table class="table table-sm mb-0">
+                <thead>
+                  <tr>
+                    <th>Hizmet / Açıklama</th>
+                    <th>Miktar</th>
+                    <th>Birim</th>
+                    <th>Tarih</th>
+                    <th>Notlar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in items[section] %}
+                  <tr>
+                    <td style="font-size:13px;">{{ row.description or '—' }}</td>
+                    <td style="font-size:13px; color:#64748b;">{{ row.qty or 1 }}</td>
+                    <td style="font-size:13px; color:#64748b;">{{ row.unit or '—' }}</td>
+                    <td style="font-size:12px; color:#94a3b8;">{{ row.date_from or '' }}{% if row.date_to and row.date_to != row.date_from %} — {{ row.date_to }}{% endif %}</td>
+                    <td style="font-size:12px; color:#94a3b8;">{{ row.notes or '' }}</td>
+                  </tr>
+                  {% if section == 'meeting' and row.daily_attendees %}
+                  <tr style="background:#fefce8;">
+                    <td colspan="5" style="padding:4px 12px;">
+                      <div style="font-size:10px; font-weight:700; color:#92400e; text-transform:uppercase; letter-spacing:.4px; margin-bottom:4px;">
+                        📅 Günlük Detay
+                      </div>
+                      <table style="font-size:11px; border-collapse:collapse; width:auto;">
+                        <tr>
+                          <th style="padding:2px 10px; background:#fde68a; border:1px solid #fcd34d;">Tarih</th>
+                          <th style="padding:2px 10px; background:#fde68a; border:1px solid #fcd34d;">Kişi</th>
+                          <th style="padding:2px 10px; background:#fde68a; border:1px solid #fcd34d;">Oturma Düzeni</th>
+                        </tr>
+                        {% for da in row.daily_attendees %}
+                        <tr>
+                          <td style="padding:2px 10px; border:1px solid #fcd34d;">{{ da.date }}</td>
+                          <td style="padding:2px 10px; border:1px solid #fcd34d; text-align:center;">{{ da.qty }}</td>
+                          <td style="padding:2px 10px; border:1px solid #fcd34d;">{{ da.seating_layout }}</td>
+                        </tr>
+                        {% endfor %}
+                      </table>
+                    </td>
+                  </tr>
+                  {% endif %}
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
+            {% if can_rfq %}
+            <div class="mt-2 text-end">
+              <button type="button" class="btn btn-sm btn-outline-warning"
+                      onclick="openRfqModal('{{ section }}')">
+                <i class="bi bi-envelope me-1"></i>Bu Sekmenin Tedarikçilerine Mail Hazırla
+              </button>
+            </div>
+            {% endif %}
+          </div>
+          {% endif %}
+          {% endfor %}
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted mb-0" style="font-size:13px;">Henüz hizmet kalemi eklenmemiş.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ─── Operasyon Akışı ─── #}
+    {% if oa_active and oa_module.oa_manager_url %}
+    <div class="mb-4">
+      <a href="{{ oa_module.oa_manager_url }}" target="_blank"
+         class="d-flex align-items-center justify-content-between text-decoration-none"
+         style="background:linear-gradient(135deg,#1e3a5f,#1e5f8c); color:#fff;
+                border-radius:12px; padding:14px 20px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:22px;">⚙️</span>
+          <div>
+            <div style="font-weight:700; font-size:14px;">Operasyon Akışı</div>
+            <div style="font-size:11px; opacity:.7; margin-top:1px;">Aktif · Yönetim Paneline Gir</div>
+          </div>
+        </div>
+        <span style="font-size:18px; opacity:.8;">→</span>
+      </a>
+      <div class="text-end mt-1">
+        <form method="post" action="/requests/{{ req.id }}/modules/operasyon/deactivate"
+              style="display:inline;"
+              onsubmit="return confirm('Operasyon akışını sıfırlamak istediğinizden emin misiniz?')">
+          <button type="submit"
+                  style="background:none; border:none; font-size:11px; color:#94a3b8; cursor:pointer; padding:0;">
+            Sıfırla
+          </button>
+        </form>
+      </div>
+    </div>
+    {% elif not oa_active %}
+    <form method="post" action="/requests/{{ req.id }}/modules/operasyon/activate"
+          target="_blank" class="mb-4">
+      <button type="submit"
+              style="width:100%; background:#f8fafc; border:2px dashed #cbd5e1;
+                     border-radius:12px; padding:14px 20px; cursor:pointer;
+                     display:flex; align-items:center; gap:10px;
+                     color:#64748b; font-size:13px; font-weight:600; text-align:left;">
+        <span style="font-size:22px;">⚙️</span>
+        <div>
+          <div style="color:#1e293b; font-weight:700; font-size:14px;">Operasyon Akışı Oluştur</div>
+          <div style="font-size:11px; margin-top:1px;">Katılımcı, transfer, konaklama ve program yönetimi</div>
+        </div>
+        <span style="margin-left:auto; font-size:16px;">+</span>
+      </button>
+    </form>
+    {% endif %}
+
+    {# Seçilen Tedarikçiler (kompakt, aktif sekmeye göre filtrelenir) #}
+    {% if pref_venues %}
+    <div class="card mb-4" id="selectedVenuesCard">
+      <div class="card-body py-2">
+        <span class="text-muted fw-semibold me-2" style="font-size:11px; text-transform:uppercase; letter-spacing:.4px;">
+          <i class="bi bi-building me-1"></i>Seçilen Tedarikçiler:
+        </span>
+        {% for venue in venues %}
+        {% if venue.id in pref_venues %}
+        <a href="/venues/{{ venue.id }}" class="text-decoration-none selected-venue-badge"
+           data-supplier-type="{{ venue.supplier_type }}">
+          <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 me-1"
+                style="font-size:12px; padding:4px 10px;">
+            {{ venue.name }} <span class="text-muted">· {{ venue.city }}</span>
+          </span>
+        </a>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# RFQ Modal (her zaman render et, JS ile kontrol edilir) #}
+    {% if can_rfq %}
+    <div class="modal fade" id="rfqModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header" style="background:#1e293b; color:#fff; border:none;">
+            <div>
+              <h5 class="modal-title mb-0">
+                <i class="bi bi-envelope-open me-2"></i>Teklif İstek E-postaları
+              </h5>
+              <div id="rfqSectionLabel" class="mt-1" style="font-size:12px; opacity:.8;"></div>
+            </div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body p-0">
+            <div class="alert alert-info py-2 mx-3 mt-3 mb-0" style="font-size:12px;">
+              <i class="bi bi-info-circle me-1"></i>
+              Her tedarikçi için e-posta içeriği otomatik oluşturulur.
+              <strong>Zengin Metin Kopyala</strong> ile Outlook/Gmail'e yapıştırabilirsiniz.
+            </div>
+            {# Inline tedarikçi ekleme alanı (başta gizli) #}
+            <div id="rfqAddVenueArea" class="px-3 pt-3" style="display:none;">
+              <div class="border rounded p-3" style="background:#f8fafc;">
+                <div class="fw-semibold mb-2" style="font-size:12px; color:#1e293b;">
+                  <i class="bi bi-plus-circle me-1 text-primary"></i>Tedarikçi Ekle
+                </div>
+                <div class="vs-wrapper mb-2">
+                  <div class="position-relative">
+                    <i class="bi bi-search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:12px;pointer-events:none;"></i>
+                    <input type="text" id="rfqAddSearch" class="form-control form-control-sm"
+                           style="padding-left:30px;"
+                           placeholder="Tedarikçi ara..."
+                           oninput="filterRfqAddDrop(this.value)"
+                           onfocus="openRfqAddDrop()">
+                  </div>
+                  <div class="vs-dropdown" id="rfqAddDrop" style="display:none;"></div>
+                </div>
+                <button type="button" class="btn btn-outline-secondary btn-sm mt-1"
+                        onclick="document.getElementById('rfqAddVenueArea').style.display='none';">
+                  İptal
+                </button>
+              </div>
+            </div>
+            <div id="rfqVenueCards" class="p-3"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-primary btn-sm me-auto"
+                    onclick="toggleRfqAddVenueArea()">
+              <i class="bi bi-plus-circle me-1"></i>Tedarikçi Ekle
+            </button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+
+{# ─── İKİ SÜTUN ─── #}
+{# ─── BÜTÇE TABLARI (birden fazlaysa yan yana) ─── #}
+{% if budgets_data and budgets_data | length > 1 %}
+{% set compare_collapsed = req.confirmed_budget_id is not none %}
+{% set SECTION_LABELS = {
+  'accommodation': '🛏 Konaklama',
+  'meeting':       '🏛 Toplantı',
+  'fb':            '🍽 F&B',
+  'teknik':        '🔧 Teknik',
+  'dekor':         '🎨 Dekor',
+  'transfer':      '🚌 Transfer',
+  'tasarim':       '🖨 Tasarım',
+  'other':         '📦 Diğer'
+} %}
+{% set SECTIONS_ORDER = ['accommodation', 'meeting', 'fb', 'teknik', 'dekor', 'transfer', 'tasarim', 'other'] %}
+<div class="card mb-4" id="budgetCompareCard">
+  <div class="card-header d-flex align-items-center justify-content-between py-2"
+       style="background:#f8fafc; border-bottom:1px solid #e2e8f0; cursor:pointer;"
+       data-bs-toggle="collapse" data-bs-target="#budgetCompareCollapse">
+    <h6 class="fw-bold mb-0">
+      <i class="bi bi-calculator me-2 text-success"></i>Bütçe Karşılaştırması
+      <span class="badge bg-secondary ms-1" style="font-size:11px;">{{ budgets_data | length }}</span>
+    </h6>
+    <div class="d-flex align-items-center gap-2" onclick="event.stopPropagation()">
+    {% if (can_edit_status or can_budget_ops) and req.status in ('in_progress', 'venues_contacted', 'budget_ready') %}
+    <a href="/budgets/new?req_id={{ req.id }}" class="btn btn-success btn-sm">
+      <i class="bi bi-plus me-1"></i>Yeni Bütçe
+    </a>
+    {% endif %}
+    <i class="bi bi-chevron-down text-muted"></i>
+    </div>
+  </div>
+  <div class="collapse {% if not compare_collapsed %}show{% endif %}" id="budgetCompareCollapse">
+  <div class="card-body p-0">
+
+    {# Tab başlıkları #}
+    <ul class="nav nav-tabs px-3 pt-2" id="budgetTabs" role="tablist" style="flex-wrap:nowrap; overflow-x:auto; overflow-y:hidden;">
+      {# ─── Özet Sekmesi (ilk) ─── #}
+      <li class="nav-item flex-shrink-0" role="presentation">
+        <button class="nav-link active fw-semibold"
+                data-bs-toggle="tab"
+                data-bs-target="#btpane-summary"
+                type="button" style="white-space:nowrap;">
+          <i class="bi bi-bar-chart-line me-1 text-success"></i>Özet Karşılaştırma
+        </button>
+      </li>
+      {% for bd in budgets_data %}
+      {% set b = bd.budget %}
+      {% set bs = b.budget_status %}
+      {% set scolor = {'draft_edem':'secondary','pending_manager':'warning','draft_manager':'info','approved':'success','confirmed':'success','revision_requested':'danger','cancelled':'dark'}.get(bs, 'secondary') %}
+      <li class="nav-item flex-shrink-0" role="presentation">
+        <button class="nav-link"
+                data-bs-toggle="tab"
+                data-bs-target="#btpane-{{ b.id }}"
+                type="button" style="white-space:nowrap;">
+          <i class="bi bi-building me-1"></i>{{ b.venue_name or ('Bütçe #' + loop.index|string) }}
+          <span class="badge bg-{{ scolor }} ms-1" style="font-size:10px;">{{ {'draft_edem':'Taslak','pending_manager':'Onayda','draft_manager':'Düzenleniyor','approved':'Onaylandı','confirmed':'Müşteri Seçti ✓','revision_requested':'Revizyon','cancelled':'İptal'}.get(bs, bs) }}</span>
+          {% if bs == 'pending_manager' and budget_pending_approvers.get(b.id) %}
+          <span class="ms-1" style="font-size:10px; color:#92400e;" title="Onay bekleyen kişi">
+            <i class="bi bi-person-fill"></i> {{ budget_pending_approvers[b.id].full_name }}
+          </span>
+          {% endif %}
+        </button>
+      </li>
+      {% endfor %}
+    </ul>
+
+    {# Tab içerikleri #}
+    <div class="tab-content">
+
+      {# ══════════════════════════════════════════════
+         ÖZET KARŞILAŞTIRMA SEKMESİ
+         ══════════════════════════════════════════════ #}
+      <div class="tab-pane fade show active" id="btpane-summary">
+        {% set SLABELS = {'accommodation':'🛏 Konaklama','meeting':'🏛 Toplantı','fb':'🍽 F&B',
+                          'teknik':'🔧 Teknik','dekor':'🎨 Dekor','transfer':'🚌 Transfer',
+                          'tasarim':'🖨 Tasarım','other':'📦 Diğer'} %}
+        {% set show_cost = current_user.role in ('admin', 'e_dem', 'mudur', 'yonetici', 'asistan') %}
+
+        {# En düşük grand total → vurgu için (TRY bazlı karşılaştırma) #}
+        {% set min_grand = namespace(val=999999999) %}
+        {% for bd in budgets_data %}
+          {% if bd.totals.grand_try > 0 and bd.totals.grand_try < min_grand.val %}
+            {% set min_grand.val = bd.totals.grand_try %}
+          {% endif %}
+        {% endfor %}
+
+        <div class="table-responsive">
+          <table class="table table-sm mb-0" style="font-size:12px;">
+            <thead>
+              <tr style="background:#1e293b; color:white;">
+                <th class="ps-3" style="min-width:170px; font-size:11px; letter-spacing:.4px;">KALEM</th>
+                {% for bd in budgets_data %}
+                {% set b = bd.budget %}
+                {% set bs = b.budget_status %}
+                {% set is_best = bd.totals.grand_try > 0 and bd.totals.grand_try == min_grand.val %}
+                <th class="text-end pe-3" style="min-width:170px;">
+                  <div style="font-size:12px; font-weight:700;">{{ b.venue_name or ('Bütçe #' + loop.index|string) }}</div>
+                  <div style="margin-top:3px; display:flex; gap:4px; justify-content:flex-end; flex-wrap:wrap;">
+                    <span class="badge bg-{{ {'draft_edem':'secondary','pending_manager':'warning','draft_manager':'info','approved':'success','confirmed':'success','revision_requested':'danger','cancelled':'dark'}.get(bs,'secondary') }}" style="font-size:9px;">
+                      {{ {'draft_edem':'Taslak','pending_manager':'Onayda','draft_manager':'Düzenleniyor','approved':'Onaylandı','confirmed':'Müşteri Seçti ✓','revision_requested':'Revizyon','cancelled':'İptal'}.get(bs, bs) }}
+                    </span>
+                    {% if is_best %}<span class="badge bg-success" style="font-size:9px;">⭐ En İyi</span>{% endif %}
+                  </div>
+                  {# E-dem: Managera Gönder butonu #}
+                  {% if req.status != 'closed' and current_user.role in ('admin','e_dem') and bs == 'draft_edem' %}
+                  <div style="margin-top:6px; display:flex; gap:4px; justify-content:flex-end;">
+                    <form method="post" action="/budgets/{{ b.id }}/send-to-manager" style="margin:0;">
+                      <input type="hidden" name="back" value="{{ req.id }}">
+                      <button type="submit" class="btn btn-primary btn-sm py-0 px-2" style="font-size:10px;">
+                        <i class="bi bi-send me-1"></i>Managera Gönder
+                      </button>
+                    </form>
+                  </div>
+                  {% endif %}
+                  {# E-dem: Revizyon sonrası tekrar gönder #}
+                  {% if req.status != 'closed' and current_user.role in ('admin','e_dem') and bs == 'revision_requested' %}
+                  <div style="margin-top:6px; display:flex; gap:4px; justify-content:flex-end;">
+                    <form method="post" action="/budgets/{{ b.id }}/send-to-manager" style="margin:0;">
+                      <input type="hidden" name="back" value="{{ req.id }}">
+                      <button type="submit" class="btn btn-warning btn-sm py-0 px-2" style="font-size:10px;">
+                        <i class="bi bi-send me-1"></i>Tekrar Gönder
+                      </button>
+                    </form>
+                  </div>
+                  {% endif %}
+                  {# Onay / İptal / Export butonları — sadece manager/admin görebilir #}
+                  {% if req.status != 'closed' and current_user.role in ('admin','mudur','yonetici') %}
+                  <div style="margin-top:6px; display:flex; gap:4px; justify-content:flex-end; flex-wrap:wrap;">
+                    {% if bs not in ('approved','cancelled') %}
+                    <form method="post" action="/budgets/{{ b.id }}/approve" style="margin:0;">
+                      <input type="hidden" name="back" value="{{ req.id }}">
+                      <button type="submit" class="btn btn-success btn-sm py-0 px-2" style="font-size:10px;">
+                        <i class="bi bi-check-lg"></i> Onayla
+                      </button>
+                    </form>
+                    <form method="post" action="/budgets/{{ b.id }}/cancel" style="margin:0;">
+                      <input type="hidden" name="back" value="{{ req.id }}">
+                      <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-2" style="font-size:10px;"
+                              onclick="return confirm('İptal edilsin mi?')">
+                        <i class="bi bi-x-lg"></i>
+                      </button>
+                    </form>
+                    {% endif %}
+                    {% if bs == 'approved' %}
+                    <a href="/budgets/{{ b.id }}/export?vat=exclusive"
+                       class="btn btn-outline-success btn-sm py-0 px-2" style="font-size:10px;"
+                       title="Bu mekanı Excel'e aktar">
+                      <i class="bi bi-file-earmark-excel"></i>
+                    </a>
+                    {% endif %}
+                  </div>
+                  {% endif %}
+                </th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+
+              {# ── Bölüm satırları ── #}
+              {% for sec in all_sections %}
+              <tr style="background:#f1f5f9;">
+                <td class="ps-3 fw-bold" colspan="{{ budgets_data|length + 1 }}" style="font-size:11px; letter-spacing:.5px; text-transform:uppercase; color:#475569;">
+                  {{ SLABELS.get(sec, sec) }}
+                </td>
+              </tr>
+              {% if show_cost %}
+              <tr>
+                <td class="ps-3 text-muted" style="padding-left:24px!important;">Maliyet (KDV hariç)</td>
+                {% for bd in budgets_data %}
+                {% set ns_sec = namespace(cost=0) %}
+                {% for s, sv in bd.totals.sections %}{% if s == sec %}{% set ns_sec.cost = sv.cost %}{% endif %}{% endfor %}
+                <td class="text-end pe-3" style="color:#94a3b8;">{{ ns_sec.cost | money | replace('₺', bd.totals.offer_sym) if ns_sec.cost else '—' }}</td>
+                {% endfor %}
+              </tr>
+              {% endif %}
+              {% if current_user.role != 'e_dem' %}
+              <tr>
+                <td class="ps-3 text-muted" style="padding-left:24px!important;">Satış (KDV hariç)</td>
+                {% for bd in budgets_data %}
+                {% set ns_sec = namespace(sale=0) %}
+                {% for s, sv in bd.totals.sections %}{% if s == sec %}{% set ns_sec.sale = sv.sale %}{% endif %}{% endfor %}
+                <td class="text-end pe-3 fw-semibold">{{ ns_sec.sale | money | replace('₺', bd.totals.offer_sym) if ns_sec.sale else '—' }}</td>
+                {% endfor %}
+              </tr>
+              {% endif %}
+              {% endfor %}
+
+              {# ── Ara toplam ── #}
+              <tr style="background:#e2e8f0; font-weight:700; font-size:12px; border-top:2px solid #94a3b8;">
+                <td class="ps-3">Hizmetler Toplamı</td>
+                {% for bd in budgets_data %}
+                {% set t = bd.totals %}
+                <td class="text-end pe-3">
+                  {% if show_cost %}<div style="color:#94a3b8; font-size:11px;">M: {{ t.cost_ex | money | replace('₺', t.offer_sym) }}</div>{% endif %}
+                  {% if current_user.role != 'e_dem' %}<div>S: {{ t.sale_ex | money | replace('₺', t.offer_sym) }}</div>{% endif %}
+                </td>
+                {% endfor %}
+              </tr>
+
+              {# ── Hizmet bedeli ── #}
+              <tr style="background:#fefce8;">
+                <td class="ps-3 fw-semibold" style="color:#92400e;">
+                  <i class="bi bi-briefcase me-1"></i>Hizmet Bedeli
+                </td>
+                {% for bd in budgets_data %}
+                {% set t = bd.totals %}
+                <td class="text-end pe-3 fw-semibold" style="color:#b45309;">
+                  {% if t.sf_pct > 0 %}
+                  <div style="font-size:10px; color:#92400e; font-weight:400;">%{{ t.sf_pct | int if t.sf_pct % 1 == 0 else t.sf_pct }}</div>
+                  {{ t.sf_amount | money | replace('₺', t.offer_sym) }}
+                  {% else %}
+                  <span class="text-muted fw-normal">—</span>
+                  {% endif %}
+                </td>
+                {% endfor %}
+              </tr>
+
+              {# ── KDV ── #}
+              <tr>
+                <td class="ps-3 text-muted">KDV</td>
+                {% for bd in budgets_data %}
+                {% set t = bd.totals %}
+                <td class="text-end pe-3 text-muted">{{ (t.vat + t.sf_vat) | money | replace('₺', t.offer_sym) }}</td>
+                {% endfor %}
+              </tr>
+
+              {# ── Genel toplam ── #}
+              <tr style="border-top:2px solid #3b82f6;">
+                {% for bd in budgets_data %}{% endfor %}
+              </tr>
+              <tr style="background:#1e3a5f; color:white; font-weight:800; font-size:13px;">
+                <td class="ps-3">GENEL TOPLAM (KDV dahil)</td>
+                {% for bd in budgets_data %}
+                {% set t = bd.totals %}
+                {% set is_best = t.grand_try > 0 and t.grand_try == min_grand.val %}
+                <td class="text-end pe-3" style="{{ 'color:#4ade80;' if is_best else '' }}">
+                  {{ t.grand | money | replace('₺', t.offer_sym) }}
+                  {% if t.offer_currency != 'TRY' %}
+                  <div style="font-size:10px; opacity:.65; font-weight:400;">{{ t.grand_try | money }}</div>
+                  {% endif %}
+                </td>
+                {% endfor %}
+              </tr>
+
+              {# ── Kâr marjı — sadece admin ve proje yöneticisi ── #}
+              {% if current_user.role in ('admin', 'mudur', 'yonetici') %}
+              <tr style="background:#f8fafc;">
+                <td class="ps-3 text-muted fw-semibold" style="font-size:11px;">KÂR MARJI</td>
+                {% for bd in budgets_data %}
+                {% set t = bd.totals %}
+                {% set mclass = 'text-success' if t.margin >= 20 else ('text-warning' if t.margin >= 10 else 'text-danger') %}
+                <td class="text-end pe-3 fw-bold {{ mclass }}">
+                  {{ '%' + t.margin|string if t.margin else '—' }}
+                </td>
+                {% endfor %}
+              </tr>
+              {% endif %}
+
+            </tbody>
+          </table>
+        </div>
+
+        {# Aksiyon butonları özet altında — kapalı dosyada gösterme #}
+        {% if req.status != 'closed' %}
+        <div class="d-flex gap-2 px-3 py-2 border-top flex-wrap align-items-center">
+          {% for bd in budgets_data %}
+          {% set b = bd.budget %}
+          <a href="/budgets/{{ b.id }}?back={{ req.id }}"
+             class="btn btn-outline-primary btn-sm" style="font-size:11px;">
+            <i class="bi bi-eye me-1"></i>{{ b.venue_name or ('Bütçe #' + loop.index|string) }} Detay
+          </a>
+          {% endfor %}
+
+          {# Tüm onaylıları Excel'e aktar #}
+          {% set has_approved = budgets_data | selectattr('budget.budget_status', 'equalto', 'approved') | list %}
+          {% if req.status != 'closed' and has_approved and current_user.role in ('admin','mudur','yonetici','e_dem') %}
+          <div class="ms-auto d-flex align-items-center gap-2">
+            <div class="btn-group" role="group">
+              <a href="/requests/{{ req.id }}/export?vat=exclusive"
+                 class="btn btn-success btn-sm" style="font-size:11px;">
+                <i class="bi bi-file-earmark-excel me-1"></i>Tüm Onaylıları Excel'e Aktar (KDV Hariç)
+              </a>
+              <button type="button" class="btn btn-success btn-sm dropdown-toggle dropdown-toggle-split"
+                      data-bs-toggle="dropdown" aria-expanded="false" style="font-size:11px;">
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end">
+                <li>
+                  <a class="dropdown-item" href="/requests/{{ req.id }}/export?vat=exclusive">
+                    <i class="bi bi-file-earmark-excel me-2 text-success"></i>KDV Hariç
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="/requests/{{ req.id }}/export?vat=inclusive">
+                    <i class="bi bi-file-earmark-excel me-2 text-primary"></i>KDV Dahil
+                  </a>
+                </li>
+              </ul>
+            </div>
+            <a href="/requests/{{ req.id }}/preview" target="_blank"
+               class="btn btn-outline-primary btn-sm" style="font-size:11px;">
+              <i class="bi bi-eye me-1"></i>Teklif Önizle
+            </a>
+            <button type="button" class="btn btn-primary btn-sm" style="font-size:11px;"
+                    onclick="sendOfferEmail('{{ req.id }}', '{{ (customer.email if customer else '') | e }}', '{{ req.event_name | e }}', '{{ req.request_no | e }}')">
+              <i class="bi bi-envelope-arrow-up me-1"></i>Müşteriye Gönder
+            </button>
+          </div>
+          {% endif %}
+
+          {# Hesap Dökümü — confirmed / completed / closing / closed #}
+          {% set has_confirmed = budgets_data | selectattr('budget.budget_status', 'equalto', 'confirmed') | list %}
+          {% set has_approved_too = has_approved %}
+          {% if (has_confirmed or has_approved_too) and req.status in ('confirmed','completed')
+                and current_user.role in ('admin','mudur','yonetici','muhasebe_muduru') %}
+          <div class="ms-auto">
+            <a href="/requests/{{ req.id }}/statement" target="_blank"
+               class="btn btn-sm" style="font-size:11px; background:#1a3a5c; color:white; border-color:#1a3a5c;">
+              <i class="bi bi-receipt me-1"></i>Hesap Dökümü
+            </a>
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}{# /req.status != 'closed' #}
+      </div>
+
+      {# ══════════════════════════════════════════════
+         BİREYSEL BÜTÇE SEKMELERİ
+         ══════════════════════════════════════════════ #}
+      {% for bd in budgets_data %}
+      {% set b = bd.budget %}
+      {% set rbs = bd.rows_by_section %}
+      <div class="tab-pane fade" id="btpane-{{ b.id }}">
+
+        {# Aksiyon butonları — kapalı dosyada gösterme #}
+        {% if req.status != 'closed' %}
+        <div class="d-flex gap-2 px-3 pt-3 pb-2 border-bottom">
+          <a href="/budgets/{{ b.id }}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-eye me-1"></i>Detay
+          </a>
+          {% if current_user.role in ('admin', 'e_dem', 'asistan') and b.budget_status in ('draft_edem', 'revision_requested') %}
+          <a href="/budgets/{{ b.id }}/edit" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-pencil me-1"></i>Düzenle
+          </a>
+          {% endif %}
+          {% if current_user.role in ('admin', 'mudur', 'yonetici') and b.budget_status not in ('approved', 'cancelled') %}
+          <a href="/budgets/{{ b.id }}/price" class="btn btn-outline-warning btn-sm">
+            <i class="bi bi-tag me-1"></i>Fiyat Gir
+          </a>
+          {% endif %}
+          {% if b.budget_status == 'approved' %}
+          <a href="/budgets/{{ b.id }}/export" class="btn btn-outline-success btn-sm">
+            <i class="bi bi-file-earmark-excel me-1"></i>Excel
+          </a>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        {# Mini bütçe tablosu #}
+        {% set show_cost = current_user.role in ('admin', 'e_dem', 'mudur', 'yonetici', 'asistan') %}
+        {% set col_count = 6 if show_cost else 5 %}
+        <div class="table-responsive">
+          <table class="table table-sm mb-0" style="font-size:12px;">
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th class="ps-3">Hizmet</th>
+                <th>Miktar</th>
+                {% if show_cost %}<th style="color:#94a3b8;">Maliyet (KDV hariç)</th>{% endif %}
+                <th>Satış (KDV hariç)</th>
+                <th>KDV</th>
+                <th class="fw-bold">Toplam</th>
+              </tr>
+            </thead>
+            {% set bd_offer_sym = {'TRY':'₺','EUR':'€','USD':'$'}.get(b.offer_currency or 'TRY', b.offer_currency or '₺') %}
+            {% set bd_offer_cur = b.offer_currency or 'TRY' %}
+            {% set bd_ex_rates  = b.exchange_rates %}
+            {% set bd_offer_rate = (bd_ex_rates.get(bd_offer_cur, 1.0)|float) if bd_offer_cur != 'TRY' else 1.0 %}
+            <tbody>
+              {% set gns = namespace(cost_ex=0, sale_ex=0, vat=0, total=0) %}
+              {% for sec in SECTIONS_ORDER %}
+              {% set sec_rows = rbs.get(sec, []) %}
+              {% if sec_rows %}
+              <tr style="background:#1e293b; color:white;">
+                <td class="ps-3 fw-bold" colspan="{{ col_count }}" style="font-size:10px; letter-spacing:.5px; text-transform:uppercase;">{{ SECTION_LABELS.get(sec, sec) }}</td>
+              </tr>
+              {% for row in sec_rows %}
+              {% set qty      = row.qty|float if row.qty else 1 %}
+              {% set nights   = row.nights|float if row.nights else 1 %}
+              {% set sale     = row.sale_price|float if row.sale_price else 0 %}
+              {% set cost     = row.cost_price|float if row.cost_price else 0 %}
+              {% set vat      = row.vat_rate|float if row.vat_rate else 0 %}
+              {% set row_cur  = row.get('currency', 'TRY') or 'TRY' %}
+              {% set row_rate = (bd_ex_rates.get(row_cur, 1.0)|float) if row_cur != 'TRY' else 1.0 %}
+              {% set conv     = (row_rate / bd_offer_rate) if bd_offer_rate else 1.0 %}
+              {% set cost_sub = cost * qty * nights * conv %}
+              {% set sale_sub = sale * qty * nights * conv %}
+              {% set vat_amt  = sale_sub * (vat / 100) %}
+              {% set row_total = sale_sub + vat_amt %}
+              {% set gns.cost_ex = gns.cost_ex + cost_sub %}
+              {% set gns.sale_ex = gns.sale_ex + sale_sub %}
+              {% set gns.vat = gns.vat + vat_amt %}
+              {% set gns.total = gns.total + row_total %}
+              <tr>
+                <td class="ps-3">
+                  {{ row.service_name or '—' }}
+                  {% set sel_q = row.get('quotes', []) | selectattr('selected', 'equalto', true) | list %}
+                  {% if sel_q %}<span class="badge bg-primary bg-opacity-10 text-primary ms-1" style="font-size:10px;">{{ sel_q[0].supplier }}</span>{% endif %}
+                </td>
+                <td class="text-muted">{{ row.qty or 1 }}{% if sec == 'accommodation' %} × {{ row.nights or 1 }}g{% endif %}</td>
+                {% if show_cost %}<td style="color:#94a3b8;">{{ cost_sub | money | replace('₺', bd_offer_sym) if cost else '—' }}</td>{% endif %}
+                <td>{{ sale_sub | money | replace('₺', bd_offer_sym) }}</td>
+                <td class="text-muted">%{{ vat|int }}</td>
+                <td class="fw-semibold">{{ row_total | money | replace('₺', bd_offer_sym) }}</td>
+              </tr>
+              {% endfor %}
+              {% endif %}
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              {# Alt toplam satırı (KDV hariç) #}
+              {% set sf_pct = b.service_fee_pct or 0 %}
+              {% set sf_amount = (gns.sale_ex * sf_pct / 100) | round(2) %}
+              {% set sf_vat = (sf_amount * 0.20) | round(2) %}
+              {% set grand_total = gns.total + sf_amount + sf_vat %}
+              {% set grand_total_try = grand_total * bd_offer_rate %}
+              <tr style="background:#f1f5f9; font-size:12px; color:#475569; font-weight:600; border-top:1px solid #e2e8f0;">
+                <td class="ps-3" colspan="2">Hizmetler Toplamı</td>
+                {% if show_cost %}<td style="color:#94a3b8;">{{ gns.cost_ex | money | replace('₺', bd_offer_sym) }}</td>{% endif %}
+                <td>{{ gns.sale_ex | money | replace('₺', bd_offer_sym) }}</td>
+                <td>{{ gns.vat | money | replace('₺', bd_offer_sym) }}</td>
+                <td>{{ gns.total | money | replace('₺', bd_offer_sym) }}</td>
+              </tr>
+              {# Hizmet bedeli satırı (varsa) #}
+              {% if sf_pct > 0 %}
+              <tr style="background:#fefce8; font-size:12px;">
+                <td class="ps-3 fw-semibold" colspan="2" style="color:#92400e;">
+                  <i class="bi bi-briefcase me-1"></i>Hizmet Bedeli
+                  <span class="badge bg-warning bg-opacity-20 text-warning ms-1" style="font-size:10px;">%{{ sf_pct | int if sf_pct % 1 == 0 else sf_pct }}</span>
+                </td>
+                {% if show_cost %}<td style="color:#94a3b8;">—</td>{% endif %}
+                <td class="fw-semibold" style="color:#b45309;">{{ sf_amount | money | replace('₺', bd_offer_sym) }}</td>
+                <td class="text-muted">{{ sf_vat | money | replace('₺', bd_offer_sym) }}</td>
+                <td class="fw-semibold" style="color:#b45309;">{{ (sf_amount + sf_vat) | money | replace('₺', bd_offer_sym) }}</td>
+              </tr>
+              {% endif %}
+              {# Genel toplam #}
+              <tr style="background:#1e3a5f; color:white; font-weight:800; border-top:2px solid #3b82f6;">
+                <td class="ps-3" colspan="{{ col_count - 1 }}">GENEL TOPLAM (KDV dahil)</td>
+                <td style="font-size:13px; white-space:nowrap;">
+                  {{ grand_total | money | replace('₺', bd_offer_sym) }}
+                  {% if bd_offer_cur != 'TRY' %}
+                  <div style="font-size:10px; opacity:.65; font-weight:400;">{{ grand_total_try | money }}</div>
+                  {% endif %}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+  </div>
+  </div>
+</div>
+{% endif %}
+
+{# ─── Tab kalıcılığı: sekme seçimini localStorage + URL hash ile koru ─── #}
+{% if budgets_data and budgets_data | length > 1 %}
+<script>
+(function () {
+  const TAB_KEY = 'req_tab_{{ req.id }}';
+  const tabsEl  = document.getElementById('budgetTabs');
+  if (!tabsEl) return;
+
+  // 1) Aktif sekmeyi kaydet (hash + localStorage)
+  tabsEl.addEventListener('shown.bs.tab', function (e) {
+    const target = e.target.getAttribute('data-bs-target');
+    if (target) {
+      const id = target.slice(1);   // '#btpane-...' → 'btpane-...'
+      localStorage.setItem(TAB_KEY, id);
+      history.replaceState(null, '', '#' + id);
+    }
+  });
+
+  // 2) Sayfa yüklenince: URL hash → localStorage → varsayılan (özet)
+  function restore() {
+    const fromHash  = location.hash ? location.hash.slice(1) : null;
+    const fromStore = localStorage.getItem(TAB_KEY);
+    const targetId  = fromHash || fromStore || 'btpane-summary';
+
+    const btn = tabsEl.querySelector(`[data-bs-target="#${targetId}"]`);
+    if (btn && !btn.classList.contains('active')) {
+      bootstrap.Tab.getOrCreateInstance(btn).show();
+    }
+  }
+
+  // Bootstrap tab'ları DOM'a hazır olduğunda çalıştır
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', restore);
+  } else {
+    restore();
+  }
+})();
+</script>
+{% endif %}
+
+
+{# ─── FİNANSAL SEKME ─── #}
+{% set fund_sym = {'TRY':'₺','USD':'$','EUR':'€'}.get(parent_fund.fund_currency, parent_fund.fund_currency) if parent_fund else '₺' %}
+<div class="card mb-4" id="tab-financial">
+  <div class="card-header d-flex align-items-center justify-content-between py-2"
+       style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
+    <h6 class="fw-bold mb-0">
+      <i class="bi bi-receipt me-2 text-success"></i>Finansal Durum
+      <span class="badge bg-secondary ms-1" style="font-size:11px;">KDV Hariç, TRY</span>
+    </h6>
+    <div class="d-flex align-items-center gap-2">
+    {% if parent_fund %}
+    <a href="/requests/{{ parent_fund.id }}" class="btn btn-outline-primary btn-sm"
+       style="border-color:#a78bfa; color:#7c3aed;">
+      <i class="bi bi-piggy-bank me-1"></i>Havuz: {{ parent_fund.request_no }}
+    </a>
+    {% if can_manage_funds %}
+    <button type="button" class="btn btn-sm" style="background:#7c3aed; color:white;"
+            data-bs-toggle="modal" data-bs-target="#fundReturnModal">
+      <i class="bi bi-arrow-down-left me-1"></i>Fona İade Et
+    </button>
+    {% endif %}
+    {% endif %}
+    {% if can_manage_invoices %}
+    <a href="/invoices/new?request_id={{ req.id }}"
+       class="btn btn-success btn-sm">
+      <i class="bi bi-plus me-1"></i>Fatura Ekle
+    </a>
+    {% endif %}
+    </div>
+  </div>
+  <div class="card-body">
+
+    {# Özet Kartlar — admin, müdür, yönetici ve muhasebe müdürü görebilir #}
+    {% if current_user.role in ('admin', 'mudur', 'yonetici', 'muhasebe_muduru') %}
+    {% macro fin_card(label, bgt_val, real_val, color) %}
+    <div class="col-sm-6 col-lg-3">
+      <div class="p-3 rounded border" style="background:#f8fafc;">
+        <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.8px;">{{ label }}</div>
+        <div class="mt-1" style="font-size:13px; color:#94a3b8;">
+          Bütçe: <span class="fw-semibold text-dark">{{ '₺{:,.0f}'.format(bgt_val).replace(',', '.') }}</span>
+        </div>
+        <div style="font-size:20px; font-weight:800; color:{{ color }}; line-height:1.2;">
+          ₺{{ '{:,.0f}'.format(real_val).replace(',', '.') }}
+        </div>
+        <div style="font-size:11px; color:#94a3b8;">Gerçek (faturadan)</div>
+      </div>
+    </div>
+    {% endmacro %}
+    <div class="row g-3 mb-4">
+      {{ fin_card('Ciro',    budget_sale_excl, invoice_ciro,    '#2563eb') }}
+      <div class="col-sm-6 col-lg-3">
+        <div class="p-3 rounded border" style="background:#f8fafc;">
+          <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.8px;">Gider</div>
+          <div class="mt-1" style="font-size:13px; color:#94a3b8;">
+            Bütçe: <span class="fw-semibold text-dark">{{ '₺{:,.0f}'.format(budget_cost_excl).replace(',', '.') }}</span>
+          </div>
+          <div style="font-size:20px; font-weight:800; color:#dc2626; line-height:1.2;">
+            ₺{{ '{:,.0f}'.format(invoice_net_maliyet).replace(',', '.') }}
+          </div>
+          <div style="font-size:11px; color:#94a3b8; line-height:1.6;">
+            Faturadan
+            {% if hbf_approved_total > 0 %}<br>
+            <span style="color:#b45309;">+ HBF ₺{{ '{:,.0f}'.format(hbf_approved_total).replace(',', '.') }}</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <div class="p-3 rounded border" style="background:#f8fafc;">
+          <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.8px;">Kar</div>
+          <div class="mt-1" style="font-size:13px; color:#94a3b8;">
+            Bütçe: <span class="fw-semibold text-dark">₺{{ '{:,.0f}'.format(budget_sale_excl - budget_cost_excl).replace(',', '.') }}</span>
+          </div>
+          <div style="font-size:20px; font-weight:800; color:{% if invoice_kar >= 0 %}#16a34a{% else %}#dc2626{% endif %}; line-height:1.2;">
+            ₺{{ '{:,.0f}'.format(invoice_kar).replace(',', '.') }}
+          </div>
+          <div style="font-size:11px; color:#94a3b8; line-height:1.6;">
+            Kesilen − Gelen
+            {% if invoice_komisyon > 0 %}<br>
+            <span style="color:#16a34a;">+ Kom. ₺{{ '{:,.0f}'.format(invoice_komisyon).replace(',', '.') }}</span>
+            {% endif %}
+            {% if hbf_approved_total > 0 %}<br>
+            <span style="color:#b45309;">− HBF ₺{{ '{:,.0f}'.format(hbf_approved_total).replace(',', '.') }}</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <div class="p-3 rounded border" style="background:#f8fafc;">
+          <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.8px;">Karlılık</div>
+          {% if budget_sale_excl > 0 %}
+          <div class="mt-1" style="font-size:13px; color:#94a3b8;">
+            Bütçe: <span class="fw-semibold text-dark">%{{ '{:.1f}'.format((budget_sale_excl - budget_cost_excl) / budget_sale_excl * 100) }}</span>
+          </div>
+          {% else %}
+          <div class="mt-1" style="font-size:13px; color:#94a3b8;">Bütçe: <span class="text-muted">—</span></div>
+          {% endif %}
+          {% set total_revenue = invoice_ciro + invoice_komisyon %}
+          {% if total_revenue > 0 %}
+          <div style="font-size:20px; font-weight:800; color:{% if invoice_kar / total_revenue >= 0.15 %}#16a34a{% elif invoice_kar >= 0 %}#d97706{% else %}#dc2626{% endif %}; line-height:1.2;">
+            %{{ '{:.1f}'.format(invoice_kar / total_revenue * 100) }}
+          </div>
+          {% else %}
+          <div style="font-size:20px; font-weight:800; color:#94a3b8; line-height:1.2;">—</div>
+          {% endif %}
+          <div style="font-size:11px; color:#94a3b8;">Fatura + HBF</div>
+        </div>
+      </div>
+    </div>
+    {% endif %}{# /admin or project_manager only #}
+
+    {# ── Makro: fatura satırı ── #}
+    {% macro invoice_row(inv, show_actions, show_approve, show_cut=false, row_style='') %}
+    {% set type_colors = {
+      'kesilen':      ('bg-success',  'text-success'),
+      'gelen':        ('bg-danger',   'text-danger'),
+      'komisyon':     ('bg-success',  'text-success'),
+      'iade_kesilen': ('bg-info',     'text-info'),
+      'iade_gelen':   ('bg-secondary','text-secondary')
+    } %}
+    {% set tcls = type_colors.get(inv.invoice_type, ('bg-secondary', 'text-secondary')) %}
+    <tr style="{{ row_style }}">
+      <td>
+        <span class="badge {{ tcls[0] }} bg-opacity-10 {{ tcls[1] }}" style="font-size:11px; white-space:nowrap;">
+          {{ inv.type_label }}
+        </span>
+      </td>
+      <td class="text-muted">{{ inv.invoice_no or '—' }}</td>
+      <td style="white-space:nowrap; color:#64748b;">{{ inv.invoice_date | date_tr if inv.invoice_date else '—' }}</td>
+      <td>{{ inv.vendor_name or '—' }}</td>
+      <td style="color:#64748b; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+        {{ inv.description or '' }}
+      </td>
+      <td class="text-end fw-semibold">₺{{ '{:,.2f}'.format(inv.amount).replace(',', '.') }}</td>
+      <td class="text-end text-muted">
+        %{{ inv.vat_rate | int }}
+        <br><small>₺{{ '{:,.2f}'.format(inv.vat_amount).replace(',', '.') }}</small>
+      </td>
+      <td class="text-end fw-semibold">₺{{ '{:,.2f}'.format(inv.total_amount).replace(',', '.') }}</td>
+      <td>
+        {% if inv.document_path %}
+        <a href="/invoices/{{ inv.id }}/document" target="_blank"
+           class="btn btn-xs btn-outline-secondary py-0 px-1" style="font-size:11px;">
+          <i class="bi bi-file-earmark me-1"></i>{{ inv.document_name or 'Belge' }}
+        </a>
+        {% else %}
+        <span class="text-muted" style="font-size:11px;">—</span>
+        {% endif %}
+      </td>
+      <td class="text-end" style="white-space:nowrap;">
+        {# Detay görüntüle #}
+        {% if inv.status in ('pending', 'mudur_approved', 'gm_approved') %}
+        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 me-1"
+                title="Fatura İçeriğini Görüntüle"
+                data-invoice='{{ inv.to_dict() | tojson }}'
+                onclick="openInvoiceDetailModal(JSON.parse(this.dataset.invoice))">
+          <i class="bi bi-eye"></i>
+        </button>
+        {% endif %}
+        {# Onay/red butonları — hiyerarşik üst de onaylayabilir (approvable_invoice_ids backend'den gelir) #}
+        {% set _can_approve_this = inv.status in ('pending', 'mudur_approved') and inv.id in approvable_invoice_ids %}
+        {% if _can_approve_this %}
+          <form method="post" action="/invoices/{{ inv.id }}/approve" class="d-inline">
+            <button type="submit" class="btn btn-sm btn-primary py-0 px-2"
+                    title="Onayla" onclick="return confirm('Fatura talebini onaylıyor musunuz?')">
+              <i class="bi bi-check-lg me-1"></i>Onayla
+            </button>
+          </form>
+          <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2"
+                  title="Reddet" onclick="openRejectModal('{{ inv.id }}')">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        {% elif inv.status == 'gm_approved' and show_cut %}
+          {# Eski akış: gm_approved → onaylamak için approve et #}
+          <form method="post" action="/invoices/{{ inv.id }}/approve" class="d-inline">
+            <button type="submit" class="btn btn-sm btn-warning py-0 px-2"
+                    title="Onayla (Eski Akış)" onclick="return confirm('Onayla?')">
+              <i class="bi bi-check-lg me-1"></i>Onayla
+            </button>
+          </form>
+        {% elif inv.status == 'approved' and show_cut %}
+          {# Belge/detay ekle — muhasebe için #}
+          <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1"
+                  onclick="openCutModal('{{ inv.id }}')"
+                  title="Belge / Detay Ekle">
+            <i class="bi bi-paperclip"></i>
+          </button>
+        {% endif %}
+        {# Düzenle/iptal #}
+        {% if show_actions %}
+        <a href="/invoices/{{ inv.id }}/edit" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Düzenle">
+          <i class="bi bi-pencil"></i>
+        </a>
+        {% if inv.status != 'cancelled' %}
+        <form method="post" action="/invoices/{{ inv.id }}/delete" class="d-inline"
+              onsubmit="return confirm('Faturayı iptal etmek istediğinizden emin misiniz?')">
+          <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1" title="İptal et">
+            <i class="bi bi-trash"></i>
+          </button>
+        </form>
+        {% endif %}
+        {% endif %}
+        {# Admin: referans taşı #}
+        {% if current_user.role == 'admin' %}
+        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1"
+                title="Referans Taşı" onclick="openReassignModal('{{ inv.id }}', '{{ inv.vendor_name or inv.invoice_no }}')">
+          <i class="bi bi-arrow-right-circle"></i>
+        </button>
+        {% endif %}
+      </td>
+    </tr>
+    {% endmacro %}
+
+    {# ── Fatura satırları — collapse başlığı ── #}
+    {% set _inv_total_count = (pending_invoices | length) + (active_invoices | length) + (gm_approved_invoices | length) %}
+    <div class="d-flex align-items-center justify-content-between mb-2"
+         style="cursor:pointer; padding:6px 0; border-bottom:1px solid #e2e8f0;"
+         data-bs-toggle="collapse" data-bs-target="#invoicesTableCollapse"
+         aria-expanded="false">
+      <span class="fw-semibold" style="font-size:13px; color:#1e293b;">
+        <i class="bi bi-receipt me-1 text-muted"></i>Faturalar
+        {% if _inv_total_count > 0 %}
+        <span class="badge bg-secondary bg-opacity-25 text-secondary ms-1" style="font-size:11px;">{{ _inv_total_count }}</span>
+        {% endif %}
+      </span>
+      <i class="bi bi-chevron-down text-muted small"></i>
+    </div>
+    <div class="collapse" id="invoicesTableCollapse">
+
+    {# ── Onay Bekleyen Fatura Talepleri — onay yetkisi olan veya beklenen kişiler görür ── #}
+    {% if pending_invoices %}
+    <div class="mb-3 p-3" style="background:#fffbeb; border:1px solid #fcd34d; border-radius:8px;">
+      <div class="fw-semibold mb-2" style="font-size:13px; color:#92400e;">
+        <i class="bi bi-hourglass-split me-1"></i>
+        Onay Bekleyen Fatura Talepleri ({{ pending_invoices | length }})
+        <span class="text-muted fw-normal ms-2" style="font-size:12px;">— Onaylayan kişinin limitine göre işlem yapılır</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0" style="font-size:13px;">
+          <thead style="background:#fef3c7;">
+            <tr>
+              <th>Tip</th><th>Fatura No</th><th>Tarih</th><th>Tedarikçi / Müşteri</th>
+              <th>Açıklama</th>
+              <th class="text-end">Tutar (KDV Hariç)</th><th class="text-end">KDV</th>
+              <th class="text-end">Toplam</th><th>Belge</th>
+              <th>Onaylayacak</th>
+              <th class="text-end">İşlem</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for inv in pending_invoices %}
+            {% set _row_approve = inv.id in approvable_invoice_ids %}
+            {% set _approver = inv.current_approver or (inv.request.creator if inv.request else None) %}
+            <tr>
+              {% set type_colors = {
+                'kesilen':      ('bg-success',  'text-success'),
+                'gelen':        ('bg-danger',   'text-danger'),
+                'komisyon':     ('bg-success',  'text-success'),
+                'iade_kesilen': ('bg-info',     'text-info'),
+                'iade_gelen':   ('bg-secondary','text-secondary')
+              } %}
+              {% set tcls = type_colors.get(inv.invoice_type, ('bg-secondary', 'text-secondary')) %}
+              <td><span class="badge {{ tcls[0] }} bg-opacity-10 {{ tcls[1] }}" style="font-size:11px;">{{ inv.type_label }}</span></td>
+              <td class="text-muted">{{ inv.invoice_no or '—' }}</td>
+              <td style="white-space:nowrap; color:#64748b;">{{ inv.invoice_date | date_tr if inv.invoice_date else '—' }}</td>
+              <td>{{ inv.vendor_name or '—' }}</td>
+              <td style="color:#64748b; max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ inv.description or '' }}</td>
+              <td class="text-end fw-semibold">₺{{ '{:,.2f}'.format(inv.amount).replace(',', '.') }}</td>
+              <td class="text-end text-muted">%{{ inv.vat_rate | int }}<br><small>₺{{ '{:,.2f}'.format(inv.vat_amount).replace(',', '.') }}</small></td>
+              <td class="text-end fw-semibold">₺{{ '{:,.2f}'.format(inv.total_amount).replace(',', '.') }}</td>
+              <td>
+                {% if inv.document_path %}
+                <a href="/invoices/{{ inv.id }}/document" target="_blank" class="btn btn-xs btn-outline-secondary py-0 px-1" style="font-size:11px;">
+                  <i class="bi bi-file-earmark"></i>
+                </a>
+                {% else %}<span class="text-muted" style="font-size:11px;">—</span>{% endif %}
+              </td>
+              <td style="white-space:nowrap;">
+                {% if _approver %}
+                <span style="font-size:11px; color:#92400e;">
+                  <i class="bi bi-person-fill me-1"></i>{{ _approver.full_name }}
+                  {% if _approver.org_title %}
+                  <br><span class="text-muted">{{ _approver.org_title.name }}</span>
+                  {% endif %}
+                </span>
+                {% else %}
+                <span class="text-muted" style="font-size:11px;">—</span>
+                {% endif %}
+              </td>
+              <td class="text-end" style="white-space:nowrap;">
+                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 me-1"
+                        title="Fatura İçeriğini Görüntüle"
+                        data-invoice='{{ inv.to_dict() | tojson }}'
+                        onclick="openInvoiceDetailModal(JSON.parse(this.dataset.invoice))">
+                  <i class="bi bi-eye"></i>
+                </button>
+                {% if _row_approve %}
+                <form method="post" action="/invoices/{{ inv.id }}/approve" class="d-inline">
+                  <button type="submit" class="btn btn-sm btn-primary py-0 px-2"
+                          onclick="return confirm('Fatura talebini onaylıyor musunuz?')">
+                    <i class="bi bi-check-lg me-1"></i>Onayla
+                  </button>
+                </form>
+                <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2"
+                        onclick="openRejectModal('{{ inv.id }}')">
+                  <i class="bi bi-x-lg"></i>
+                </button>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    {# gm_approved: eski kayıtlar için geriye dönük uyumluluk gösterimi #}
+    {% if gm_approved_invoices %}
+    <div class="mb-3 p-3" style="background:#fefce8; border:1px solid #fde047; border-radius:8px;">
+      <div class="fw-semibold mb-2" style="font-size:13px; color:#854d0e;">
+        <i class="bi bi-hourglass-split me-1"></i>
+        Eski Akıştan Kalan Faturalar ({{ gm_approved_invoices | length }})
+        <span class="text-muted fw-normal ms-2" style="font-size:12px;">— Onaylamak için işlem butonunu kullanın</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0" style="font-size:13px;">
+          <thead style="background:#fef9c3;">
+            <tr>
+              <th>Tip</th><th>Fatura No</th><th>Tarih</th><th>Tedarikçi / Müşteri</th>
+              <th>Açıklama</th>
+              <th class="text-end">Tutar (KDV Hariç)</th><th class="text-end">KDV</th>
+              <th class="text-end">Toplam</th><th>Belge</th><th class="text-end">İşlem</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for inv in gm_approved_invoices %}
+              {{ invoice_row(inv, show_actions=can_manage_invoices, show_approve=can_approve_invoices, show_cut=can_cut_invoices) }}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    {# ── Onaylanan Faturalar (+ fon transferleri) ── #}
+    {% if active_invoices or fund_transfers %}
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0" style="font-size:13px;">
+        <thead style="background:#f1f5f9;">
+          <tr>
+            <th>Tip</th><th>Fatura No</th><th>Tarih</th><th>Tedarikçi / Müşteri</th>
+            <th>Açıklama</th>
+            <th class="text-end">Tutar (KDV Hariç)</th><th class="text-end">KDV</th>
+            <th class="text-end">Toplam</th><th>Belge</th><th class="text-end">İşlem</th>
+          </tr>
+        </thead>
+        <tbody>
+          {# Fon transfer satırları — fatura listesi içinde "Fondan Transfer / Fona İade" olarak #}
+          {% for t in fund_transfers %}
+          <tr style="background: {% if t.direction == 'out' %}#f5f3ff{% else %}#fef3c7{% endif %};">
+            <td>
+              {% if t.direction == 'out' %}
+              <span class="badge" style="background:#ede9fe; color:#6d28d9; font-size:11px; white-space:nowrap;">
+                <i class="bi bi-arrow-down-right me-1"></i>Fondan Transfer
+              </span>
+              {% else %}
+              <span class="badge" style="background:#fef3c7; color:#92400e; font-size:11px; white-space:nowrap;">
+                <i class="bi bi-arrow-up-left me-1"></i>Fona İade
+              </span>
+              {% endif %}
+            </td>
+            <td class="text-muted">—</td>
+            <td style="white-space:nowrap; color:#64748b;">{{ t.transfer_date | date_tr }}</td>
+            <td>
+              {% if parent_fund %}
+              <a href="/requests/{{ parent_fund.id }}" class="text-decoration-none" style="color:#7c3aed;">
+                <i class="bi bi-piggy-bank me-1"></i>{{ parent_fund.event_name }}
+              </a>
+              {% else %}—{% endif %}
+            </td>
+            <td style="color:#64748b; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+              {{ t.description or 'Fon transferi' }}
+            </td>
+            <td class="text-end fw-semibold">
+              {% if t.currency != 'TRY' %}{{ fund_sym }}{{ '{:,.2f}'.format(t.amount_excl_vat).replace(',', '.') }}<br>
+              <small class="text-muted">≈ ₺{{ '{:,.2f}'.format(t.amount_try_excl_vat).replace(',', '.') }}</small>
+              {% else %}₺{{ '{:,.2f}'.format(t.amount_excl_vat).replace(',', '.') }}{% endif %}
+            </td>
+            <td class="text-end text-muted">
+              %{{ t.vat_rate | int }}<br>
+              <small>{{ fund_sym }}{{ '{:,.2f}'.format(t.amount_vat).replace(',', '.') }}</small>
+            </td>
+            <td class="text-end fw-semibold">
+              {% if t.currency != 'TRY' %}{{ fund_sym }}{{ '{:,.2f}'.format(t.amount).replace(',', '.') }}<br>
+              <small class="text-muted">≈ ₺{{ '{:,.2f}'.format(t.amount_try).replace(',', '.') }}</small>
+              {% else %}₺{{ '{:,.2f}'.format(t.amount).replace(',', '.') }}{% endif %}
+            </td>
+            <td><span class="text-muted" style="font-size:11px;">—</span></td>
+            <td class="text-end"><span class="text-muted" style="font-size:11px;">—</span></td>
+          </tr>
+          {% endfor %}
+          {% for inv in active_invoices %}
+            {{ invoice_row(inv, show_actions=can_manage_invoices, show_approve=false, show_cut=can_cut_invoices) }}
+          {% endfor %}
+        </tbody>
+        <tfoot style="background:#f8fafc; font-size:12px;">
+          {% set _inv_amount  = active_invoices | sum(attribute='amount') %}
+          {% set _inv_total   = active_invoices | sum(attribute='total_amount') %}
+          {% set _ft_excl_try = fund_in_total - fund_out_total %}
+          <tr>
+            <td colspan="5" class="fw-semibold text-end pe-3">Toplam (KDV Hariç, TRY):</td>
+            <td class="text-end fw-bold">
+              ₺{{ '{:,.2f}'.format(_inv_amount + _ft_excl_try).replace(',', '.') }}
+              {% if fund_transfers %}
+              <br><small class="text-muted fw-normal">fatura: ₺{{ '{:,.2f}'.format(_inv_amount).replace(',', '.') }} · fon: ₺{{ '{:,.2f}'.format(_ft_excl_try).replace(',', '.') }}</small>
+              {% endif %}
+            </td>
+            <td></td>
+            <td class="text-end fw-bold">₺{{ '{:,.2f}'.format(_inv_total).replace(',', '.') }}</td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    {% elif not pending_invoices and not gm_approved_invoices and not fund_transfers %}
+    <div class="text-center py-4 text-muted">
+      <i class="bi bi-receipt" style="font-size:2.5rem; opacity:.3;"></i>
+      <p class="mt-2 mb-0" style="font-size:13px;">Henüz fatura girilmemiş.</p>
+      {% if can_manage_invoices %}
+      <a href="/invoices/new?request_id={{ req.id }}" class="btn btn-sm btn-success mt-2">
+        <i class="bi bi-plus me-1"></i>İlk Faturayı Ekle
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {# ── Reddedilen Faturalar (gizli, aç/kapa) ── #}
+    {% if rejected_invoices %}
+    <div class="mt-2">
+      <button class="btn btn-sm btn-link text-muted p-0" type="button"
+              data-bs-toggle="collapse" data-bs-target="#rejectedInvoices">
+        <i class="bi bi-chevron-down me-1"></i>
+        Reddedilen faturalar ({{ rejected_invoices | length }})
+      </button>
+      <div class="collapse" id="rejectedInvoices">
+        <div class="table-responsive mt-2">
+          <table class="table table-sm mb-0" style="font-size:12px; opacity:.75;">
+            <thead style="background:#fee2e2;">
+              <tr>
+                <th>Tip</th><th>Fatura No</th><th>Tarih</th><th>Tedarikçi / Müşteri</th>
+                <th>Red Notu</th>
+                <th class="text-end">Toplam</th><th>Belge</th><th class="text-end">İşlem</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for inv in rejected_invoices %}
+              <tr style="background:#fff5f5;">
+                {% set type_colors = {
+                  'kesilen':('bg-success','text-success'),'gelen':('bg-danger','text-danger'),
+                  'komisyon':('bg-success','text-success'),'iade_kesilen':('bg-info','text-info'),
+                  'iade_gelen':('bg-secondary','text-secondary')
+                } %}
+                {% set tcls = type_colors.get(inv.invoice_type, ('bg-secondary','text-secondary')) %}
+                <td><span class="badge {{ tcls[0] }} bg-opacity-10 {{ tcls[1] }}" style="font-size:10px;">{{ inv.type_label }}</span></td>
+                <td class="text-muted">{{ inv.invoice_no or '—' }}</td>
+                <td style="white-space:nowrap; color:#64748b;">{{ inv.invoice_date | date_tr if inv.invoice_date else '—' }}</td>
+                <td>{{ inv.vendor_name or '—' }}</td>
+                <td style="color:#b91c1c; font-size:11px;">{{ inv.rejection_note or '—' }}</td>
+                <td class="text-end">₺{{ '{:,.2f}'.format(inv.total_amount).replace(',', '.') }}</td>
+                <td>
+                  {% if inv.document_path %}
+                  <a href="/invoices/{{ inv.id }}/document" target="_blank" class="btn btn-xs btn-outline-secondary py-0 px-1" style="font-size:10px;">
+                    <i class="bi bi-file-earmark"></i>
+                  </a>
+                  {% else %}—{% endif %}
+                </td>
+                <td class="text-end" style="white-space:nowrap;">
+                  {% if can_approve_invoices %}
+                  <form method="post" action="/invoices/{{ inv.id }}/approve" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-outline-success py-0 px-2" title="Tekrar Onayla">
+                      <i class="bi bi-check-lg"></i>
+                    </button>
+                  </form>
+                  {% endif %}
+                  {% if can_manage_invoices %}
+                  <a href="/invoices/{{ inv.id }}/edit" class="btn btn-sm btn-outline-secondary py-0 px-1"><i class="bi bi-pencil"></i></a>
+                  {% endif %}
+                  {% if current_user.role == 'admin' %}
+                  <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1"
+                          onclick="openReassignModal('{{ inv.id }}', '{{ inv.vendor_name or inv.invoice_no }}')">
+                    <i class="bi bi-arrow-right-circle"></i>
+                  </button>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    </div>{# /invoicesTableCollapse #}
+
+    {# ── Red Modalı ── #}
+    <div class="modal fade" id="rejectModal" tabindex="-1">
+      <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+          <div class="modal-header py-2">
+            <h6 class="modal-title">Faturayı Reddet</h6>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <form method="post" id="rejectForm">
+            <div class="modal-body">
+              <label class="form-label fw-semibold" style="font-size:13px;">Red Notu <span class="text-muted fw-normal">(isteğe bağlı)</span></label>
+              <textarea name="rejection_note" class="form-control form-control-sm" rows="3"
+                        maxlength="300" placeholder="Neden reddedildi?"></textarea>
+            </div>
+            <div class="modal-footer py-2">
+              <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+              <button type="submit" class="btn btn-sm btn-danger">Reddet</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    {# ── Fatura İçerik Detay Modalı ── #}
+    <div class="modal fade" id="invoiceDetailModal" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header py-2">
+            <h6 class="modal-title"><i class="bi bi-receipt me-2"></i>Fatura Talebi Detayı</h6>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body" id="invoiceDetailBody">
+          </div>
+          <div class="modal-footer py-2">
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Kapat</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# ── Faturayı Kes Modalı (muhasebe) ── #}
+    {% if current_user.role in ('admin', 'muhasebe_muduru', 'muhasebe') %}
+    <div class="modal fade" id="cutInvoiceModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header py-2">
+            <h6 class="modal-title"><i class="bi bi-scissors me-2 text-success"></i>Faturayı Kes & Projeye Ekle</h6>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <form method="post" id="cutInvoiceForm" enctype="multipart/form-data">
+            <div class="modal-body">
+              <div class="mb-3">
+                <label class="form-label fw-semibold" style="font-size:13px;">Fatura No</label>
+                <input type="text" name="invoice_no" class="form-control form-control-sm"
+                       placeholder="Fatura numarası">
+              </div>
+              <div class="row g-2 mb-3">
+                <div class="col-6">
+                  <label class="form-label fw-semibold" style="font-size:13px;">Fatura Tarihi</label>
+                  <input type="date" name="invoice_date" class="form-control form-control-sm">
+                </div>
+                <div class="col-6">
+                  <label class="form-label fw-semibold" style="font-size:13px;">Vade Tarihi</label>
+                  <input type="date" name="due_date" class="form-control form-control-sm">
+                </div>
+              </div>
+              <div class="mb-1">
+                <label class="form-label fw-semibold" style="font-size:13px;">
+                  Fatura PDF / Belge
+                  <span class="text-muted fw-normal ms-1">(isteğe bağlı)</span>
+                </label>
+                <input type="file" name="document" class="form-control form-control-sm"
+                       accept=".pdf,.jpg,.jpeg,.png,.gif,.webp">
+                <div class="form-text" style="font-size:11px;">PDF veya resim — maks. 10 MB</div>
+              </div>
+            </div>
+            <div class="modal-footer py-2">
+              <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">İptal</button>
+              <button type="submit" class="btn btn-sm btn-success">
+                <i class="bi bi-scissors me-1"></i>Faturayı Kes & Ekle
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {# ── Fona İade Modalı ── #}
+    {% if parent_fund and can_manage_funds %}
+    <div class="modal fade" id="fundReturnModal" tabindex="-1">
+      <div class="modal-dialog">
+        <form method="post" action="/requests/fund/{{ parent_fund.id }}/transfer" class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title"><i class="bi bi-arrow-down-left me-2"></i>Fona İade</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" name="direction" value="in">
+            <input type="hidden" name="related_request_id" value="{{ req.id }}">
+            <div class="alert alert-info" style="font-size:12px;">
+              Bu referanstan <strong>{{ parent_fund.event_name }}</strong> havuzuna
+              {{ fund_sym }} cinsinden iade yapılacak. Tutar KDV dahildir.
+            </div>
+            <div class="row g-3">
+              <div class="col-md-7">
+                <label class="form-label fw-semibold">Tutar ({{ fund_sym }}, KDV dahil)</label>
+                <input type="number" name="amount" class="form-control" required min="0.01" step="0.01">
+              </div>
+              <div class="col-md-5">
+                <label class="form-label fw-semibold">KDV %</label>
+                <input type="number" name="vat_rate" class="form-control" step="1"
+                       value="{{ '{:g}'.format(parent_fund.fund_initial_vat_rate) }}">
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-semibold">Tarih</label>
+                <input type="date" name="transfer_date" class="form-control" value="{{ today }}">
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-semibold">Açıklama</label>
+                <input type="text" name="description" class="form-control" placeholder="Örn: Kullanılmayan tutarın iadesi">
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">İptal</button>
+            <button type="submit" class="btn" style="background:#7c3aed; color:white;">
+              <i class="bi bi-check-lg me-1"></i>İade Et
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    {# ── Referans Taşıma Modalı (admin) ── #}
+    {% if current_user.role == 'admin' %}
+    <div class="modal fade" id="reassignModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header py-2">
+            <h6 class="modal-title">Referans Değiştir</h6>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <form method="post" id="reassignForm">
+            <div class="modal-body">
+              <p class="text-muted mb-3" style="font-size:13px;" id="reassignInvName"></p>
+              <label class="form-label fw-semibold" style="font-size:13px;">Yeni Referans</label>
+              <select name="new_request_id" class="form-select form-select-sm">
+                {% for r in all_requests %}
+                <option value="{{ r.id }}" {% if r.id == req.id %}selected{% endif %}>
+                  {{ r.request_no }} — {{ r.event_name }} ({{ r.client_name }})
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="modal-footer py-2">
+              <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+              <button type="submit" class="btn btn-sm btn-primary">Taşı</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {# ─── HBF — Harcama Bildirim Formları ─── #}
+    <hr class="my-3">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <span class="fw-semibold" style="font-size:13px; color:#0369a1;">
+        <i class="bi bi-receipt-cutoff me-1"></i>Harcama Bildirim Formları (HBF)
+        {% if expense_reports %}
+        <span class="badge bg-primary bg-opacity-10 text-primary ms-1" style="font-size:10px;">{{ expense_reports | length }}</span>
+        {% endif %}
+      </span>
+      {% if req.status != 'closed' %}
+      <a href="/expenses/new?request_id={{ req.id }}" class="btn btn-sm btn-outline-primary py-0 px-2"
+         style="font-size:12px;">
+        <i class="bi bi-plus me-1"></i>Yeni HBF
+      </a>
+      {% endif %}
+    </div>
+    {% if expense_reports %}
+    <div class="table-responsive">
+      <table class="table table-sm mb-0" style="font-size:12px;">
+        <thead style="background:#f0f9ff;">
+          <tr>
+            <th class="ps-2">Başlık</th>
+            <th>Oluşturan</th>
+            <th>Tarih</th>
+            <th>Durum</th>
+            <th class="text-end">Toplam</th>
+            <th class="text-end pe-2">İşlem</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for rpt in expense_reports %}
+          <tr>
+            <td class="ps-2 fw-semibold">
+              <a href="/expenses/{{ rpt.id }}" class="text-decoration-none text-dark">
+                {{ rpt.title or 'HBF' }}
+              </a>
+              {% if rpt.status == 'rejected' and rpt.rejection_note %}
+              <div style="font-size:10px; color:#dc2626; margin-top:1px;">
+                <i class="bi bi-x-circle me-1"></i>{{ rpt.rejection_note[:50] }}{% if rpt.rejection_note | length > 50 %}…{% endif %}
+              </div>
+              {% endif %}
+            </td>
+            <td class="text-muted">{{ rpt.submitter.full_name if rpt.submitter else '—' }}</td>
+            <td class="text-muted" style="white-space:nowrap;">
+              {{ rpt.created_at.strftime('%d.%m.%Y') if rpt.created_at else '—' }}
+            </td>
+            <td>
+              <span class="badge bg-{{ {'draft':'secondary','submitted':'warning','approved':'success','rejected':'danger'}.get(rpt.status,'secondary') }}"
+                    style="font-size:10px;">
+                {{ {'draft':'Taslak','submitted':'Onay Bekliyor','approved':'Onaylandı','rejected':'Reddedildi'}.get(rpt.status, rpt.status) }}
+              </span>
+            </td>
+            <td class="text-end fw-semibold">₺{{ '{:,.2f}'.format(rpt.grand_total).replace(',', '.') }}</td>
+            <td class="text-end pe-2" style="white-space:nowrap;">
+              <a href="/expenses/{{ rpt.id }}" class="btn btn-xs btn-outline-secondary py-0 px-1" title="Görüntüle">
+                <i class="bi bi-eye"></i>
+              </a>
+              {% if req.status != 'closed' %}
+              {% if rpt.status in ('draft','rejected') and (current_user.role == 'admin' or rpt.submitted_by == current_user.id) %}
+              <a href="/expenses/{{ rpt.id }}/edit" class="btn btn-xs btn-outline-primary py-0 px-1 ms-1" title="Düzenle">
+                <i class="bi bi-pencil"></i>
+              </a>
+              {% endif %}
+              {% if rpt.status == 'submitted' and (current_user.role == 'admin' or req.created_by == current_user.id) %}
+              <form method="post" action="/expenses/{{ rpt.id }}/approve" class="d-inline ms-1">
+                <button type="submit" class="btn btn-xs btn-success py-0 px-1" title="Onayla"
+                        onclick="return confirm('Onaylanacak. Emin misiniz?')">
+                  <i class="bi bi-check-lg"></i>
+                </button>
+              </form>
+              {% endif %}
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        {% if expense_reports | selectattr('status','equalto','approved') | list %}
+        <tfoot>
+          <tr style="background:#f0f9ff; font-weight:700; font-size:12px;">
+            <td class="ps-2" colspan="4">Onaylanan HBF Toplamı</td>
+            <td class="text-end">
+              ₺{{ '{:,.2f}'.format(expense_reports | selectattr('status','equalto','approved') | sum(attribute='grand_total') | round(2)).replace(',','.') }}
+            </td>
+            <td></td>
+          </tr>
+        </tfoot>
+        {% endif %}
+      </table>
+    </div>
+    {% else %}
+    <div class="text-muted py-2" style="font-size:12px;">
+      <i class="bi bi-receipt-cutoff me-1 opacity-50"></i>Henüz harcama bildirimi eklenmemiş.
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+
+{# ─── KÜTÜPHANE SEKMESİ ─── #}
+<div class="card mb-4" id="tab-library">
+  <div class="card-header d-flex align-items-center justify-content-between py-2"
+       style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
+    <h6 class="fw-bold mb-0">
+      <i class="bi bi-archive me-2 text-primary"></i>Kütüphane
+      <span class="badge bg-secondary ms-1" style="font-size:11px;">
+        {{ (timeline | length) + (req_documents | length) }} kayıt
+      </span>
+    </h6>
+  </div>
+  <div class="card-body p-0">
+
+    {# ── Adım adım belge & aktivite akışı ── #}
+    {% if timeline or req_documents %}
+    <div class="table-responsive">
+      <table class="table table-sm mb-0" style="font-size:12px;">
+        <thead style="background:#f1f5f9;">
+          <tr>
+            <th class="ps-3" style="width:36px;">#</th>
+            <th>Açıklama</th>
+            <th style="width:110px;">Tarih</th>
+            <th style="width:80px;">Yapan</th>
+            <th class="pe-3 text-end" style="width:70px;">Dosya</th>
+          </tr>
+        </thead>
+        <tbody>
+          {# Belgeler + aktivite logları zaman sırasıyla birleştirilmiş #}
+          {% set ns = namespace(idx=0) %}
+          {% for item in timeline %}
+          {% set ns.idx = ns.idx + 1 %}
+          <tr>
+            <td class="ps-3 text-muted">{{ ns.idx }}</td>
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                <span style="width:24px; height:24px; border-radius:50%; flex-shrink:0;
+                             background:{% if item.color == 'primary' %}#dbeafe
+                               {% elif item.color == 'success' %}#dcfce7
+                               {% elif item.color == 'danger' %}#fee2e2
+                               {% elif item.color == 'warning' %}#fef9c3
+                               {% elif item.color == 'info' %}#cffafe
+                               {% else %}#f1f5f9{% endif %};
+                             display:flex; align-items:center; justify-content:center;">
+                  <i class="bi {{ item.icon }}"
+                     style="font-size:11px; color:{% if item.color == 'primary' %}#2563eb
+                       {% elif item.color == 'success' %}#16a34a
+                       {% elif item.color == 'danger' %}#dc2626
+                       {% elif item.color == 'warning' %}#d97706
+                       {% elif item.color == 'info' %}#0891b2
+                       {% else %}#64748b{% endif %};"></i>
+                </span>
+                <div>
+                  <span class="fw-semibold">{{ item.title }}</span>
+                  {% if item.detail %}
+                  <div class="text-muted" style="font-size:11px;">{{ item.detail }}</div>
+                  {% endif %}
+                </div>
+              </div>
+            </td>
+            <td class="text-muted" style="white-space:nowrap;">
+              {{ item.created_at.strftime("%d.%m.%Y %H:%M") }}
+            </td>
+            <td class="text-muted" style="font-size:11px;">
+              {{ item.user.full_name if item.user else '—' }}
+            </td>
+            <td class="pe-3 text-end">
+              {% if item.kind == 'doc' %}
+              <a href="/requests/{{ req.id }}/documents/{{ item.id }}/download"
+                 class="btn btn-light btn-sm p-1" title="İndir" style="font-size:11px;">
+                <i class="bi bi-download"></i>
+              </a>
+              {% else %}
+              <span class="text-muted" style="font-size:11px;">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-archive d-block mb-2" style="font-size:2.5rem; opacity:.2;"></i>
+      <p class="mb-0" style="font-size:13px;">
+        Henüz kayıt yok.<br>
+        <small>Durum değişiklikleri, teklif indirmeleri ve fatura hareketleri burada otomatik görünür.</small>
+      </p>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Tedarikçi seçildiyse bütçe karşılaştırma kartını en alta taşı
+{% if req.confirmed_budget_id %}
+(function() {
+  const card = document.getElementById('budgetCompareCard');
+  if (card) { card.parentNode.appendChild(card); }
+})();
+{% endif %}
+// ─── Fatura Onay Modalları ───
+function openRejectModal(invoiceId) {
+  document.getElementById('rejectForm').action = '/invoices/' + invoiceId + '/reject';
+  document.querySelector('#rejectModal textarea[name=rejection_note]').value = '';
+  new bootstrap.Modal(document.getElementById('rejectModal')).show();
+}
+function openCutModal(invoiceId) {
+  const form = document.getElementById('cutInvoiceForm');
+  if (!form) return;
+  form.action = '/invoices/' + invoiceId + '/cut';
+  form.reset();
+  new bootstrap.Modal(document.getElementById('cutInvoiceModal')).show();
+}
+
+function openInvoiceDetailModal(inv) {
+  const fmt = n => (parseFloat(n)||0).toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const TYPE_LABELS = {
+    'kesilen':'Kesilen Fatura', 'gelen':'Gelen Fatura',
+    'komisyon':'Komisyon', 'iade_kesilen':'İade (Kesilen)', 'iade_gelen':'İade (Gelen)'
+  };
+  const lines = Array.isArray(inv.lines) ? inv.lines : [];
+
+  let linesHtml = '';
+  if (lines.length) {
+    linesHtml = `<table class="table table-sm mb-0" style="font-size:13px;">
+      <thead style="background:#f8fafc;">
+        <tr>
+          <th>Açıklama</th>
+          <th class="text-end" style="width:130px;">Tutar (KDV Hariç)</th>
+          <th class="text-end" style="width:80px;">KDV %</th>
+          <th class="text-end" style="width:120px;">KDV Tutarı</th>
+          <th class="text-end" style="width:130px;">Toplam</th>
+        </tr>
+      </thead><tbody>`;
+    let totalExcl = 0, totalVat = 0;
+    lines.forEach(ln => {
+      const a   = parseFloat(ln.amount)     || 0;
+      const vr  = parseFloat(ln.vat_rate)   || 0;
+      const va  = parseFloat(ln.vat_amount) || (a * vr / 100);
+      totalExcl += a; totalVat += va;
+      linesHtml += `<tr>
+        <td>${ln.description || '—'}</td>
+        <td class="text-end">₺${fmt(a)}</td>
+        <td class="text-end text-muted">%${Math.round(vr)}</td>
+        <td class="text-end text-muted">₺${fmt(va)}</td>
+        <td class="text-end fw-semibold">₺${fmt(a + va)}</td>
+      </tr>`;
+    });
+    linesHtml += `</tbody><tfoot style="background:#f1f5f9; font-weight:600;">
+      <tr>
+        <td colspan="1" class="text-muted" style="font-size:12px;">TOPLAM</td>
+        <td class="text-end">₺${fmt(totalExcl)}</td>
+        <td></td>
+        <td class="text-end text-muted">₺${fmt(totalVat)}</td>
+        <td class="text-end">₺${fmt(totalExcl + totalVat)}</td>
+      </tr></tfoot></table>`;
+  } else {
+    linesHtml = `<p class="text-muted mb-0" style="font-size:13px;">Kalem detayı bulunamadı.</p>`;
+  }
+
+  const statusLabel = {'pending':'GM Onayı Bekliyor','gm_approved':'Muhasebe Kesmesi Bekliyor','approved':'Kesildi','rejected':'Reddedildi'}[inv.status] || inv.status;
+  const statusColor = {'pending':'warning','gm_approved':'success','approved':'primary','rejected':'danger'}[inv.status] || 'secondary';
+
+  document.getElementById('invoiceDetailBody').innerHTML = `
+    <div class="row g-3 mb-3">
+      <div class="col-sm-4">
+        <div class="text-muted" style="font-size:11px; text-transform:uppercase; letter-spacing:.5px;">Tip</div>
+        <div style="font-size:13px; font-weight:600;">${TYPE_LABELS[inv.invoice_type] || inv.invoice_type}</div>
+      </div>
+      <div class="col-sm-4">
+        <div class="text-muted" style="font-size:11px; text-transform:uppercase; letter-spacing:.5px;">Tedarikçi / Müşteri</div>
+        <div style="font-size:13px; font-weight:600;">${inv.vendor_name || '—'}</div>
+      </div>
+      <div class="col-sm-4">
+        <div class="text-muted" style="font-size:11px; text-transform:uppercase; letter-spacing:.5px;">Durum</div>
+        <span class="badge bg-${statusColor} bg-opacity-15 text-${statusColor}" style="font-size:12px;">${statusLabel}</span>
+      </div>
+      ${inv.description ? `<div class="col-12">
+        <div class="text-muted" style="font-size:11px; text-transform:uppercase; letter-spacing:.5px;">Açıklama</div>
+        <div style="font-size:13px;">${inv.description}</div>
+      </div>` : ''}
+    </div>
+    <div class="table-responsive">${linesHtml}</div>`;
+
+  new bootstrap.Modal(document.getElementById('invoiceDetailModal')).show();
+}
+function openClosureRejectModal(closureId) {
+  document.getElementById('closureRejectForm').action = '/closure/' + closureId + '/reject';
+  new bootstrap.Modal(document.getElementById('closureRejectModal')).show();
+}
+function openReassignModal(invoiceId, invLabel) {
+  document.getElementById('reassignForm').action = '/invoices/' + invoiceId + '/reassign';
+  document.getElementById('reassignInvName').textContent = 'Fatura: ' + invLabel;
+  new bootstrap.Modal(document.getElementById('reassignModal')).show();
+}
+
+// ─── RFQ Veri ───
+const REQ_DATA = {
+  request_no:     {{ req.request_no | tojson }},
+  event_name:     {{ req.event_name | tojson }},
+  client_name:    {{ req.client_name | tojson }},
+  check_in:       {{ (req.check_in or '') | tojson }},
+  check_out:      {{ (req.check_out or '') | tojson }},
+  accom_check_in: {{ (req.accom_check_in or '') | tojson }},
+  accom_check_out:{{ (req.accom_check_out or '') | tojson }},
+  attendee_count:  {{ req.attendee_count | tojson }},
+  items:           {{ req.items | tojson }},
+  cities:          {{ req.cities | tojson }},
+  quote_deadline:  {{ (req.quote_deadline or '') | tojson }},
+};
+
+// ─── E-posta Şablonları (Admin tarafından yönetilir) ───
+const EMAIL_TEMPLATES = {{ email_templates_json | tojson }};
+const SETTINGS_CTX    = {{ settings_ctx | tojson }};
+
+// Müşteri kontak bilgisi
+const CUSTOMER_CONTACTS = {{ (customer.contacts if customer else []) | tojson }};
+const CUSTOMER_PRIMARY  = CUSTOMER_CONTACTS[0] || {};
+
+// Şablon render: {variable} → değer (eksik key'lerde olduğu gibi bırak)
+// extra ile gelen değerler base context'i override eder (venue mailleri için contact_name vb.)
+function renderEmailTpl(tpl, extra) {
+  const ctx = Object.assign({
+    event_name:      REQ_DATA.event_name,
+    request_no:      REQ_DATA.request_no,
+    client_name:     REQ_DATA.client_name,
+    check_in:        fmtDate(REQ_DATA.check_in),
+    check_out:       fmtDate(REQ_DATA.check_out),
+    accom_check_in:  fmtDate(REQ_DATA.accom_check_in),
+    accom_check_out: fmtDate(REQ_DATA.accom_check_out),
+    attendee_count:  REQ_DATA.attendee_count,
+    quote_deadline:  deadlineDate(),
+    // Müşteri kontak — müşteriye giden maillerde varsayılan; venue maillerinde extra ile override edilir
+    contact_name:    CUSTOMER_PRIMARY.name  || REQ_DATA.client_name || '',
+    contact_email:   CUSTOMER_PRIMARY.email || '',
+    contact_phone:   CUSTOMER_PRIMARY.phone || '',
+    company_name:    SETTINGS_CTX.company_name,
+    company_email:   SETTINGS_CTX.company_email,
+    company_phone:   SETTINGS_CTX.company_phone,
+    email_signature: SETTINGS_CTX.email_signature,
+  }, extra || {});
+  return tpl.replace(/\{(\w+)\}/g, (_, key) => (ctx[key] !== undefined ? ctx[key] : `{${key}}`));
+}
+
+function getTplSubject(slug, extra) {
+  const t = EMAIL_TEMPLATES[slug];
+  if (!t) return '';
+  return renderEmailTpl(t.subject_tpl, extra);
+}
+
+function getTplBody(slug, extra) {
+  const t = EMAIL_TEMPLATES[slug];
+  if (!t) return '';
+  return renderEmailTpl(t.body_tpl, extra);
+}
+
+// Seçili tüm tedarikçiler (supplier_type bilgisi dahil)
+const PREF_VENUES = [
+  {% for venue in venues %}{% if venue.id in req.preferred_venues %}
+  {
+    id:            {{ venue.id | tojson }},
+    name:          {{ venue.name | tojson }},
+    city:          {{ venue.city | tojson }},
+    supplier_type: {{ venue.supplier_type | tojson }},
+    contacts:      {{ venue.contacts | tojson }},
+  },
+  {% endif %}{% endfor %}
+];
+
+// Tüm aktif tedarikçiler (tercih yapılmadıysa seçim için)
+const ALL_VENUES = [
+  {% for venue in venues %}
+  {
+    id:            {{ venue.id | tojson }},
+    name:          {{ venue.name | tojson }},
+    city:          {{ venue.city | tojson }},
+    supplier_type: {{ venue.supplier_type | tojson }},
+    contacts:      {{ venue.contacts | tojson }},
+    cities:        {{ venue.cities | tojson }},
+  },
+  {% endfor %}
+];
+
+// Tedarikçi türü → ilgili section'lar
+const SUPPLIER_SECTIONS = {
+  otel:       ['accommodation', 'meeting', 'fb'],
+  etkinlik:   ['accommodation', 'meeting', 'fb'],
+  teknik:     ['teknik'],
+  dekor:      ['dekor'],
+  transfer:   ['transfer'],
+  tasarim:    ['tasarim'],
+  restaurant: ['fb', 'other'],
+  susleme:    ['dekor', 'other'],
+  ik:         ['other'],
+  diger:      ['other'],
+};
+
+const SECTION_TITLES = {
+  accommodation: 'KONAKLAMA DETAYLARI',
+  meeting:       'TOPLANTI / SALON DETAYLARI',
+  fb:            'YİYECEK & İÇECEK',
+  teknik:        'TEKNİK EKİPMAN',
+  dekor:         'DEKOR & SÜSLEME',
+  transfer:      'TRANSFER & ULAŞIM',
+  tasarim:       'TASARIM & BASILI MATERYALLER',
+  other:         'DİĞER HİZMETLER',
+};
+
+// ─── Yardımcılar ───
+function fmtDate(d) {
+  if (!d) return '?';
+  const p = d.split('-');
+  return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : d;
+}
+
+function deadlineDate() {
+  if (REQ_DATA.quote_deadline) {
+    // PM'in belirlediği tarihin 1 gün öncesi
+    const d = new Date(REQ_DATA.quote_deadline);
+    d.setDate(d.getDate() - 1);
+    return ('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2)+'.'+d.getFullYear();
+  }
+  // Fallback: bugün + 3 gün
+  const d = new Date();
+  d.setDate(d.getDate() + 3);
+  return ('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2)+'.'+d.getFullYear();
+}
+
+function escH(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── E-posta içeriği ───
+function buildEmailHtml(venue, contactNames, filterSection) {
+  const greeting = contactNames.length ? `Sayın ${contactNames[0]},` : 'Sayın İlgili,';
+  const items = REQ_DATA.items || {};
+  const relevantSections = filterSection
+    ? [filterSection]
+    : (SUPPLIER_SECTIONS[venue.supplier_type] || Object.keys(SECTION_TITLES));
+
+  const brand  = '#1a3a5c';
+  const accent = '#1e5f8c';
+  const light  = '#f8fafc';
+  const border = '#e2e8f0';
+  const tDark  = '#1e293b';
+  const tMuted = '#64748b';
+  const thBg   = '#f0f4f8';
+  const SEC_ICONS = {accommodation:'🛏',meeting:'🏛',fb:'🍽',teknik:'🔧',dekor:'🎨',transfer:'🚌',tasarim:'🖨',other:'📦'};
+
+  function secTable(secKey, title, rows) {
+    const icon    = SEC_ICONS[secKey] || '📋';
+    const isAccom = secKey === 'accommodation';
+    const cols    = isAccom ? 5 : 4;
+    const thStyle = `padding:8px 12px;background:${thBg};color:${tMuted};font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;text-align:left;border-bottom:1px solid ${border};white-space:nowrap;`;
+    let t = `<div style="margin-bottom:28px;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid ${border};border-radius:8px;overflow:hidden;">
+    <tr>
+      <td colspan="${cols}" style="background:${accent};padding:11px 16px;">
+        <span style="color:#ffffff;font-weight:700;font-size:12px;letter-spacing:.8px;text-transform:uppercase;">${icon} ${escH(title)}</span>
+      </td>
+    </tr>
+    <tr>
+      <th style="${thStyle}">Talep Edilen Servis</th>
+      ${isAccom
+        ? `<th style="${thStyle}">Giriş Tarihi</th><th style="${thStyle}">Çıkış Tarihi</th>`
+        : `<th style="${thStyle}">Tarih</th>`}
+      <th style="${thStyle}">Kişi / Miktar</th>
+      <th style="${thStyle.replace('white-space:nowrap;','')}">Notlar</th>
+    </tr>`;
+    rows.forEach((r, i) => {
+      const bg = i%2===0 ? '#ffffff' : light;
+      const bb = i<rows.length-1 ? `border-bottom:1px solid ${border};` : '';
+      const tdS  = `padding:10px 12px;background:${bg};font-size:12px;white-space:nowrap;${bb}`;
+      t += `
+    <tr>
+      <td style="padding:10px 12px;background:${bg};color:${tDark};font-size:13px;font-weight:500;${bb}">${escH(r.svc)}</td>
+      ${isAccom
+        ? `<td style="${tdS}color:${tMuted};">${escH(r.checkin||'')}</td><td style="${tdS}color:${tMuted};">${escH(r.checkout||'')}</td>`
+        : `<td style="${tdS}color:${tMuted};">${escH(r.date||'')}</td>`}
+      <td style="${tdS}color:${tMuted};">${escH(r.qty)}</td>
+      <td style="padding:10px 12px;background:${bg};color:${tMuted};font-size:12px;${bb}">${escH(r.notes)}</td>
+    </tr>`;
+    });
+    t += `</table></div>`;
+    return t;
+  }
+
+  let html = `<div style="font-family:'Segoe UI',Arial,Helvetica,sans-serif;max-width:680px;margin:0 auto;">
+
+  <div style="background:${brand};padding:28px 36px 24px;border-radius:10px 10px 0 0;">
+    <div style="color:#93c5fd;font-size:10px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:8px;">FİYAT TEKLİFİ TALEBİ &nbsp;·&nbsp; ${escH(REQ_DATA.request_no)}</div>
+    <div style="color:#ffffff;font-size:21px;font-weight:700;line-height:1.3;margin-bottom:8px;">${escH(REQ_DATA.event_name)}</div>
+    <div style="display:inline-block;background:rgba(255,255,255,0.12);border-radius:20px;padding:4px 14px;">
+      <span style="color:#cbd5e1;font-size:12px;">${fmtDate(REQ_DATA.check_in)} – ${fmtDate(REQ_DATA.check_out)}</span>
+      <span style="color:#64748b;margin:0 6px;">|</span>
+      <span style="color:#cbd5e1;font-size:12px;">${REQ_DATA.attendee_count} kişi</span>
+    </div>
+  </div>
+
+  <div style="background:#ffffff;padding:28px 36px;border-left:1px solid ${border};border-right:1px solid ${border};">
+
+    <p style="font-size:14px;color:${tDark};margin:0 0 14px;font-weight:600;">${greeting}</p>
+    <p style="font-size:13px;color:${tMuted};margin:0 0 28px;line-height:1.7;">
+      <strong>${fmtDate(REQ_DATA.check_in)} – ${fmtDate(REQ_DATA.check_out)}</strong> tarihleri arasında
+      düzenleyeceğimiz <strong style="color:${tDark};">${escH(REQ_DATA.event_name)}</strong> etkinliğimiz için
+      fiyat teklifinizi ve müsaitlik durumunuzu bildirmenizi rica ederiz.
+    </p>
+
+    <div style="margin-bottom:28px;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid ${border};border-radius:8px;overflow:hidden;">
+        <tr>
+          <td colspan="4" style="background:${brand};padding:10px 16px;">
+            <span style="color:#ffffff;font-weight:700;font-size:11px;letter-spacing:.8px;text-transform:uppercase;">ETKİNLİK BİLGİLERİ</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px;background:${thBg};color:${tMuted};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid ${border};width:20%;">Müşteri</td>
+          <td style="padding:10px 14px;color:${tDark};font-size:13px;border-bottom:1px solid ${border};width:30%;">${escH(REQ_DATA.client_name)}</td>
+          <td style="padding:10px 14px;background:${thBg};color:${tMuted};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid ${border};width:20%;">Kişi Sayısı</td>
+          <td style="padding:10px 14px;color:${tDark};font-size:13px;border-bottom:1px solid ${border};width:30%;">${REQ_DATA.attendee_count} kişi</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px;background:${thBg};color:${tMuted};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Etkinlik Tarihleri</td>
+          <td colspan="3" style="padding:10px 14px;color:${tDark};font-size:13px;">${fmtDate(REQ_DATA.check_in)} – ${fmtDate(REQ_DATA.check_out)}</td>
+        </tr>
+      </table>
+    </div>
+`;
+
+  const hasAccomDates = REQ_DATA.accom_check_in || (items.accommodation||[]).some(r => r.date_from);
+  if (hasAccomDates && relevantSections.includes('accommodation')) {
+    const rows = (items.accommodation||[]).filter(r=>r.description);
+    if (rows.length) {
+      const acIn  = REQ_DATA.accom_check_in  || (rows[0]?.date_from ?? '');
+      const acOut = REQ_DATA.accom_check_out || (rows[0]?.date_to   ?? '');
+      html += secTable('accommodation', 'Konaklama', rows.map(r => ({
+        svc: r.description,
+        checkin:  acIn  ? fmtDate(acIn)  : '',
+        checkout: acOut ? fmtDate(acOut) : '',
+        qty: `${r.qty||1} Oda`, notes: r.notes||''
+      })));
+    }
+  }
+
+  if (relevantSections.includes('meeting')) {
+    const rows = (items.meeting||[]).filter(r=>r.description);
+    if (rows.length) {
+      const _SL = {tiyatro:'Tiyatro Düzeni',sinif:'Sınıf Düzeni','u-seklinde':'U Şeklinde',
+                   toplanti:'Toplantı Düzeni',adatr:'Ada / Roundtable',kokteyl:'Kokteyl',gala:'Gala Oturma'};
+      html += secTable('meeting', 'Toplantı / Salon', rows.map(r => {
+        // Oturma düzeni: daily_attendees'dan benzersiz layoutları al (boş satır için row-level fallback)
+        const daLayouts = (r.daily_attendees||[]).map(da => da.seating_layout).filter(Boolean);
+        const uniqueLayouts = [...new Set(daLayouts)];
+        const layoutStr = uniqueLayouts.length
+          ? uniqueLayouts.map(l => _SL[l]||l).join(', ')
+          : (r.seating_layout ? (_SL[r.seating_layout]||r.seating_layout) : '');
+        return {
+          svc: r.description,
+          date: r.date_from ? (r.date_to && r.date_to!==r.date_from ? `${fmtDate(r.date_from)} – ${fmtDate(r.date_to)}` : fmtDate(r.date_from)) : '',
+          qty: `${r.qty||1} ${r.unit||''}`.trim(),
+          notes: [layoutStr, r.notes].filter(Boolean).join(' · ')
+        };
+      }));
+    }
+  }
+
+  const otherSecs = relevantSections.filter(s => s!=='accommodation' && s!=='meeting');
+  otherSecs.forEach(sec => {
+    const rows = (items[sec]||[]).filter(r=>r.description);
+    if (!rows.length) return;
+    html += secTable(sec, SECTION_TITLES[sec]||sec, rows.map(r => ({
+      svc: r.description,
+      date: r.date_from ? (r.date_to && r.date_to!==r.date_from ? `${fmtDate(r.date_from)} – ${fmtDate(r.date_to)}` : fmtDate(r.date_from)) : '',
+      qty: `${r.qty||1} ${r.unit||''}`.trim(),
+      notes: r.notes||''
+    })));
+  });
+
+  html += `
+    <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:16px 20px;margin-top:4px;">
+      <div style="color:#78350f;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">⏰ Teklif Son Tarihi</div>
+      <div style="color:#92400e;font-size:16px;font-weight:700;margin-bottom:6px;">${deadlineDate()}</div>
+      <div style="color:#78350f;font-size:12px;line-height:1.5;">Lütfen fiyatlarınıza <strong>KDV oranlarını</strong> ve <strong>KDV'nin dahil olup olmadığını</strong> belirtiniz.</div>
+    </div>
+
+  </div>
+
+  <div style="background:${light};padding:18px 36px;border-radius:0 0 10px 10px;border:1px solid ${border};border-top:none;">
+    <p style="margin:0;font-size:12px;color:${tMuted};line-height:1.8;">
+      Saygılarımızla,<br>
+      <strong style="color:${tDark};font-size:13px;">E-dem Etkinlik Yönetimi</strong>
+    </p>
+  </div>
+
+</div>`;
+  return html;
+}
+
+function buildEmailText(venue, contactNames, filterSection) {
+  const greeting = contactNames.length ? `Sayın ${contactNames[0]},` : 'Sayın İlgili,';
+  const items = REQ_DATA.items || {};
+  const relevantSections = filterSection
+    ? [filterSection]
+    : (SUPPLIER_SECTIONS[venue.supplier_type] || Object.keys(SECTION_TITLES));
+
+  // Türkçe ay isimleriyle tarih formatlama
+  const TR_MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran',
+                     'Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+  function trDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return `${d.getDate()} ${TR_MONTHS[d.getMonth()]}`;
+  }
+  function trDateFull(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return `${d.getDate()} ${TR_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  }
+  // "25 & 26 Mart 2026" veya "25 Mart – 2 Nisan 2026"
+  function trRange(from, to) {
+    if (!from) return '';
+    if (!to || from === to) return trDateFull(from);
+    const d1 = new Date(from), d2 = new Date(to);
+    if (d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear()) {
+      return `${d1.getDate()} & ${d2.getDate()} ${TR_MONTHS[d1.getMonth()]} ${d1.getFullYear()}`;
+    }
+    return `${trDate(from)} – ${trDateFull(to)}`;
+  }
+
+  let txt = `${greeting}\n\n`;
+  txt += `${REQ_DATA.event_name} etkinliğimiz için fiyat teklifi talebimizi iletmek istiyoruz.\n\n`;
+  txt += `Referans No  : ${REQ_DATA.request_no}\n`;
+  txt += `Müşteri      : ${REQ_DATA.client_name}\n`;
+  txt += `Tarih        : ${trRange(REQ_DATA.check_in, REQ_DATA.check_out)}\n`;
+  txt += `Kişi Sayısı  : ${REQ_DATA.attendee_count} kişi\n`;
+
+  // ── KONAKLAMA DETAYLARI ──
+  if (relevantSections.includes('accommodation')) {
+    const rows = (items.accommodation||[]).filter(r => r.description);
+    if (rows.length) {
+      const acIn  = REQ_DATA.accom_check_in  || rows[0]?.date_from || '';
+      const acOut = REQ_DATA.accom_check_out || rows[0]?.date_to   || '';
+      txt += `\nKONAKLAMA DETAYLARI\n`;
+      if (acIn || acOut) {
+        txt += `${trDate(acIn)} giriş – ${trDate(acOut)} çıkış\n`;
+      }
+      rows.forEach(r => {
+        const qty = parseInt(r.qty) || 1;
+        let line = qty > 1 ? `${qty} oda – ${r.description}` : r.description;
+        if (r.notes) line += ` (${r.notes})`;
+        txt += `${line}\n`;
+      });
+    }
+  }
+
+  // ── TOPLANTI DETAYLARI ──
+  if (relevantSections.includes('meeting')) {
+    const rows = (items.meeting||[]).filter(r => r.description);
+    if (rows.length) {
+      const allFrom = rows.map(r => r.date_from).filter(Boolean).sort();
+      const allTo   = rows.map(r => r.date_to || r.date_from).filter(Boolean).sort();
+      const firstD  = allFrom[0] || REQ_DATA.check_in;
+      const lastD   = allTo[allTo.length - 1] || REQ_DATA.check_out;
+      txt += `\nTOPLANTI DETAYLARI\n`;
+      if (firstD) txt += `${trRange(firstD, lastD)}\n`;
+      txt += `${REQ_DATA.attendee_count} kişi\n`;
+      const _SLt = {tiyatro:'Tiyatro Düzeni',sinif:'Sınıf Düzeni','u-seklinde':'U Şeklinde',
+                    toplanti:'Toplantı Düzeni',adatr:'Ada / Roundtable',kokteyl:'Kokteyl',gala:'Gala Oturma'};
+      rows.forEach(r => {
+        const daLayouts = (r.daily_attendees||[]).map(da => da.seating_layout).filter(Boolean);
+        const uniqueLayouts = [...new Set(daLayouts)];
+        const layoutStr = uniqueLayouts.length
+          ? uniqueLayouts.map(l => _SLt[l]||l).join(', ')
+          : (r.seating_layout ? (_SLt[r.seating_layout]||r.seating_layout) : '');
+        let line = r.description;
+        if (layoutStr) line += ` - ${layoutStr}`;
+        if (r.notes) line += ` (${r.notes})`;
+        txt += `${line}\n`;
+      });
+    }
+  }
+
+  // ── TALEP EDİLEN SERVİSLER (F&B + diğer tüm seksiyonlar) ──
+  const serviceSecs = relevantSections.filter(s => s !== 'accommodation' && s !== 'meeting');
+  const serviceRows = [];
+  serviceSecs.forEach(sec => {
+    (items[sec]||[]).filter(r => r.description).forEach(r => serviceRows.push(r));
+  });
+  if (serviceRows.length) {
+    txt += `\nTALEP EDİLEN SERVİSLER\n`;
+    serviceRows.forEach(r => {
+      let line = r.description;
+      if (r.notes) line += ` (${r.notes})`;
+      txt += `${line}\n`;
+    });
+  }
+
+  txt += `\n─────────────────────────────────────\n`;
+  txt += `Teklif son tarihi: ${deadlineDate()}\n`;
+  txt += `Lütfen fiyatlarınıza KDV oranlarını ve KDV'nin dahil olup olmadığını belirtiniz.\n\n`;
+  txt += `Saygılarımızla,\nE-dem Etkinlik Yönetimi`;
+  return txt;
+}
+
+// ─── Kopyala ───
+async function copyHtmlToClipboard(html) {
+  try {
+    const blob = new Blob([html], {type:'text/html'});
+    const plain = new Blob([html.replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"')], {type:'text/plain'});
+    await navigator.clipboard.write([new ClipboardItem({'text/html':blob,'text/plain':plain})]);
+    showToast('Zengin metin kopyalandı — Outlook/Gmail\'e yapıştırın.');
+  } catch(e) {
+    const ta = document.createElement('textarea');
+    ta.value = html; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    showToast('HTML kopyalandı (fallback).');
+  }
+}
+
+async function copyTextToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast('Düz metin kopyalandı.');
+  } catch(e) {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    showToast('Metin kopyalandı (fallback).');
+  }
+}
+
+function showToast(msg) {
+  const el = document.getElementById('rfqToast');
+  if (el) { el.querySelector('.toast-body').textContent = msg; bootstrap.Toast.getOrCreateInstance(el).show(); }
+  else { alert(msg); }
+}
+
+// ─── Bütçe + venue kontakt verisi (email taslakları için) ───
+const budgetsJson = {{ budgets_json | tojson }};
+const REQ_EVENT_NAME = {{ req.event_name | tojson }};
+const REQ_REF_NO     = {{ req.request_no | tojson }};
+const REQ_CHECK_IN   = "{{ req.check_in or '' }}";
+const REQ_CHECK_OUT  = "{{ req.check_out or '' }}";
+
+// _emailCard: slug tabanlı, dinamik contact rendering
+// slug: EMAIL_TEMPLATES key (örn. 'confirm_venue', 'cancel_venue')
+// contacts: [{name, email, phone}, ...]
+// baseExtra: {venue_name: ...} — contact bilgisi hariç
+function _emailCard(title, borderColor, headerBg, headerColor, iconCls, slug, contacts, baseExtra) {
+  const cardId = 'ec-' + Math.random().toString(36).slice(2);
+  const copyId = cardId + '-copy';
+  const tpl = EMAIL_TEMPLATES[slug] || {};
+  const subjTpl = tpl.subject_tpl || '';
+  const bodyTpl = tpl.body_tpl    || '';
+
+  function _renderFor(c) {
+    const extra = Object.assign({}, baseExtra || {}, {
+      contact_name:  (c && c.name)  || '',
+      contact_email: (c && c.email) || '',
+      contact_phone: (c && c.phone) || '',
+    });
+    return {
+      subj: renderEmailTpl(subjTpl, extra),
+      body: renderEmailTpl(bodyTpl, extra),
+    };
+  }
+
+  const init = _renderFor(contacts[0] || null);
+
+  // Checkbox listesi — ilk tikli kontak ismiyle re-render
+  let contactsHtml = '';
+  if (contacts.length === 0) {
+    contactsHtml = `<input type="email" data-card="${cardId}"
+      class="form-control form-control-sm ec-manual-email"
+      placeholder="E-posta adresi girin"
+      style="font-size:11px; width:220px; display:inline-block;">`;
+  } else {
+    contactsHtml = contacts.map((c, i) => {
+      const cbId = cardId + '-cb' + i;
+      const label = (c.name || '') + (c.email ? ` &lt;${c.email}&gt;` : '');
+      return `<div class="form-check form-check-inline mb-0" style="font-size:11px;">
+        <input class="form-check-input ec-cb" type="checkbox" id="${cbId}"
+               data-email="${escAttr(c.email || '')}"
+               data-name="${escAttr(c.name || '')}"
+               data-phone="${escAttr(c.phone || '')}"
+               data-card="${cardId}" checked
+               onchange="_ecContactChange('${cardId}')">
+        <label class="form-check-label" for="${cbId}">${label}</label>
+      </div>`;
+    }).join('');
+  }
+
+  return `
+  <div class="card mb-2" style="border-color:${borderColor};" id="${cardId}"
+       data-subj-tpl="${escAttr(subjTpl)}"
+       data-body-tpl="${escAttr(bodyTpl)}"
+       data-base-extra="${escAttr(JSON.stringify(baseExtra || {}))}">
+    <div class="card-header d-flex align-items-start justify-content-between py-2 gap-2 flex-wrap"
+         style="background:${headerBg}; color:${headerColor}; font-size:12px;">
+      <span><i class="${iconCls} me-1"></i>${title}</span>
+      <div class="d-flex flex-wrap gap-1">${contactsHtml}</div>
+    </div>
+    <div class="card-body py-2 d-flex gap-2 align-items-center">
+      <button type="button" class="btn btn-sm btn-outline-primary ec-send-btn" data-card="${cardId}"
+              data-subject="${escAttr(init.subj)}" data-body="${escAttr(init.body)}"
+              style="font-size:12px;" onclick="_sendEmail(this)">
+        <i class="bi bi-envelope me-1"></i>Mail Gönder
+      </button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" style="font-size:12px;"
+              onclick="navigator.clipboard.writeText(document.getElementById('${copyId}').textContent).then(()=>showToast('Kopyalandı'))">
+        <i class="bi bi-clipboard me-1"></i>Kopyala
+      </button>
+      <details style="font-size:11px; flex:1;">
+        <summary class="text-muted" style="cursor:pointer;">Metin önizle</summary>
+        <pre id="${copyId}" class="mt-1 p-2 rounded"
+             style="background:#f8fafc; font-size:11px; white-space:pre-wrap; max-height:120px; overflow-y:auto;">${escHtml(init.body)}</pre>
+      </details>
+    </div>
+  </div>`;
+}
+
+// Checkbox değişince: ilk tikli kişinin adıyla yeniden render et
+function _ecContactChange(cardId) {
+  const card = document.getElementById(cardId);
+  if (!card) return;
+  const subjTpl = card.dataset.subjTpl || '';
+  const bodyTpl = card.dataset.bodyTpl || '';
+  let baseExtra = {};
+  try { baseExtra = JSON.parse(card.dataset.baseExtra || '{}'); } catch(e) {}
+
+  const firstCb = card.querySelector('.ec-cb:checked');
+  const c = firstCb
+    ? { name: firstCb.dataset.name || '', email: firstCb.dataset.email || '', phone: firstCb.dataset.phone || '' }
+    : {};
+
+  const extra = Object.assign({}, baseExtra, {
+    contact_name:  c.name  || '',
+    contact_email: c.email || '',
+    contact_phone: c.phone || '',
+  });
+  const newSubj = renderEmailTpl(subjTpl, extra);
+  const newBody = renderEmailTpl(bodyTpl, extra);
+
+  const btn = card.querySelector('.ec-send-btn');
+  if (btn) { btn.dataset.subject = newSubj; btn.dataset.body = newBody; }
+  const pre = document.getElementById(cardId + '-copy');
+  if (pre) pre.textContent = newBody;
+}
+
+function escAttr(s) {
+  return String(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function _sendEmail(btn) {
+  const cardId = btn.dataset.card;
+  const subject = btn.dataset.subject;
+  const body    = btn.dataset.body;
+  const checked = document.querySelectorAll(`#${cardId} .ec-cb:checked`);
+  const manualEl = document.querySelector(`#${cardId} .ec-manual-email`);
+  let emails = Array.from(checked).map(cb => cb.dataset.email).filter(Boolean);
+  if (manualEl && manualEl.value.trim()) emails.push(manualEl.value.trim());
+  if (emails.length === 0) { alert('Lütfen en az bir alıcı seçin veya e-posta adresi girin.'); return; }
+  const href = `mailto:${encodeURIComponent(emails.join(', '))}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  window.location.href = href;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+
+// ─── Proje Durumu Modal ───
+let _psStatus = null;
+
+function choosePsStatus(val) {
+  _psStatus = val;
+  document.querySelectorAll('.ps-choice-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.value === val);
+  });
+  document.getElementById('psStep0NextBtn').disabled = false;
+  // Header rengi güncelle
+  const hdr = document.getElementById('psModalHeader');
+  if (val === 'confirmed')  hdr.style.background = '#166534';
+  else if (val === 'postponed') hdr.style.background = '#92400e';
+  else                       hdr.style.background = '#991b1b';
+}
+
+function goPsStep0() {
+  document.getElementById('psStep0').hidden          = false;
+  document.getElementById('psStep1Confirmed').hidden = true;
+  document.getElementById('psStep2Confirmed').hidden = true;
+  document.getElementById('psStep1Other').hidden     = true;
+}
+
+function goPsStep1() {
+  if (!_psStatus) return;
+  document.getElementById('psStep0').hidden = true;
+  if (_psStatus === 'confirmed') {
+    document.getElementById('psStep1Confirmed').hidden = false;
+  } else {
+    const form      = document.getElementById('psOtherForm');
+    const label     = document.getElementById('psOtherReasonLabel');
+    const submitBtn = document.getElementById('psOtherSubmitBtn');
+    if (_psStatus === 'postponed') {
+      form.action        = `/requests/{{ req.id }}/postpone`;
+      label.textContent  = 'Erteleme Nedeni (isteğe bağlı)';
+      submitBtn.className = 'btn btn-warning btn-sm text-dark';
+      submitBtn.innerHTML = '<i class="bi bi-pause-circle me-1"></i>Ertele';
+    } else {
+      form.action        = `/requests/{{ req.id }}/cancel-job`;
+      label.textContent  = 'İptal Nedeni (isteğe bağlı)';
+      submitBtn.className = 'btn btn-danger btn-sm';
+      submitBtn.innerHTML = '<i class="bi bi-x-lg me-1"></i>İptal Et';
+    }
+    // venue emails sıfırla
+    const cb = document.getElementById('psSendVenueEmailsCb');
+    if (cb) cb.checked = false;
+    const sec = document.getElementById('psVenueEmailSection');
+    if (sec) { sec.hidden = true; delete sec.dataset.built; }
+    document.getElementById('psStep1Other').hidden = false;
+  }
+}
+
+function goPsStep1Confirmed() {
+  document.getElementById('psStep2Confirmed').hidden = true;
+  document.getElementById('psStep1Confirmed').hidden = false;
+}
+
+function goPsStep2Confirmed() {
+  const sel = document.getElementById('psBudgetSelect');
+  if (!sel || !sel.value) { alert('Lütfen onaylanan bütçeyi seçin.'); return; }
+  const budgetId = sel.value;
+  document.getElementById('psBudgetIdInput').value = budgetId;
+
+  const selBudget = budgetsJson.find(b => b.id === budgetId);
+  const others    = budgetsJson.filter(b => b.id !== budgetId && b.status === 'approved');
+
+  const confirmBody = document.getElementById('psConfirmEmailBody');
+  if (selBudget) {
+    const cList = selBudget.contacts || [];
+    confirmBody.innerHTML = _emailCard(
+      `${selBudget.venue_name || 'Seçilen Mekan'} — Konfirme Bildirimi`,
+      '#16a34a', '#d1fae5', '#065f46', 'bi bi-check-circle',
+      'confirm_venue', cList, { venue_name: selBudget.venue_name || '' }
+    );
+  }
+
+  const cancelCards = document.getElementById('psCancelEmailCards');
+  if (others.length > 0) {
+    let html = `<div class="fw-semibold mb-2" style="font-size:13px; color:#991b1b;"><i class="bi bi-x-circle me-1"></i>Diğer Mekanlara — İptal Bildirimi</div>`;
+    others.forEach(b => {
+      html += _emailCard(
+        b.venue_name || 'Mekan', '#dc2626', '#fee2e2', '#991b1b', 'bi bi-x-circle',
+        'cancel_venue', b.contacts || [], { venue_name: b.venue_name || '' }
+      );
+    });
+    cancelCards.innerHTML = html;
+  } else {
+    cancelCards.innerHTML = '<div class="text-muted" style="font-size:12px;"><i class="bi bi-info-circle me-1"></i>Diğer onaylı bütçe yok.</div>';
+  }
+
+  document.getElementById('psStep1Confirmed').hidden = true;
+  document.getElementById('psStep2Confirmed').hidden = false;
+}
+
+function togglePsVenueEmails(checked) {
+  const sec = document.getElementById('psVenueEmailSection');
+  sec.hidden = !checked;
+  if (checked && !sec.dataset.built) {
+    sec.dataset.built = '1';
+    const cards   = document.getElementById('psVenueEmailCards');
+    const targets = budgetsJson.filter(b => ['approved','pending_manager','confirmed'].includes(b.status));
+    if (targets.length === 0) {
+      cards.innerHTML = '<div class="text-muted" style="font-size:12px;">Bildirim yapılacak mekan bulunamadı.</div>';
+    } else {
+      let html = '';
+      targets.forEach(b => {
+        html += _emailCard(
+          b.venue_name || 'Mekan', '#dc2626', '#fee2e2', '#991b1b', 'bi bi-x-circle',
+          'cancel_venue', b.contacts || [], { venue_name: b.venue_name || '' }
+        );
+      });
+      cards.innerHTML = html;
+    }
+  }
+}
+
+// Modal kapanınca sıfırla
+document.getElementById('projectStatusModal')?.addEventListener('hidden.bs.modal', () => {
+  _psStatus = null;
+  document.querySelectorAll('.ps-choice-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('psStep0NextBtn').disabled = true;
+  document.getElementById('psModalHeader').style.background = '#1e293b';
+  goPsStep0();
+});
+
+function sendOfferEmail(reqId, customerEmail, eventName, refNo) {
+  // 1) Durumu "offer_sent" olarak güncelle
+  fetch(`/requests/${reqId}/offer-sent`, { method: 'POST' })
+    .catch(() => {});  // sessiz hata — zaten offer_sent ise de sorun yok
+
+  // 2) Excel'i indir
+  const exportUrl = `/requests/${reqId}/export?vat=exclusive`;
+  const a = document.createElement('a');
+  a.href = exportUrl;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  // 3) Mail istemcisini aç (müşteri adresi varsa)
+  if (customerEmail) {
+    const offerSubj = getTplSubject('offer_customer')
+      || renderEmailTpl('Etkinlik Teklifi: {event_name} — {request_no}');
+    const offerBody = getTplBody('offer_customer')
+      || renderEmailTpl('Sayın Yetkili,\n\n{event_name} etkinliğiniz için hazırlanan teklif dosyasını ekte sunmaktayız.\n\nReferans No: {request_no}\n\nTeklifi inceleyip dönüş yapmanızı rica ederiz.\n\n{email_signature}');
+    const subject = encodeURIComponent(offerSubj);
+    const body    = encodeURIComponent(offerBody);
+    setTimeout(() => {
+      window.open(`mailto:${customerEmail}?subject=${subject}&body=${body}`, '_blank');
+    }, 800);
+    showToast('Teklif gönderildi olarak işaretlendi. Excel indiriliyor, mail uygulamanız açılıyor.');
+  } else {
+    showToast('Teklif gönderildi olarak işaretlendi. Excel indiriliyor. Müşteri email adresi tanımlı değil.');
+  }
+}
+
+// ─── Aktif sekme takibi ───
+let _activeSection = null;
+(function() {
+  // İlk aktif tab'ı bul
+  const firstActive = document.querySelector('#detailTabs .nav-link.active');
+  if (firstActive) _activeSection = firstActive.getAttribute('data-section');
+})();
+
+const _SECTION_SUPPLIER_TYPES = {
+  accommodation: ['otel', 'etkinlik'],
+  meeting:       ['otel', 'etkinlik'],
+  fb:            ['otel', 'etkinlik', 'restaurant'],
+  teknik:        ['teknik'],
+  dekor:         ['dekor', 'susleme'],
+  transfer:      ['transfer'],
+  tasarim:       ['tasarim'],
+  other:         ['ik', 'diger', 'restaurant', 'susleme'],
+};
+
+function filterSelectedVenues(section) {
+  const allowed = _SECTION_SUPPLIER_TYPES[section] || null;
+  document.querySelectorAll('.selected-venue-badge').forEach(el => {
+    if (!allowed || allowed.includes(el.getAttribute('data-supplier-type'))) {
+      el.style.display = '';
+    } else {
+      el.style.display = 'none';
+    }
+  });
+  // Hiç görünen yoksa kartı gizle
+  const card = document.getElementById('selectedVenuesCard');
+  if (card) {
+    const anyVisible = [...document.querySelectorAll('.selected-venue-badge')]
+      .some(el => el.style.display !== 'none');
+    card.style.display = anyVisible ? '' : 'none';
+  }
+}
+
+function onSectionTabClick(section) {
+  _activeSection = section;
+  filterSelectedVenues(section);
+}
+
+// Sayfa yüklenince ilk aktif sekmeye göre filtrele
+if (_activeSection) filterSelectedVenues(_activeSection);
+
+// ─── RFQ kart sayacı ve aktif emailFilterSection ───
+let _rfqCardCount     = 0;
+let _rfqCurrentEFS    = null;   // şu anki buildRfqContent'in emailFilterSection'ı
+let _rfqCurrentSection = null;  // şu anki section (tedarikçi filtresi için)
+
+// ─── RFQ Modal Aç ───
+function openRfqModal(section) {
+  const targetSection = section || _activeSection;
+  buildRfqContent(targetSection);
+  document.getElementById('rfqAddVenueArea').style.display = 'none';
+  new bootstrap.Modal(document.getElementById('rfqModal')).show();
+}
+
+// ─── Modal içeriği oluştur ───
+function buildRfqContent(section) {
+  const container = document.getElementById('rfqVenueCards');
+  const labelEl   = document.getElementById('rfqSectionLabel');
+
+  // Hangi tedarikçiler bu section için ilgili?
+  const relevantTypes = {
+    accommodation: ['otel', 'etkinlik'],
+    meeting:       ['otel', 'etkinlik'],
+    fb:            ['otel', 'etkinlik', 'restaurant'],
+    teknik:        ['teknik'],
+    dekor:         ['dekor', 'susleme'],
+    transfer:      ['transfer'],
+    tasarim:       ['tasarim'],
+    other:         ['ik', 'diger', 'restaurant', 'susleme'],
+  };
+
+  const SECTION_DISPLAY = {
+    accommodation: '🛏 Konaklama',
+    meeting:       '🏛 Toplantı',
+    fb:            '🍽 F&B',
+    teknik:        '🔧 Teknik Ekipman',
+    dekor:         '🎨 Dekor',
+    transfer:      '🚌 Transfer',
+    tasarim:       '🖨 Tasarım & Baskı',
+    other:         '📦 Diğer',
+  };
+
+  // Section filtresine göre venue listesi
+  let filteredVenues = PREF_VENUES;
+  if (section && relevantTypes[section]) {
+    const allowed = relevantTypes[section];
+    filteredVenues = PREF_VENUES.filter(v => allowed.includes(v.supplier_type));
+  }
+
+  // Otel/mekan için konaklama+toplantı+F&B tek mailde birleştirilir
+  const isVenueGroup = ['accommodation', 'meeting', 'fb'].includes(section);
+  const emailFilterSection = isVenueGroup ? null : section;
+
+  if (labelEl) {
+    labelEl.textContent = isVenueGroup
+      ? `🏨 Otel/Mekan — Konaklama + Toplantı + F&B — ${filteredVenues.length} tedarikçi`
+      : section
+        ? `${SECTION_DISPLAY[section] || section} — ${filteredVenues.length} tedarikçi`
+        : `Tüm tedarikçiler — ${filteredVenues.length}`;
+  }
+
+  // Sayaç ve aktif EFS/section'ı sakla — sonradan "Tedarikçi Ekle" için
+  _rfqCurrentEFS     = emailFilterSection;
+  _rfqCurrentSection = section;
+  _rfqCardCount      = 0;
+
+  container.innerHTML = '';
+
+  if (!filteredVenues.length) {
+    // Tercih yapılmamış — ALL_VENUES'den ilgili türdeki tedarikçileri göster
+    const allowedTypes = isVenueGroup
+      ? ['otel', 'etkinlik']
+      : (relevantTypes[section] || Object.keys(relevantTypes));
+    const candidates = ALL_VENUES.filter(v => allowedTypes.includes(v.supplier_type));
+    const typeLabelsMap = {otel:'Otel',etkinlik:'Etkinlik Mekanı',teknik:'Teknik',dekor:'Dekor',
+      transfer:'Transfer',tasarim:'Tasarım',restaurant:'Restoran',susleme:'Süsleme',ik:'İK',diger:'Diğer'};
+
+    if (!candidates.length) {
+      container.innerHTML = `<div class="text-center text-muted py-4">
+        <i class="bi bi-building-slash" style="font-size:32px;opacity:.3;"></i>
+        <p class="mt-2 mb-0" style="font-size:13px;">Bu kategori için sistemde aktif tedarikçi bulunmuyor.</p>
+      </div>`;
+      return;
+    }
+
+    // Picker state'i sıfırla ve dropdown arayüzünü oluştur
+    initRfqVsPicker(candidates);
+
+    container.innerHTML = `
+      <div class="p-3">
+        <div class="alert alert-warning py-2 mb-3" style="font-size:12px;">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          Bu talep için tedarikçi tercih edilmemiş. Aşağıdan seçip mail hazırlayabilirsiniz.
+        </div>
+        <div class="vs-wrapper mb-2">
+          <div class="position-relative">
+            <i class="bi bi-search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:12px;pointer-events:none;"></i>
+            <input type="text" id="rfqVsSearch" class="form-control form-control-sm"
+                   style="padding-left:30px;"
+                   placeholder="Tedarikçi ara..."
+                   oninput="filterRfqVsDrop(this.value)"
+                   onfocus="openRfqVsDrop()">
+          </div>
+          <div class="vs-dropdown" id="rfqVsDrop" style="display:none;"></div>
+        </div>
+        <div id="rfqVsChips" class="mb-3">
+          <span style="font-size:11px;color:#94a3b8;">Henüz tedarikçi seçilmedi</span>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm"
+                onclick="applyVenuePickerSelection(${JSON.stringify(section)}, ${JSON.stringify(emailFilterSection)})">
+          <i class="bi bi-envelope-open me-1"></i> Seçili Tedarikçiler İçin Mail Hazırla
+        </button>
+      </div>`;
+
+    // Dropdown'u otomatik aç
+    setTimeout(openRfqVsDrop, 80);
+    return;
+  }
+
+  filteredVenues.forEach((venue, vi) => {
+    container.appendChild(buildRfqCard(venue, vi, emailFilterSection));
+    _rfqCardCount = vi + 1;
+  });
+}
+
+// ─── RFQ modal inline tedarikçi ekleme ───
+function toggleRfqAddVenueArea() {
+  const area = document.getElementById('rfqAddVenueArea');
+  const visible = area.style.display !== 'none';
+  area.style.display = visible ? 'none' : 'block';
+  if (!visible) {
+    document.getElementById('rfqAddSearch').value = '';
+    document.getElementById('rfqAddDrop').style.display = 'none';
+    setTimeout(openRfqAddDrop, 80);
+  }
+}
+
+function openRfqAddDrop() {
+  const drop = document.getElementById('rfqAddDrop');
+  if (drop) { drop.style.display = 'block'; renderRfqAddDrop(''); }
+}
+
+function filterRfqAddDrop(query) {
+  const drop = document.getElementById('rfqAddDrop');
+  if (drop) { drop.style.display = 'block'; renderRfqAddDrop(query); }
+}
+
+function renderRfqAddDrop(query) {
+  const drop = document.getElementById('rfqAddDrop');
+  if (!drop) return;
+  const q = query.toLowerCase().trim();
+  const typeLabels = {otel:'Otel',etkinlik:'Etkinlik Mekanı',teknik:'Teknik',dekor:'Dekor',
+    transfer:'Transfer',tasarim:'Tasarım',restaurant:'Restoran',susleme:'Süsleme',ik:'İK',diger:'Diğer'};
+
+  // Mevcut section için ilgili tedarikçi türleri
+  const sectionTypes = {
+    accommodation: ['otel', 'etkinlik'],
+    meeting:       ['otel', 'etkinlik'],
+    fb:            ['otel', 'etkinlik', 'restaurant'],
+    teknik:        ['teknik'],
+    dekor:         ['dekor', 'susleme'],
+    transfer:      ['transfer'],
+    tasarim:       ['tasarim'],
+    other:         ['ik', 'diger', 'restaurant', 'susleme'],
+  };
+  const allowedTypes = _rfqCurrentSection ? (sectionTypes[_rfqCurrentSection] || null) : null;
+
+  // Talepteki şehirler (virgülle ayrılmış tek şehir veya cities dizisi)
+  const reqCities = (REQ_DATA.cities || []).map(c => c.toLowerCase());
+
+  const filtered = ALL_VENUES.filter(v => {
+    // Metin filtresi
+    if (q && !v.name.toLowerCase().includes(q) && !v.city.toLowerCase().includes(q)) return false;
+    // Tür filtresi
+    if (allowedTypes && !allowedTypes.includes(v.supplier_type)) return false;
+    // Şehir filtresi — tedarikçinin herhangi bir şehri, talepteki şehirlerden biriyle eşleşsin
+    if (reqCities.length) {
+      const vCities = (v.cities && v.cities.length ? v.cities : [v.city]).map(c => c.toLowerCase());
+      if (!vCities.some(vc => reqCities.some(rc => vc.includes(rc) || rc.includes(vc)))) return false;
+    }
+    return true;
+  });
+  if (!filtered.length) { drop.innerHTML = `<div class="vs-no-res">Sonuç bulunamadı</div>`; return; }
+  drop.innerHTML = filtered.map(v =>
+    `<div class="vs-item" onclick="addVenueToRfq('${escH(v.id)}')">
+      <div>
+        <div class="vsi-name">${escH(v.name)}
+          <span class="badge bg-secondary bg-opacity-10 text-secondary ms-1" style="font-size:10px;">${escH(typeLabels[v.supplier_type]||v.supplier_type)}</span>
+        </div>
+        <div class="vsi-city"><i class="bi bi-geo-alt me-1"></i>${escH(v.city)}</div>
+      </div>
+    </div>`
+  ).join('');
+}
+
+function addVenueToRfq(venueId) {
+  const venue = ALL_VENUES.find(v => v.id === venueId);
+  if (!venue) return;
+  const vi = _rfqCardCount++;
+  const card = buildRfqCard(venue, vi, _rfqCurrentEFS);
+  document.getElementById('rfqVenueCards').appendChild(card);
+  // Alanı kapat ve input'u temizle
+  document.getElementById('rfqAddVenueArea').style.display = 'none';
+  document.getElementById('rfqAddSearch').value = '';
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ─── RFQ Picker dropdown state ───
+let _rfqPickerCandidates = [];
+let _rfqPickerSelected   = new Set();
+
+function initRfqVsPicker(candidates) {
+  _rfqPickerCandidates = candidates;
+  _rfqPickerSelected   = new Set();
+}
+
+function openRfqVsDrop() {
+  const drop = document.getElementById('rfqVsDrop');
+  if (drop) { drop.style.display = 'block'; renderRfqVsDrop(document.getElementById('rfqVsSearch')?.value || ''); }
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.vs-wrapper')) {
+    const d = document.getElementById('rfqVsDrop');
+    if (d) d.style.display = 'none';
+  }
+});
+
+function filterRfqVsDrop(query) {
+  const drop = document.getElementById('rfqVsDrop');
+  if (drop) { drop.style.display = 'block'; renderRfqVsDrop(query); }
+}
+
+function renderRfqVsDrop(query) {
+  const drop = document.getElementById('rfqVsDrop');
+  if (!drop) return;
+  const q = query.toLowerCase().trim();
+  const typeLabels = {otel:'Otel',etkinlik:'Etkinlik Mekanı',teknik:'Teknik',dekor:'Dekor',
+    transfer:'Transfer',tasarim:'Tasarım',restaurant:'Restoran',susleme:'Süsleme',ik:'İK',diger:'Diğer'};
+  const filtered = _rfqPickerCandidates.filter(v =>
+    !q || v.name.toLowerCase().includes(q) || v.city.toLowerCase().includes(q)
+  );
+  if (!filtered.length) { drop.innerHTML = `<div class="vs-no-res">Sonuç bulunamadı</div>`; return; }
+  drop.innerHTML = filtered.map(v =>
+    `<div class="vs-item ${_rfqPickerSelected.has(v.id)?'vs-sel':''}" onclick="toggleRfqVsItem('${escH(v.id)}')">
+      <i class="bi bi-check2" style="flex-shrink:0;visibility:${_rfqPickerSelected.has(v.id)?'visible':'hidden'};color:#1d4ed8;"></i>
+      <div>
+        <div class="vsi-name">${escH(v.name)} <span class="badge bg-secondary bg-opacity-10 text-secondary ms-1" style="font-size:10px;">${escH(typeLabels[v.supplier_type]||v.supplier_type)}</span></div>
+        <div class="vsi-city"><i class="bi bi-geo-alt me-1"></i>${escH(v.city)}</div>
+      </div>
+    </div>`
+  ).join('');
+}
+
+function toggleRfqVsItem(venueId) {
+  if (_rfqPickerSelected.has(venueId)) _rfqPickerSelected.delete(venueId);
+  else _rfqPickerSelected.add(venueId);
+  renderRfqVsDrop(document.getElementById('rfqVsSearch')?.value || '');
+  renderRfqVsChips();
+}
+
+function renderRfqVsChips() {
+  const el = document.getElementById('rfqVsChips');
+  if (!el) return;
+  const sel = _rfqPickerCandidates.filter(v => _rfqPickerSelected.has(v.id));
+  if (!sel.length) {
+    el.innerHTML = '<span style="font-size:11px;color:#94a3b8;">Henüz tedarikçi seçilmedi</span>';
+    return;
+  }
+  el.innerHTML = sel.map(v =>
+    `<span style="display:inline-flex;align-items:center;gap:5px;background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;border-radius:20px;padding:3px 10px;font-size:12px;margin:2px;">
+      ${escH(v.name)} <span style="font-size:10px;opacity:.7;">${escH(v.city)}</span>
+      <button type="button" onclick="toggleRfqVsItem('${escH(v.id)}')"
+              style="background:none;border:none;color:#1e40af;padding:0 0 0 4px;cursor:pointer;font-size:13px;">×</button>
+    </span>`
+  ).join('');
+}
+
+// ─── Ortak RFQ kart oluşturucu (kontak seçimli) ───
+const _RFQ_TYPE_LABELS = {otel:'Otel',etkinlik:'Etkinlik Mekanı',teknik:'Teknik',dekor:'Dekor',
+  transfer:'Transfer',tasarim:'Tasarım',restaurant:'Restoran',susleme:'Süsleme',ik:'İK',diger:'Diğer'};
+
+// Checkbox değişiminde card'ı güncelle — venue datası window'da saklanır
+function updateRfqCard(vi) {
+  const venue             = window[`_rfqVenueData${vi}`];
+  const emailFilterSection = window[`_rfqEFS${vi}`];
+  if (!venue) return;
+
+  const boxes  = document.querySelectorAll(`#rfqContacts${vi} input[type=checkbox]:checked`);
+  const names  = [...boxes].map(b => b.getAttribute('data-name')).filter(Boolean);
+  const emails = [...boxes].map(b => b.getAttribute('data-email')).filter(Boolean);
+
+  const eHtml = buildEmailHtml(venue, names, emailFilterSection);
+  const eText = buildEmailText(venue, names, emailFilterSection);
+  window[`_rfqHtml${vi}`] = eHtml;
+  window[`_rfqText${vi}`] = eText;
+
+  const subject = encodeURIComponent(`${REQ_DATA.event_name} Fiyat Teklifi - ${REQ_DATA.request_no}`);
+  const body    = encodeURIComponent(eText);
+
+  const mailEl = document.getElementById(`rfqMailto${vi}`);
+  if (mailEl) mailEl.href = `mailto:${emails.join(',')}?subject=${subject}&body=${body}`;
+
+  const prevEl = document.getElementById(`rfqPreview${vi}`);
+  if (prevEl) prevEl.innerHTML = eHtml;
+}
+
+function buildRfqCard(venue, vi, emailFilterSection) {
+  const contacts = venue.contacts && venue.contacts.length ? venue.contacts : [];
+
+  window[`_rfqVenueData${vi}`] = venue;
+  window[`_rfqEFS${vi}`]       = emailFilterSection;
+
+  const initNames  = contacts.map(c => c.name).filter(Boolean);
+  const initEmails = contacts.map(c => c.email).filter(Boolean);
+  const initHtml   = buildEmailHtml(venue, initNames, emailFilterSection);
+  const initText   = buildEmailText(venue, initNames, emailFilterSection);
+  window[`_rfqHtml${vi}`] = initHtml;
+  window[`_rfqText${vi}`] = initText;
+
+  const subject    = encodeURIComponent(`${REQ_DATA.event_name} Fiyat Teklifi - ${REQ_DATA.request_no}`);
+  const initMailto = `mailto:${initEmails.join(',')}?subject=${subject}&body=${encodeURIComponent(initText)}`;
+
+  const typeLabel = escH(_RFQ_TYPE_LABELS[venue.supplier_type] || venue.supplier_type);
+
+  const div = document.createElement('div');
+  div.style.cssText = 'background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:20px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);';
+  div.innerHTML = `
+    <!-- Card Header -->
+    <div style="background:#f8fafc;padding:14px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+        <div style="width:38px;height:38px;background:#1a3a5c;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="bi bi-building" style="color:#93c5fd;font-size:16px;"></i>
+        </div>
+        <div style="min-width:0;">
+          <div style="font-weight:700;font-size:14px;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+            ${escH(venue.name)}
+            <span style="font-size:10px;font-weight:600;background:#e0f2fe;color:#0369a1;padding:2px 7px;border-radius:10px;margin-left:6px;vertical-align:middle;">${typeLabel}</span>
+          </div>
+          <div style="font-size:12px;color:#64748b;margin-top:2px;">
+            <i class="bi bi-geo-alt" style="font-size:11px;margin-right:3px;"></i>${escH(venue.city)}
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;flex-shrink:0;">
+        <button type="button" onclick="copyHtmlToClipboard(window['_rfqHtml${vi}'])"
+          style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#2563eb;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+          <i class="bi bi-clipboard-check"></i> Zengin Metin
+        </button>
+        <button type="button" onclick="copyTextToClipboard(window['_rfqText${vi}'])"
+          style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#ffffff;color:#475569;border:1px solid #cbd5e1;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+          <i class="bi bi-clipboard"></i> Düz Metin
+        </button>
+        ${contacts.length ? `
+        <a id="rfqMailto${vi}" href="${escH(initMailto)}"
+          style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#f59e0b;color:#ffffff;border-radius:7px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">
+          <i class="bi bi-envelope-arrow-up"></i> Mail Aç
+        </a>` : ''}
+      </div>
+    </div>
+
+    <!-- Contacts -->
+    <div style="padding:14px 20px;border-bottom:1px solid #e2e8f0;">
+      ${contacts.length ? `
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:8px;">
+        <i class="bi bi-people" style="margin-right:4px;"></i>Alıcılar
+      </div>
+      <div id="rfqContacts${vi}" style="display:flex;flex-wrap:wrap;gap:6px;">
+        ${contacts.map(c => `
+        <label style="display:inline-flex;align-items:center;gap:7px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:6px 10px;cursor:pointer;font-size:12px;transition:background .15s;"
+               onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#f8fafc'">
+          <input type="checkbox" checked style="width:14px;height:14px;cursor:pointer;accent-color:#2563eb;"
+                 data-name="${escH(c.name||'')}"
+                 data-email="${escH(c.email||'')}"
+                 onchange="updateRfqCard(${vi})">
+          <div>
+            <div style="font-weight:600;color:#1e293b;line-height:1.3;">${escH(c.name||'')}${c.title ? `<span style="font-weight:400;color:#94a3b8;margin-left:4px;">${escH(c.title)}</span>` : ''}</div>
+            ${c.email
+              ? `<div style="font-size:11px;color:#3b82f6;">${escH(c.email)}</div>`
+              : `<div style="font-size:11px;color:#ef4444;">e-posta yok</div>`}
+          </div>
+        </label>`).join('')}
+      </div>` : `
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:7px;">
+        <i class="bi bi-exclamation-circle" style="color:#ef4444;font-size:14px;"></i>
+        <span style="font-size:13px;color:#b91c1c;">Bu tedarikçide kontak bilgisi tanımlı değil.</span>
+      </div>`}
+    </div>
+
+    <!-- Subject + Preview -->
+    <div style="padding:12px 20px;">
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:10px;">
+        <span style="font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Konu:</span>
+        <span style="color:#475569;margin-left:6px;">${escH(REQ_DATA.event_name)} Fiyat Teklifi — ${escH(REQ_DATA.request_no)}</span>
+      </div>
+      <details>
+        <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#2563eb;user-select:none;list-style:none;display:inline-flex;align-items:center;gap:5px;padding:5px 0;">
+          <i class="bi bi-eye" style="font-size:13px;"></i> E-posta Önizleme
+        </summary>
+        <div style="margin-top:12px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+          <div style="background:#f8fafc;padding:6px 14px;font-size:11px;color:#94a3b8;border-bottom:1px solid #e2e8f0;">
+            Önizleme — Outlook veya Gmail'e yapıştırıldığında bu görünümü korur
+          </div>
+          <div id="rfqPreview${vi}" style="padding:20px;background:#ffffff;max-height:500px;overflow-y:auto;">
+            ${initHtml}
+          </div>
+        </div>
+      </details>
+    </div>`;
+
+  return div;
+}
+
+// ─── Venue picker'dan seçim yapılıp mail hazırlanması ───
+function applyVenuePickerSelection(section, emailFilterSection) {
+  if (!_rfqPickerSelected.size) {
+    showToast('Lütfen en az bir tedarikçi seçin.');
+    return;
+  }
+  const selectedVenues = _rfqPickerCandidates.filter(v => _rfqPickerSelected.has(v.id));
+  const container = document.getElementById('rfqVenueCards');
+  container.innerHTML = '';
+  selectedVenues.forEach((venue, vi) => {
+    container.appendChild(buildRfqCard(venue, vi, emailFilterSection));
+    _rfqCardCount = vi + 1;
+  });
+  _rfqCurrentEFS     = emailFilterSection;
+  _rfqCurrentSection = section;
+}
+</script>
+
+{# Toast bildirimi #}
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:9999;">
+  <div id="rfqToast" class="toast align-items-center text-bg-success border-0" role="alert">
+    <div class="d-flex">
+      <div class="toast-body fw-semibold"></div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+{# ══════════════════════════════
+   MODAL: Proje Durumu (Onaylandı / Ertelendi / İptal)
+   ══════════════════════════════ #}
+<div class="modal fade" id="projectStatusModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" id="psModalHeader" style="background:#1e293b; color:white;">
+        <h5 class="modal-title"><i class="bi bi-flag me-2"></i>Proje Durumu</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+
+      {# Adım 0: Durum seçimi #}
+      <div id="psStep0">
+        <div class="modal-body">
+          <p class="text-muted mb-3" style="font-size:13px;">Projenin güncel durumunu seçin:</p>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-success flex-fill ps-choice-btn py-3"
+                    onclick="choosePsStatus('confirmed')" data-value="confirmed">
+              <i class="bi bi-check-circle fs-4 d-block mb-1"></i>
+              <span style="font-size:13px; font-weight:600;">Onaylandı</span>
+            </button>
+            <button type="button" class="btn btn-outline-warning flex-fill ps-choice-btn py-3"
+                    onclick="choosePsStatus('postponed')" data-value="postponed">
+              <i class="bi bi-pause-circle fs-4 d-block mb-1"></i>
+              <span style="font-size:13px; font-weight:600;">Ertelendi</span>
+            </button>
+            <button type="button" class="btn btn-outline-danger flex-fill ps-choice-btn py-3"
+                    onclick="choosePsStatus('cancelled')" data-value="cancelled">
+              <i class="bi bi-x-circle fs-4 d-block mb-1"></i>
+              <span style="font-size:13px; font-weight:600;">İptal Oldu</span>
+            </button>
+          </div>
+        </div>
+        <div class="modal-footer d-flex justify-content-between align-items-center">
+          <button type="button" class="btn btn-outline-warning btn-sm"
+                  data-bs-dismiss="modal"
+                  onclick="setTimeout(()=>new bootstrap.Modal(document.getElementById('revisionModal')).show(),250)">
+            <i class="bi bi-calendar-event me-1"></i>Tarih Değişikliği
+          </button>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Vazgeç</button>
+            <button type="button" class="btn btn-primary btn-sm" id="psStep0NextBtn"
+                    onclick="goPsStep1()" disabled>
+              Devam Et <i class="bi bi-arrow-right ms-1"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {# Adım 1a: Onaylandı — Bütçe seçimi #}
+      <div id="psStep1Confirmed" hidden>
+        <div class="modal-body">
+          <p class="text-muted" style="font-size:13px;">Müşterinin onayladığı mekanı / bütçeyi seçin.</p>
+          <label class="form-label fw-semibold">Onaylanan Bütçe / Mekan</label>
+          <select id="psBudgetSelect" class="form-select">
+            <option value="">— Seçiniz —</option>
+            {% for b in req.budgets %}
+            {% if b.budget_status in ('approved', 'confirmed') %}
+            <option value="{{ b.id }}" {% if b.id == req.confirmed_budget_id %}selected{% endif %}>
+              {{ b.venue_name or ('Bütçe #' + loop.index|string) }}
+            </option>
+            {% endif %}
+            {% endfor %}
+          </select>
+          {% set ns_any = namespace(found=false) %}
+          {% for b in req.budgets %}{% if b.budget_status in ('approved','confirmed') %}{% set ns_any.found = true %}{% endif %}{% endfor %}
+          {% if not ns_any.found %}
+          <div class="alert alert-warning mt-3 mb-0" style="font-size:13px;">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            Onaylı / konfirmeli bütçe bulunamadı. Önce bir bütçeyi <strong>Onayla</strong>.
+          </div>
+          {% endif %}
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="goPsStep0()">
+            <i class="bi bi-arrow-left me-1"></i>Geri
+          </button>
+          <button type="button" class="btn btn-success btn-sm" onclick="goPsStep2Confirmed()">
+            Devam Et <i class="bi bi-arrow-right ms-1"></i>
+          </button>
+        </div>
+      </div>
+
+      {# Adım 2: Onaylandı — Email taslakları #}
+      <div id="psStep2Confirmed" hidden>
+        <form method="post" action="/requests/{{ req.id }}/confirm">
+          <input type="hidden" name="budget_id" id="psBudgetIdInput">
+          <div class="modal-body" style="max-height:70vh; overflow-y:auto;">
+            <p class="text-muted mb-3" style="font-size:13px;">Mail taslakları hazırlandı. Göndermek istediklerinizi gönderin, ardından <strong>Onayı Kaydet</strong>'e tıklayın.</p>
+            <div class="card mb-3 border-success">
+              <div class="card-header fw-semibold" style="background:#d1fae5; color:#065f46; font-size:13px;">
+                <i class="bi bi-check-circle me-1"></i>Seçilen Mekana — Konfirme &amp; Revize Fiyat Talebi
+              </div>
+              <div class="card-body py-2" id="psConfirmEmailBody">
+                <div class="text-muted" style="font-size:12px;">Bütçe seçildikten sonra hazırlanacak…</div>
+              </div>
+            </div>
+            <div id="psCancelEmailCards"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="goPsStep1Confirmed()">
+              <i class="bi bi-arrow-left me-1"></i>Geri
+            </button>
+            <button type="submit" class="btn btn-success btn-sm">
+              <i class="bi bi-check-lg me-1"></i>Onayı Kaydet
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {# Adım 1b: Ertelendi / İptal — Neden + opsiyonel venue e-postaları #}
+      <div id="psStep1Other" hidden>
+        <form id="psOtherForm" method="post" action="">
+          <div class="modal-body">
+            <label class="form-label fw-semibold" id="psOtherReasonLabel">Neden / Açıklama</label>
+            <textarea name="reason" class="form-control" rows="2"
+                      placeholder="Erteleme / iptal nedeni, müşteriden gelen mesaj…">{% if req.cancellation_reason %}{{ req.cancellation_reason }}{% endif %}</textarea>
+            <div class="form-check mt-3">
+              <input class="form-check-input" type="checkbox" id="psSendVenueEmailsCb"
+                     onchange="togglePsVenueEmails(this.checked)">
+              <label class="form-check-label fw-semibold" for="psSendVenueEmailsCb" style="font-size:13px;">
+                Mekanlara bildirim e-postası gönder
+              </label>
+            </div>
+            <div id="psVenueEmailSection" hidden class="mt-2">
+              <div id="psVenueEmailCards"></div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="goPsStep0()">
+              <i class="bi bi-arrow-left me-1"></i>Geri
+            </button>
+            <button type="submit" id="psOtherSubmitBtn" class="btn btn-danger btn-sm">
+              <i class="bi bi-check-lg me-1"></i>Kaydet
+            </button>
+          </div>
+        </form>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+{# ══════════════════════════════
+   MODAL: Tarih Değişikliği
+   ══════════════════════════════ #}
+{# ── Dosya Kapama Modal ── #}
+<div class="modal fade" id="closureModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#1e293b; color:white;">
+        <h5 class="modal-title"><i class="bi bi-lock me-2"></i>Dosyayı Kapamaya Gönder</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/requests/{{ req.id }}/submit-closure">
+        <div class="modal-body">
+          <p class="small text-muted mb-3">
+            Dosya kapama süreci başlatılacak. Kapama onaya gönderildikten sonra bu referansa
+            <strong>fatura veya HBF girişi yapılamaz</strong>.<br>
+            Onay zinciri: <strong>Müdür → (Genel Müdür, limit aşılırsa) → Muhasebe Müdürü</strong>
+          </p>
+
+          {# Ön koşul uyarısı (client-side basit gösterim) #}
+          {% set pending_inv = req.invoices | selectattr('status','eq','pending') | list %}
+          {% set pending_hbf = req.expense_reports | selectattr('status','in',['draft','submitted']) | list %}
+          {% if pending_inv or pending_hbf %}
+          <div class="alert alert-warning py-2 small">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            <strong>Dikkat:</strong>
+            {% if pending_inv %}{{ pending_inv | length }} fatura onay bekliyor.{% endif %}
+            {% if pending_hbf %}{{ pending_hbf | length }} HBF onaylanmamış.{% endif %}
+            Bunları önce tamamlayın.
+          </div>
+          {% endif %}
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Not (opsiyonel)</label>
+            <textarea name="note" class="form-control form-control-sm" rows="3"
+                      placeholder="Kapama ile ilgili bir not ekleyebilirsiniz..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-dark btn-sm">
+            <i class="bi bi-send me-1"></i> Kapamaya Gönder
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# ── Kapama Ret Modal ── #}
+<div class="modal fade" id="closureRejectModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title">Kapamayı Reddet</h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="closureRejectForm">
+        <div class="modal-body">
+          <textarea name="rejection_note" class="form-control form-control-sm"
+                    rows="3" placeholder="Red gerekçesi..."></textarea>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-sm btn-danger">Reddet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="revisionModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#92400e; color:white;">
+        <h5 class="modal-title"><i class="bi bi-calendar-event me-2"></i>Tarih Değişikliği</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/requests/{{ req.id }}/revision">
+        <div class="modal-body">
+          <p class="text-muted" style="font-size:13px;">Yeni tarihleri girin. Onaylı bütçeler <strong>E-dem taslağına</strong> döner ve yeniden fiyatlandırılır. Referans no değişmez.</p>
+          <div class="row g-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold" style="font-size:12px;">Etkinlik Başlangıç</label>
+              <input type="date" name="new_check_in" class="form-control form-control-sm"
+                     value="{{ req.check_in or '' }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold" style="font-size:12px;">Etkinlik Bitiş</label>
+              <input type="date" name="new_check_out" class="form-control form-control-sm"
+                     value="{{ req.check_out or '' }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold" style="font-size:12px;">Konaklama Giriş <span class="text-muted fw-normal">(varsa)</span></label>
+              <input type="date" name="new_accom_check_in" class="form-control form-control-sm"
+                     value="{{ req.accom_check_in or '' }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold" style="font-size:12px;">Konaklama Çıkış <span class="text-muted fw-normal">(varsa)</span></label>
+              <input type="date" name="new_accom_check_out" class="form-control form-control-sm"
+                     value="{{ req.accom_check_out or '' }}">
+            </div>
+          </div>
+          {% if req.revision_count and req.revision_count > 0 %}
+          <div class="mt-2 text-muted" style="font-size:12px;">
+            <i class="bi bi-arrow-repeat me-1"></i>Bu talep daha önce {{ req.revision_count }} kez revize edildi.
+          </div>
+          {% endif %}
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Vazgeç</button>
+          <button type="submit" class="btn btn-warning btn-sm"
+                  onclick="return confirm('Tarihler güncellenecek ve onaylı bütçeler yeniden fiyatlandırma için E-dem taslağına dönecek. Emin misiniz?')">
+            <i class="bi bi-calendar-check me-1"></i>Tarihleri Güncelle
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# ══════════════════════════════════════════════════════════════════
+   MODAL: Revize Fiyat
+   ══════════════════════════════════════════════════════════════════ #}
+<div class="modal fade" id="revisePriceModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#1d4ed8; color:white;">
+        <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Revize Fiyat</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:14px;">Müşteri bütçeyi onayladı. Revize kesin maliyet ve satış fiyatlarını girmek ister misiniz?</p>
+        <p class="text-muted" style="font-size:12px;">Bu adımı atlayabilirsiniz — fiyatları daha sonra bütçe detay sayfasından da güncelleyebilirsiniz.</p>
+      </div>
+      <div class="modal-footer" id="revisePriceModalFooter">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Daha Sonra</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const params = new URLSearchParams(location.search);
+
+  // Revize fiyat modalı
+  const reviseId = params.get('show_revise');
+  if (reviseId) {
+    const footer = document.getElementById('revisePriceModalFooter');
+    if (footer) {
+      const btn = document.createElement('a');
+      btn.href = '/budgets/' + reviseId + '/revise-price';
+      btn.className = 'btn btn-primary btn-sm';
+      btn.innerHTML = '<i class="bi bi-pencil-square me-1"></i>Evet — Fiyatları Güncelle';
+      footer.appendChild(btn);
+    }
+    const modal = new bootstrap.Modal(document.getElementById('revisePriceModal'));
+    modal.show();
+    history.replaceState({}, '', location.pathname + '#tab-summary');
+  }
+
+  // Manager bildirim toast + mailto: butonu
+  const managerEmail = params.get('manager_notified');
+  if (managerEmail) {
+    const reqNo  = '{{ req.request_no }}';
+    const evName = '{{ req.event_name | replace("'", "\\'") }}';
+    const subject = encodeURIComponent('Yeni Bütçe Hazır: ' + reqNo + ' — ' + evName);
+    const body    = encodeURIComponent(
+      'Merhaba,\n\n' + reqNo + ' referans numaralı "' + evName + '" etkinliğine ait bütçe(ler) incelemenize sunulmuştur.\n\n' +
+      'Giriş yaparak bütçeleri inceleyebilirsiniz.\n\nİyi çalışmalar.'
+    );
+    const mailto = 'mailto:' + managerEmail + '?subject=' + subject + '&body=' + body;
+
+    // Flash container'a toast ekle
+    const fc = document.getElementById('flashContainer');
+    if (fc) {
+      const div = document.createElement('div');
+      div.className = 'alert alert-info alert-dismissible fade show shadow-sm';
+      div.role = 'alert';
+      div.innerHTML = '<i class="bi bi-envelope me-2"></i>Bütçe(ler) manager\'a gönderildi. '
+        + '<a href="' + mailto + '" class="alert-link">Bildirim maili gönder →</a>'
+        + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+      fc.appendChild(div);
+    }
+    history.replaceState({}, '', location.pathname);
+  }
+})();
+
+function copyLink(url, btn) {
+  navigator.clipboard.writeText(url).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✅ Kopyalandı';
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  });
+}
+</script>
+
+{% endblock %}

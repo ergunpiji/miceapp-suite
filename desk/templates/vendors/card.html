@@ -1,0 +1,462 @@
+{% extends "base.html" %}
+{% block page_title %}{{ vendor.name }}{% endblock %}
+{% block page_title_block %}{{ vendor.name }}{% endblock %}
+
+{% block topbar_actions %}
+{% if can_edit %}
+<a href="/vendors/{{ vendor.id }}/edit" class="btn btn-outline-secondary btn-sm">
+  <i class="bi bi-pencil me-1"></i>Düzenle
+</a>
+{% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .stat-card { border-radius:12px; padding:16px 20px; }
+  .stat-label { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:#64748b; }
+  .stat-value { font-size:22px; font-weight:700; color:#1e293b; }
+  .inv-row:hover { background:#f8fafc; }
+  .period-btn { font-size:12px; }
+  .period-btn.active { background:#1e3a5f; color:#fff; border-color:#1e3a5f; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+
+  {# Temel bilgi #}
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-3">
+      <div class="row align-items-center">
+        <div class="col-md-7">
+          <h5 class="fw-bold mb-1">{{ vendor.name }}</h5>
+          <div class="text-muted" style="font-size:13px;">
+            {% if vendor.tax_number %}Vergi No: {{ vendor.tax_number }}{% if vendor.tax_office %} / {{ vendor.tax_office }}{% endif %} &nbsp;|&nbsp;{% endif %}
+            {% if vendor.phone %}<i class="bi bi-telephone me-1"></i>{{ vendor.phone }} &nbsp;|&nbsp;{% endif %}
+            {% if vendor.email %}<a href="mailto:{{ vendor.email }}" class="text-decoration-none">{{ vendor.email }}</a>{% endif %}
+          </div>
+          {% if vendor.address %}<div class="text-muted mt-1" style="font-size:12px;"><i class="bi bi-geo-alt me-1"></i>{{ vendor.address }}</div>{% endif %}
+        </div>
+        <div class="col-md-5 text-md-end mt-3 mt-md-0">
+          <span class="badge bg-light text-dark border fs-6">
+            <i class="bi bi-clock me-1"></i>{{ vendor.payment_term }} gün vade
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Özet kartlar #}
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+      <div class="stat-card bg-light">
+        <div class="stat-label">Toplam İşlem</div>
+        <div class="stat-value">₺{{ '{:,.0f}'.format(total_amount) }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card" style="background:#f0fdf4;">
+        <div class="stat-label">Ödenen</div>
+        <div class="stat-value" style="color:#16a34a;">₺{{ '{:,.0f}'.format(paid_amount) }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card" style="background:#fffbeb;">
+        <div class="stat-label">Bekleyen</div>
+        <div class="stat-value" style="color:#d97706;">₺{{ '{:,.0f}'.format(unpaid_amount) }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card" style="background:#fef2f2;">
+        <div class="stat-label">Gecikmiş</div>
+        <div class="stat-value" style="color:#dc2626;">₺{{ '{:,.0f}'.format(overdue_amount) }}</div>
+      </div>
+    </div>
+  </div>
+
+  {# Dönem filtresi #}
+  <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
+    <span class="text-muted" style="font-size:12px;">Dönem:</span>
+    {% for p, lbl in [('all','Tümü'),('30','Son 30 gün'),('90','Son 90 gün'),('180','Son 6 ay'),('365','Son 1 yıl')] %}
+    <a href="/vendors/{{ vendor.id }}?period={{ p }}"
+       class="btn btn-outline-secondary btn-sm period-btn {% if period == p %}active{% endif %}">{{ lbl }}</a>
+    {% endfor %}
+  </div>
+
+  {# Fatura tablosu #}
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between py-2">
+      <span class="fw-semibold" style="font-size:14px;">Faturalar ({{ invoices|length }})</span>
+      <div class="d-flex gap-2">
+        {% if can_request_prepayment %}
+        <a href="/prepayment-requests/new?vendor_id={{ vendor.id }}" class="btn btn-outline-warning btn-sm">
+          <i class="bi bi-arrow-up-circle me-1"></i>Ön Ödeme Talebi
+        </a>
+        {% endif %}
+        {% if can_edit %}
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="openPrepaymentModal()"
+                title="Yapılmış ön ödemeyi kaydet (muhasebe için)">
+          <i class="bi bi-cash-coin me-1"></i>Ödeme Kaydet
+        </button>
+        <a href="/invoices/new" class="btn btn-outline-primary btn-sm">
+          <i class="bi bi-plus-lg me-1"></i>Fatura Ekle
+        </a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0" style="font-size:13px;">
+          <thead style="background:#f8fafc;">
+            <tr>
+              <th class="ps-3" style="font-size:11px;color:#64748b;text-transform:uppercase;">Fatura No</th>
+              <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Tarih</th>
+              <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Vade</th>
+              <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Referans</th>
+              <th class="text-end" style="font-size:11px;color:#64748b;text-transform:uppercase;">Tutar</th>
+              <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Ödeme</th>
+              {% if can_edit %}<th></th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for inv in invoices %}
+            <tr class="inv-row">
+              <td class="ps-3">
+                <a href="/invoices/{{ inv.id }}/detail" class="fw-semibold text-decoration-none text-dark">
+                  {{ inv.invoice_no or '—' }}
+                </a>
+                {% if inv.description %}
+                <div class="text-muted" style="font-size:11px;">{{ inv.description | truncate(50) }}</div>
+                {% endif %}
+              </td>
+              <td class="text-muted">{{ inv.invoice_date or '—' }}</td>
+              <td>
+                {% if inv.due_date %}
+                  {% if inv.due_date < today_str and inv.payment_status == 'unpaid' %}
+                  <span class="text-danger fw-semibold">{{ inv.due_date }}</span>
+                  <span class="badge bg-danger ms-1" style="font-size:10px;">Gecikmiş</span>
+                  {% else %}
+                  {{ inv.due_date }}
+                  {% endif %}
+                {% else %}—{% endif %}
+              </td>
+              <td>
+                {% if inv.request %}
+                <a href="/requests/{{ inv.request_id }}" class="text-decoration-none" style="font-size:12px;">
+                  {{ inv.request.request_no }}
+                </a>
+                {% else %}
+                <span class="text-muted" style="font-size:12px;">—</span>
+                {% endif %}
+              </td>
+              <td class="text-end fw-semibold">
+                ₺{{ '{:,.0f}'.format(inv.total_amount or 0) }}
+                {% if inv.payment_status == 'partial' and inv.paid_amount %}
+                <div style="font-size:11px;color:#a16207;">
+                  Kalan: ₺{{ '{:,.0f}'.format((inv.total_amount or 0) - (inv.paid_amount or 0)) }}
+                </div>
+                {% endif %}
+              </td>
+              <td>
+                {% if inv.payment_status == 'paid' %}
+                <span class="badge" style="background:#dcfce7;color:#16a34a;">Ödendi</span>
+                {% elif inv.payment_status == 'partial' %}
+                <span class="badge" style="background:#fef9c3;color:#a16207;">Kısmi</span>
+                {% else %}
+                <span class="badge" style="background:#fee2e2;color:#dc2626;">Bekliyor</span>
+                {% endif %}
+                {# Ödeme yöntemi #}
+                {% if inv.payment_status in ('paid','partial') and inv.paid_amount %}
+                  {% if inv.payment_method == 'kredi_karti' %}
+                  <span class="badge ms-1" style="background:#ede9fe;color:#6d28d9;font-size:9px;">
+                    <i class="bi bi-credit-card"></i> KK
+                  </span>
+                  {% elif inv.payment_method == 'cek' %}
+                  <span class="badge ms-1" style="background:#f1f5f9;color:#475569;font-size:9px;">
+                    <i class="bi bi-file-text"></i> Çek
+                  </span>
+                  {% elif inv.payment_method == 'on_odeme' %}
+                  <span class="badge ms-1" style="background:#fef9c3;color:#854d0e;font-size:9px;">
+                    <i class="bi bi-arrow-up-circle"></i> Ön Ödeme
+                  </span>
+                  {% else %}
+                  <span class="badge ms-1" style="background:#f0fdf4;color:#166534;font-size:9px;">
+                    <i class="bi bi-bank"></i> Havale
+                  </span>
+                  {% endif %}
+                {% endif %}
+              </td>
+              {% if can_edit %}
+              <td>
+                {% if inv.payment_status != 'paid' %}
+                <button type="button" class="btn btn-sm btn-outline-success"
+                        onclick="openMarkPaid('{{ inv.id }}', '{{ vendor.id }}', '{{ inv.invoice_no or inv.id[:8] }}', {{ inv.total_amount or 0 }}, {{ inv.paid_amount or 0 }})">
+                  <i class="bi bi-check2"></i>
+                </button>
+                {% endif %}
+              </td>
+              {% endif %}
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="7" class="text-center py-4 text-muted">
+                Bu tedarikçiye ait fatura bulunamadı.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# Ön Ödemeler #}
+  {% if prepayments %}
+  <div class="card border-0 shadow-sm mt-3">
+    <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between py-2">
+      <span class="fw-semibold" style="font-size:14px;">
+        Ön Ödemeler
+        {% if open_prepayment_total > 0 %}
+        <span class="badge ms-2" style="background:#fef9c3;color:#92400e;font-size:11px;">
+          Açık: ₺{{ '{:,.0f}'.format(open_prepayment_total) }}
+        </span>
+        {% endif %}
+      </span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0" style="font-size:13px;">
+          <thead style="background:#f8fafc;">
+            <tr>
+              <th class="ps-3" style="font-size:11px;color:#64748b;text-transform:uppercase;">Tarih</th>
+              <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Referans</th>
+              <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Yöntem</th>
+              <th class="text-end" style="font-size:11px;color:#64748b;text-transform:uppercase;">Tutar</th>
+              <th class="text-end" style="font-size:11px;color:#64748b;text-transform:uppercase;">Kullanılan</th>
+              <th class="text-end" style="font-size:11px;color:#64748b;text-transform:uppercase;">Kalan</th>
+              <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Durum</th>
+              <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Notlar</th>
+              {% if can_edit %}<th></th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for pp in prepayments %}
+            {% set st = prepayment_statuses.get(pp.status, ('—','secondary')) %}
+            <tr>
+              <td class="ps-3 text-muted">{{ pp.payment_date or '—' }}</td>
+              <td>
+                {% if pp.request %}
+                <a href="/requests/{{ pp.request_id }}" class="text-decoration-none" style="font-size:12px;">
+                  {{ pp.request.request_no }}
+                </a>
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if pp.payment_method == 'kredi_karti' %}
+                <span class="badge" style="background:#ede9fe;color:#6d28d9;font-size:10px;"><i class="bi bi-credit-card"></i> KK</span>
+                {% elif pp.payment_method == 'cek' %}
+                <span class="badge" style="background:#f1f5f9;color:#475569;font-size:10px;"><i class="bi bi-file-text"></i> Çek</span>
+                {% else %}
+                <span class="badge" style="background:#f0fdf4;color:#166534;font-size:10px;"><i class="bi bi-bank"></i> Havale</span>
+                {% endif %}
+              </td>
+              <td class="text-end fw-semibold">₺{{ '{:,.0f}'.format(pp.amount or 0) }}</td>
+              <td class="text-end" style="color:#16a34a;">
+                {% if pp.applied_amount %}₺{{ '{:,.0f}'.format(pp.applied_amount) }}{% else %}—{% endif %}
+              </td>
+              <td class="text-end fw-semibold" style="color:#d97706;">
+                {% set rem = (pp.amount or 0) - (pp.applied_amount or 0) %}
+                {% if rem > 0 %}₺{{ '{:,.0f}'.format(rem) }}{% else %}—{% endif %}
+              </td>
+              <td>
+                <span class="badge bg-{{ st[1] }}">{{ st[0] }}</span>
+              </td>
+              <td class="text-muted" style="font-size:11px;">{{ pp.notes or '—' }}</td>
+              {% if can_edit %}
+              <td>
+                {% if pp.status == 'open' %}
+                <form method="post" action="/vendors/{{ vendor.id }}/prepayments/{{ pp.id }}/cancel"
+                      onsubmit="return confirm('Bu ön ödeme iptal edilsin mi?');" class="d-inline">
+                  <button type="submit" class="btn btn-sm btn-outline-danger" title="İptal Et">
+                    <i class="bi bi-x"></i>
+                  </button>
+                </form>
+                {% endif %}
+              </td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+{# Mark Paid Modal #}
+{% if can_edit %}
+<div class="modal fade" id="markPaidModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-semibold">Ödeme Kaydet</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="markPaidForm">
+        <div class="modal-body">
+          <p class="text-muted mb-1" style="font-size:13px;">Fatura: <strong id="markPaidInvNo"></strong></p>
+          <p class="mb-3" style="font-size:12px;">
+            Toplam: <strong id="markPaidTotal"></strong>
+            &nbsp;|&nbsp; Kalan: <strong id="markPaidRemaining" style="color:#dc2626;"></strong>
+          </p>
+
+          <div class="row g-2 mb-2">
+            <div class="col-6">
+              <label class="form-label fw-semibold" style="font-size:12px;">Ödeme Türü</label>
+              <select name="payment_status" id="mpPaymentStatus" class="form-select form-select-sm"
+                      onchange="onMpStatusChange()">
+                <option value="paid">Tam Ödendi</option>
+                <option value="partial">Kısmi Ödeme</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold" style="font-size:12px;">Ödeme Yöntemi</label>
+              <select name="payment_method" id="mpMethod" class="form-select form-select-sm"
+                      onchange="onMpMethodChange()">
+                <option value="banka">Banka Havalesi</option>
+                <option value="kredi_karti">Kredi Kartı</option>
+                <option value="cek">Çek</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="mpPartialBox" style="display:none;" class="mb-2">
+            <label class="form-label fw-semibold" style="font-size:12px;">Ödenen Tutar (₺)</label>
+            <input type="number" name="paid_amount" id="mpAmount" class="form-control form-control-sm"
+                   step="0.01" min="0" placeholder="0.00">
+          </div>
+
+          <div class="row g-2 mb-2">
+            <div class="col-6">
+              <label class="form-label fw-semibold" style="font-size:12px;">Ödeme Tarihi</label>
+              <input type="date" name="paid_at" class="form-control form-control-sm"
+                     value="{{ today_str }}">
+            </div>
+            <div class="col-6" id="mpCcBox" style="display:none;">
+              <label class="form-label fw-semibold" style="font-size:12px;">Kart Son Ödeme Tarihi</label>
+              <input type="date" name="cc_due_date" id="mpCcDueDate" class="form-control form-control-sm">
+            </div>
+          </div>
+          <div id="mpCcNote" style="display:none;font-size:11px;color:#2563eb;" class="mt-1">
+            <i class="bi bi-info-circle me-1"></i>Nakit akışı, kart son ödeme tarihine göre hesaplanacak.
+          </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-success btn-sm">
+            <i class="bi bi-check2 me-1"></i>Kaydet
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# Ön Ödeme Modal #}
+<div class="modal fade" id="prepaymentModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-semibold"><i class="bi bi-arrow-up-circle me-1 text-warning"></i>Ön Ödeme Kaydet</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/vendors/{{ vendor.id }}/prepayments/add">
+        <div class="modal-body">
+          <div class="row g-2 mb-2">
+            <div class="col-6">
+              <label class="form-label fw-semibold" style="font-size:12px;">Tutar (₺) <span class="text-danger">*</span></label>
+              <input type="number" name="amount" class="form-control form-control-sm"
+                     step="0.01" min="0.01" placeholder="0.00" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold" style="font-size:12px;">Ödeme Tarihi <span class="text-danger">*</span></label>
+              <input type="date" name="payment_date" class="form-control form-control-sm"
+                     value="{{ today_str }}" required>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-semibold" style="font-size:12px;">Ödeme Yöntemi</label>
+            <select name="payment_method" class="form-select form-select-sm">
+              <option value="banka">Banka Havalesi</option>
+              <option value="kredi_karti">Kredi Kartı</option>
+              <option value="cek">Çek</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-semibold" style="font-size:12px;">İlgili Referans (opsiyonel)</label>
+            <select name="request_id" class="form-select form-select-sm">
+              <option value="">— Referans seçin —</option>
+              {% for req in vendor_requests %}
+              <option value="{{ req.id }}">{{ req.request_no }}{% if req.event_name %} — {{ req.event_name }}{% endif %}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-1">
+            <label class="form-label fw-semibold" style="font-size:12px;">Notlar</label>
+            <input type="text" name="notes" class="form-control form-control-sm" placeholder="Açıklama (opsiyonel)">
+          </div>
+          <div class="mt-2 p-2 rounded" style="background:#fefce8;font-size:11px;color:#713f12;">
+            <i class="bi bi-info-circle me-1"></i>
+            Bu tedarikçiye fatura onaylandığında, açık ön ödemeler otomatik olarak fatura tutarından düşülecektir.
+          </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-warning btn-sm text-dark">
+            <i class="bi bi-arrow-up-circle me-1"></i>Kaydet
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function openPrepaymentModal() {
+  new bootstrap.Modal(document.getElementById('prepaymentModal')).show();
+}
+
+function openMarkPaid(invoiceId, vendorId, invNo, totalAmount, paidAmount) {
+  const remaining = totalAmount - paidAmount;
+  document.getElementById('markPaidInvNo').textContent = invNo;
+  document.getElementById('markPaidTotal').textContent = '₺' + totalAmount.toLocaleString('tr-TR', {maximumFractionDigits:0});
+  document.getElementById('markPaidRemaining').textContent = '₺' + remaining.toLocaleString('tr-TR', {maximumFractionDigits:0});
+  document.getElementById('markPaidForm').action = '/vendors/' + vendorId + '/invoices/' + invoiceId + '/mark-paid';
+  document.getElementById('mpAmount').value = '';
+  document.getElementById('mpAmount').max = remaining;
+  document.getElementById('mpPaymentStatus').value = 'paid';
+  document.getElementById('mpMethod').value = 'banka';
+  onMpStatusChange();
+  onMpMethodChange();
+  new bootstrap.Modal(document.getElementById('markPaidModal')).show();
+}
+
+function onMpStatusChange() {
+  const isPart = document.getElementById('mpPaymentStatus').value === 'partial';
+  document.getElementById('mpPartialBox').style.display = isPart ? '' : 'none';
+  if (isPart) document.getElementById('mpAmount').focus();
+}
+
+function onMpMethodChange() {
+  const isCC = document.getElementById('mpMethod').value === 'kredi_karti';
+  document.getElementById('mpCcBox').style.display  = isCC ? '' : 'none';
+  document.getElementById('mpCcNote').style.display = isCC ? '' : 'none';
+}
+</script>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        <form method="post">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Kasa Adı</label>
+            <input type="text" name="name" class="form-control" required value="{{ book.name if book else '' }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Para Birimi</label>
+            <select name="currency" class="form-select">
+              <option value="TRY" {% if not book or book.currency == 'TRY' %}selected{% endif %}>TRY</option>
+              <option value="USD" {% if book and book.currency == 'USD' %}selected{% endif %}>USD</option>
+              <option value="EUR" {% if book and book.currency == 'EUR' %}selected{% endif %}>EUR</option>
+            </select>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Kaydet</button>
+            <a href="/cash" class="btn btn-outline-secondary">İptal</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

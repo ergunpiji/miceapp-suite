@@ -1,0 +1,538 @@
+{% extends "base.html" %}
+{% block title %}Bordro Slip — HR Ajanı{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Bordro Slip — {{ payroll.period_label }}</div>
+    <div class="page-subtitle">{{ payroll.employee.full_name if payroll.employee else '' }}
+      {% if payroll.employee %} · {{ payroll.employee.title }}{% endif %}
+    </div>
+  </div>
+  <div style="display:flex;gap:8px">
+    {% if user.role == 'hr_admin' and payroll.status == 'taslak' %}
+    <form method="post" action="/payroll/{{ payroll.id }}/approve" style="display:inline">
+      <button type="submit" class="btn btn-success">Onayla &amp; Çalışana Bildir</button>
+    </form>
+    {% elif user.role == 'hr_admin' and payroll.status == 'onaylandi' %}
+    <button onclick="document.getElementById('paidModal').classList.add('open')" class="btn btn-primary">Ödendi Olarak İşaretle</button>
+    {% endif %}
+    <a href="/payroll" class="btn btn-secondary">Geri</a>
+  </div>
+</div>
+
+<!-- Üst Özet -->
+<div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
+  <div class="stat-card" style="border-left:3px solid var(--accent)">
+    <div class="stat-label">Baz Ücret (Brüt)</div>
+    <div class="stat-value font-mono">{{ payroll.gross_salary | currency }}</div>
+    <div class="stat-sub">Günlük: {{ (payroll.gross_salary / 30) | currency }}</div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid var(--success)">
+    <div class="stat-label">Aylık Maaş (Net)</div>
+    <div class="stat-value positive font-mono">{{ payroll.net_salary | currency }}</div>
+    <div class="stat-sub">
+      <span class="badge badge-{% if payroll.status == 'odendi' %}success{% elif payroll.status == 'onaylandi' %}info{% else %}neutral{% endif %}">
+        {{ payroll.status_label }}
+      </span>
+    </div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid var(--warning)">
+    <div class="stat-label">Toplam Kesinti</div>
+    <div class="stat-value warning font-mono">{{ (payroll.sgk_employee + payroll.income_tax + payroll.stamp_tax + payroll.other_deductions) | currency }}</div>
+    <div class="stat-sub">SGK + GV + DV</div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid #6366f1">
+    <div class="stat-label">Teşvikli İşveren Maliyeti</div>
+    <div class="stat-value font-mono" style="color:#6366f1">{{ payroll.tesvikli_maliyet | currency }}</div>
+    <div class="stat-sub">İşveren SGK: {{ payroll.sgk_employer | currency }}</div>
+  </div>
+</div>
+
+<div class="grid-2">
+
+<!-- SOL: MAAŞ HESABI TURNUSOLU -->
+<div class="card">
+  <div class="card-header" style="background:var(--accent);border-radius:8px 8px 0 0">
+    <span class="card-title" style="color:#fff">MAAŞ HESABI TURNUSOLU</span>
+    <span style="color:rgba(255,255,255,.7);font-size:12px">{{ payroll.period_label }} {{ payroll.period_year }}</span>
+  </div>
+  <div class="card-body" style="padding:0">
+
+    {# Macro: turnusol satırı #}
+    {% macro trow(label, value, cls='', sub='', indent=0) %}
+    <tr>
+      <td style="padding:7px 16px 7px {{ 16 + indent * 16 }}px;font-size:12px;color:{% if cls == 'header' %}var(--text-primary){% else %}var(--text-muted){% endif %};{% if cls == 'header' %}font-weight:600{% endif %}">
+        {{ label }}
+        {% if sub %}<div style="font-size:11px;color:var(--text-muted);margin-top:2px;font-weight:400">{{ sub }}</div>{% endif %}
+      </td>
+      <td class="text-right font-mono" style="padding:7px 16px;font-size:13px;white-space:nowrap;{% if cls == 'positive' %}color:var(--success){% elif cls == 'negative' %}color:var(--danger){% elif cls == 'header' %}font-weight:600{% endif %}">
+        {{ value }}
+      </td>
+    </tr>
+    {% endmacro %}
+
+    <table style="width:100%;border-collapse:collapse">
+
+      <!-- BAZ ÜCRET -->
+      <tr style="background:#f8fafc">
+        <td style="padding:8px 16px;font-size:12px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em" colspan="2">Kazançlar</td>
+      </tr>
+      {{ trow('Baz Ücret (Brüt)', payroll.gross_salary | currency) }}
+      {{ trow('Günlük Brüt Ücret', (payroll.gross_salary / 30) | currency,
+              sub='Brüt ÷ 30 gün', indent=1) }}
+      {{ trow('Normal Kazanç', payroll.gross_salary | currency,
+              sub='Tam ay çalışma', indent=1) }}
+
+      {% if payroll.overtime_pay > 0 %}
+      <tr style="background:#f0fdf4">
+        <td style="padding:6px 16px;font-size:12px;color:var(--text-muted)">+ Fazla Çalışma</td>
+        <td class="text-right font-mono" style="padding:6px 16px;font-size:13px;color:var(--success)">{{ payroll.overtime_pay | currency }}</td>
+      </tr>
+      {% endif %}
+      {% if payroll.meal_allowance_ayni > 0 %}
+      <tr>
+        <td style="padding:6px 16px;font-size:12px;color:var(--text-muted)">+ Yemek Yardımı (Ayni)
+          <span style="font-size:11px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:3px;margin-left:4px">SGK hariç</span>
+        </td>
+        <td class="text-right font-mono" style="padding:6px 16px;font-size:13px;color:var(--success)">{{ payroll.meal_allowance_ayni | currency }}</td>
+      </tr>
+      {% endif %}
+      {% if payroll.meal_allowance > 0 %}
+      <tr>
+        <td style="padding:6px 16px;font-size:12px;color:var(--text-muted)">+ Yemek Yardımı (Nakit)</td>
+        <td class="text-right font-mono" style="padding:6px 16px;font-size:13px;color:var(--success)">{{ payroll.meal_allowance | currency }}</td>
+      </tr>
+      {% endif %}
+      {% if payroll.other_additions > 0 %}
+      <tr>
+        <td style="padding:6px 16px;font-size:12px;color:var(--text-muted)">+ Diğer Ek Ödemeler</td>
+        <td class="text-right font-mono" style="padding:6px 16px;font-size:13px;color:var(--success)">{{ payroll.other_additions | currency }}</td>
+      </tr>
+      {% endif %}
+
+      <!-- TÜM GELİRLER TOPLAMI -->
+      <tr style="background:#eff6ff;border-top:1px solid var(--border)">
+        <td style="padding:9px 16px;font-size:13px;font-weight:700">Tüm Gelirler Toplamı</td>
+        <td class="text-right font-mono" style="padding:9px 16px;font-size:14px;font-weight:700;color:var(--accent)">{{ payroll.total_gross | currency }}</td>
+      </tr>
+
+      <!-- SGK MATRAHI & KESİNTİLER -->
+      <tr style="background:#f8fafc;border-top:2px solid var(--border)">
+        <td style="padding:8px 16px;font-size:12px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em" colspan="2">SGK</td>
+      </tr>
+      {{ trow('SGK Aylık Matrahı',
+              payroll.sgk_monthly_base | currency,
+              sub='Tüm Gelirler − Ayni Yardım ' ~ (payroll.meal_allowance_ayni | currency)) }}
+      {{ trow('Çalışan SGK Toplam',
+              '− ' ~ (payroll.sgk_employee | currency),
+              cls='negative',
+              sub='SGK Matrahı × ' ~ ((SGK_EMPLOYEE_RATE * 100) | int) ~ '.0%',
+              indent=1) }}
+      {{ trow('Teşvikli İşveren SGK',
+              payroll.sgk_employer | currency,
+              sub='SGK Matrahı × ' ~ ((SGK_EMPLOYER_RATE * 100) | round(2)) ~ '%',
+              indent=1) }}
+
+      <!-- GELİR VERGİSİ -->
+      <tr style="background:#f8fafc;border-top:2px solid var(--border)">
+        <td style="padding:8px 16px;font-size:12px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em" colspan="2">Gelir Vergisi</td>
+      </tr>
+      {{ trow('GV Aylık Matrahı',
+              payroll.gv_monthly_base | currency,
+              sub='SGK Matrahı − Çalışan SGK') }}
+      {% if prev_cumulative_gv > 0 %}
+      {{ trow('Önceki Aydan Devreden Kümülatif',
+              prev_cumulative_gv | currency,
+              indent=1) }}
+      {% endif %}
+      {{ trow('Kümülatif GV Matrahı',
+              payroll.cumulative_gv_base | currency,
+              indent=1) }}
+      {{ trow('Asgari Ücret GV İstisnası',
+              '− ' ~ (payroll.asgari_ucret_istisnasi_gv | currency),
+              cls='positive', indent=1) }}
+      <tr style="border-top:1px solid var(--border)">
+        <td style="padding:7px 16px;font-size:12px;color:var(--text-muted)">Gelir Vergisi</td>
+        <td class="text-right font-mono" style="padding:7px 16px;font-size:13px;color:var(--danger)">− {{ payroll.income_tax | currency }}</td>
+      </tr>
+
+      <!-- DAMGA VERGİSİ -->
+      {{ trow('Damga Vergisi Matrahı',
+              payroll.sgk_monthly_base | currency,
+              sub='Tüm Gelirler − Ayni Yardım') }}
+      {{ trow('Damga Vergisi Asgari İstisna',
+              '− ' ~ (payroll.asgari_ucret_istisnasi_dv | currency),
+              cls='positive', indent=1) }}
+      <tr style="border-top:1px solid var(--border)">
+        <td style="padding:7px 16px;font-size:12px;color:var(--text-muted)">Damga Vergisi (%0.759)</td>
+        <td class="text-right font-mono" style="padding:7px 16px;font-size:13px;color:var(--danger)">− {{ payroll.stamp_tax | currency }}</td>
+      </tr>
+
+      <!-- ÖZEL KESİNTİLER -->
+      <tr style="background:#f8fafc;border-top:2px solid var(--border)">
+        <td style="padding:8px 16px;font-size:12px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em" colspan="2">Kesintiler</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 16px;font-size:12px;color:var(--text-muted)">Özel Kesintiler</td>
+        <td class="text-right font-mono" style="padding:6px 16px;font-size:13px">{{ payroll.other_deductions | currency }}</td>
+      </tr>
+      {% if payroll.meal_allowance_ayni > 0 %}
+      <tr>
+        <td style="padding:6px 16px;font-size:12px;color:var(--text-muted)">Ayni Yardım Kesintisi</td>
+        <td class="text-right font-mono" style="padding:6px 16px;font-size:13px;color:var(--danger)">− {{ payroll.meal_allowance_ayni | currency }}</td>
+      </tr>
+      {% endif %}
+
+      <!-- ELE GEÇEN ÜCRET -->
+      <tr style="background:#f0fdf4;border-top:2px solid var(--border)">
+        <td style="padding:9px 16px;font-size:13px;font-weight:600">Ele Geçen Ücret
+          <div style="font-size:11px;color:var(--text-muted);font-weight:400;margin-top:2px">Tüm Gelirler − Çalışan SGK − GV − DV − Ayni</div>
+        </td>
+        <td class="text-right font-mono" style="padding:9px 16px;font-size:14px;font-weight:600;color:var(--success)">{{ payroll.ele_gecen_ucret | currency }}</td>
+      </tr>
+
+      <!-- NET MAAŞ -->
+      <tr style="background:var(--success);border-top:2px solid var(--border)">
+        <td style="padding:12px 16px;font-size:14px;font-weight:800;color:#fff">AYLIK MAAŞ (NET)</td>
+        <td class="text-right font-mono" style="padding:12px 16px;font-size:20px;font-weight:800;color:#fff">{{ payroll.net_salary | currency }}</td>
+      </tr>
+
+      <!-- TEŞVİKLİ MALİYET -->
+      <tr style="background:#f8fafc;border-top:2px solid var(--border)">
+        <td style="padding:8px 16px;font-size:12px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em" colspan="2">İşveren Bakışı</td>
+      </tr>
+      {{ trow('Tüm Gelirler Toplamı', payroll.total_gross | currency) }}
+      {{ trow('Teşvikli İşveren SGK', payroll.sgk_employer | currency, indent=1) }}
+      <tr style="background:#eff6ff">
+        <td style="padding:9px 16px;font-size:13px;font-weight:700">Teşvikli Maliyet</td>
+        <td class="text-right font-mono" style="padding:9px 16px;font-size:14px;font-weight:700;color:#6366f1">{{ payroll.tesvikli_maliyet | currency }}</td>
+      </tr>
+
+    </table>
+  </div>
+</div>
+
+<!-- SAĞ: BİLGİLER + OVERTIME -->
+<div>
+
+  <!-- Düzenleme Formu (sadece taslak + hr_admin) -->
+  {% if user.role == 'hr_admin' and payroll.status == 'taslak' %}
+  <div class="card" style="margin-bottom:16px;border:2px solid var(--accent)">
+    <div class="card-header" style="background:#eff6ff">
+      <span class="card-title" style="color:var(--accent)">✏️ Bordroyu Düzenle</span>
+      <span style="font-size:11px;color:var(--text-muted)">Değiştirdikçe otomatik hesaplanır</span>
+    </div>
+    <div class="card-body">
+      <form method="post" action="/payroll/{{ payroll.id }}/edit" id="editForm">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+
+          <div class="form-group">
+            <label>Brüt Maaş (₺) *</label>
+            <input type="number" name="gross_salary" id="inp_gross"
+                   step="0.01" min="0" required
+                   value="{{ payroll.gross_salary }}"
+                   oninput="calcLive()">
+          </div>
+
+          <div class="form-group">
+            <label>Yemek Yardımı Ayni (₺)
+              <span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px">SGK hariç</span>
+            </label>
+            <input type="number" name="meal_allowance_ayni" id="inp_meal_ayni"
+                   step="0.01" min="0"
+                   value="{{ payroll.meal_allowance_ayni }}"
+                   oninput="calcLive()">
+          </div>
+
+          <div class="form-group">
+            <label>Yemek Yardımı Nakit (₺)</label>
+            <input type="number" name="meal_allowance" id="inp_meal_nakit"
+                   step="0.01" min="0"
+                   value="{{ payroll.meal_allowance }}"
+                   oninput="calcLive()">
+          </div>
+
+          <div class="form-group">
+            <label>Diğer Ek Ödemeler (₺)
+              <span style="font-size:10px;color:var(--text-muted)">(Dil tazminatı vb.)</span>
+            </label>
+            <input type="number" name="other_additions" id="inp_other_add"
+                   step="0.01" min="0"
+                   value="{{ payroll.other_additions }}"
+                   oninput="calcLive()">
+          </div>
+
+          <div class="form-group">
+            <label>Özel Kesintiler (₺)</label>
+            <input type="number" name="other_deductions" id="inp_other_ded"
+                   step="0.01" min="0"
+                   value="{{ payroll.other_deductions }}"
+                   oninput="calcLive()">
+          </div>
+
+          <div class="form-group">
+            <label>Fazla Mesai (₺)
+              <span style="font-size:10px;color:var(--text-muted)">Salt okunur</span>
+            </label>
+            <input type="number" id="inp_ot" step="0.01" min="0"
+                   value="{{ payroll.overtime_pay }}" disabled
+                   style="background:#f8fafc">
+          </div>
+
+        </div>
+
+        <div class="form-group" style="margin-top:4px">
+          <label>Notlar</label>
+          <input type="text" name="notes" value="{{ payroll.notes or '' }}">
+        </div>
+
+        <!-- Canlı Hesaplama Önizleme -->
+        <div id="livePreview" style="background:#f0fdf4;border-radius:8px;padding:12px;margin-top:12px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Anlık Hesaplama</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:12px">
+            <div>
+              <div style="color:var(--text-muted)">Tüm Gelirler</div>
+              <div class="font-mono" id="lv_total" style="font-weight:600">—</div>
+            </div>
+            <div>
+              <div style="color:var(--text-muted)">SGK Matrahı</div>
+              <div class="font-mono" id="lv_sgk_base">—</div>
+            </div>
+            <div>
+              <div style="color:var(--text-muted)">Çalışan SGK (%7.5)</div>
+              <div class="font-mono" id="lv_sgk_emp" style="color:var(--danger)">—</div>
+            </div>
+            <div>
+              <div style="color:var(--text-muted)">GV Matrahı</div>
+              <div class="font-mono" id="lv_gv_base">—</div>
+            </div>
+            <div>
+              <div style="color:var(--text-muted)">Gelir Vergisi</div>
+              <div class="font-mono" id="lv_gv" style="color:var(--danger)">—</div>
+            </div>
+            <div>
+              <div style="color:var(--text-muted)">Damga Vergisi</div>
+              <div class="font-mono" id="lv_dv" style="color:var(--danger)">—</div>
+            </div>
+          </div>
+          <div style="border-top:1px solid #bbf7d0;margin-top:10px;padding-top:10px;display:flex;gap:24px;align-items:center">
+            <div>
+              <div style="font-size:11px;color:var(--text-muted)">Ele Geçen</div>
+              <div class="font-mono" id="lv_ele" style="font-weight:600">—</div>
+            </div>
+            <div style="flex:1">
+              <div style="font-size:11px;color:var(--text-muted)">NET MAAŞ</div>
+              <div class="font-mono" id="lv_net" style="font-size:18px;font-weight:800;color:var(--success)">—</div>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--text-muted)">Teşvikli Maliyet</div>
+              <div class="font-mono" id="lv_maliyet" style="font-weight:600;color:#6366f1">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button type="submit" class="btn btn-primary">Kaydet &amp; Yeniden Hesapla</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Çalışan & Dönem Bilgileri -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><span class="card-title">Genel Bilgiler</span></div>
+    <div class="card-body">
+      <table style="width:100%">
+        {% macro irow(label, value) %}
+        <tr>
+          <td style="font-size:12px;color:var(--text-muted);padding:5px 0;width:45%">{{ label }}</td>
+          <td style="font-size:13px;font-weight:500">{{ value or '—' }}</td>
+        </tr>
+        {% endmacro %}
+        {{ irow('Çalışan', payroll.employee.full_name if payroll.employee else '') }}
+        {{ irow('Sicil No', payroll.employee.employee_no if payroll.employee else '') }}
+        {{ irow('Departman', payroll.employee.department if payroll.employee else '') }}
+        {{ irow('Dönem', payroll.period_label) }}
+        {% if payroll.payment_date %}
+        {{ irow('Ödeme Tarihi', payroll.payment_date | fmtdate) }}
+        {% endif %}
+        {{ irow('Durum', payroll.status_label) }}
+        {% if payroll.notes %}
+        {{ irow('Notlar', payroll.notes) }}
+        {% endif %}
+      </table>
+    </div>
+  </div>
+
+  <!-- Oran Özeti -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><span class="card-title">Uygulanan Oranlar (2026)</span></div>
+    <div class="card-body" style="padding:12px 16px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="background:#f8fafc;border-radius:6px;padding:8px 12px;text-align:center">
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Çalışan SGK</div>
+          <div style="font-size:18px;font-weight:700;color:var(--danger)">%{{ (SGK_EMPLOYEE_RATE * 100) | int }}.0</div>
+        </div>
+        <div style="background:#f8fafc;border-radius:6px;padding:8px 12px;text-align:center">
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">İşveren SGK</div>
+          <div style="font-size:18px;font-weight:700;color:#6366f1">%{{ (SGK_EMPLOYER_RATE * 100) | round(2) }}</div>
+        </div>
+        <div style="background:#f8fafc;border-radius:6px;padding:8px 12px;text-align:center">
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">GV Asgari İstisnası</div>
+          <div style="font-size:16px;font-weight:700;color:var(--success)">{{ payroll.asgari_ucret_istisnasi_gv | currency }}</div>
+        </div>
+        <div style="background:#f8fafc;border-radius:6px;padding:8px 12px;text-align:center">
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">DV Asgari İstisnası</div>
+          <div style="font-size:16px;font-weight:700;color:var(--success)">{{ payroll.asgari_ucret_istisnasi_dv | currency }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Kümülatif GV Takibi -->
+  {% if payroll.cumulative_gv_base > 0 %}
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><span class="card-title">Kümülatif GV Matrahı</span></div>
+    <div class="card-body" style="padding:12px 16px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="flex:1;text-align:center">
+          <div style="font-size:11px;color:var(--text-muted)">Önceki Aylardan</div>
+          <div class="font-mono" style="font-size:14px;font-weight:600">{{ prev_cumulative_gv | currency }}</div>
+        </div>
+        <div style="font-size:18px;color:var(--text-muted)">+</div>
+        <div style="flex:1;text-align:center">
+          <div style="font-size:11px;color:var(--text-muted)">Bu Ay</div>
+          <div class="font-mono" style="font-size:14px;font-weight:600">{{ payroll.gv_monthly_base | currency }}</div>
+        </div>
+        <div style="font-size:18px;color:var(--text-muted)">=</div>
+        <div style="flex:1;text-align:center;background:#eff6ff;border-radius:6px;padding:6px">
+          <div style="font-size:11px;color:var(--accent)">Kümülatif</div>
+          <div class="font-mono" style="font-size:14px;font-weight:700;color:var(--accent)">{{ payroll.cumulative_gv_base | currency }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Fazla Mesai -->
+  {% if overtime_rows %}
+  <div class="card">
+    <div class="card-header"><span class="card-title">⏰ Bu Dönem Fazla Mesai</span></div>
+    <div class="card-body" style="padding:0">
+      <table>
+        <thead>
+          <tr><th>Tarih</th><th>Süre</th><th>Çarpan</th><th>Gerekçe</th></tr>
+        </thead>
+        <tbody>
+          {% for ot in overtime_rows %}
+          <tr>
+            <td class="nowrap">{{ ot.work_date | fmtdate }}</td>
+            <td>{{ ot.hours | fmthours }}</td>
+            <td><span class="badge badge-info">{{ ot.rate_label }}</span></td>
+            <td>{{ ot.reason or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+</div>
+
+<!-- Ödendi Modal -->
+<div id="paidModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title">Ödeme Tarihi Gir</div>
+    <form method="post" action="/payroll/{{ payroll.id }}/mark-paid">
+      <div class="form-group" style="margin-bottom:16px">
+        <label>Ödeme Tarihi</label>
+        <input type="date" name="payment_date" required>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button type="submit" class="btn btn-primary">Onayla</button>
+        <button type="button" onclick="document.getElementById('paidModal').classList.remove('open')" class="btn btn-secondary">İptal</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Ödeme tarihi
+const pd = document.querySelector('[name=payment_date]');
+if (pd) pd.value = new Date().toISOString().split('T')[0];
+
+// ---------------------------------------------------------------------------
+// Canlı bordro hesaplama (Python _calc_payroll'un JS karşılığı)
+// ---------------------------------------------------------------------------
+const SGK_EMP   = 0.075;
+const SGK_EMPR  = 0.2475;
+const DV_RATE   = 0.00759;
+const GV_MIN    = 4211.33;
+const DV_MIN    = 250.70;
+const PREV_CUM  = {{ prev_cumulative_gv }};   // Python'dan geliyor
+
+// 2026 GV dilimleri (kümülatif)
+const GV_BRACKETS = [
+  [230000, 0.15],
+  [400000, 0.20],
+  [1900000, 0.27],
+  [4500000, 0.35],
+  [Infinity, 0.40],
+];
+
+function cumGV(base) {
+  let tax = 0, prev = 0;
+  for (const [limit, rate] of GV_BRACKETS) {
+    if (base <= prev) break;
+    tax += (Math.min(base, limit) - prev) * rate;
+    prev = limit;
+  }
+  return tax;
+}
+
+function fmt(n) {
+  return '₺' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+function calcLive() {
+  const gross     = parseFloat(document.getElementById('inp_gross').value)     || 0;
+  const mealAyni  = parseFloat(document.getElementById('inp_meal_ayni').value) || 0;
+  const mealNakit = parseFloat(document.getElementById('inp_meal_nakit').value)|| 0;
+  const otherAdd  = parseFloat(document.getElementById('inp_other_add').value) || 0;
+  const otherDed  = parseFloat(document.getElementById('inp_other_ded').value) || 0;
+  const ot        = parseFloat(document.getElementById('inp_ot').value)        || 0;
+
+  const totalGross  = gross + ot + mealAyni + mealNakit + otherAdd;
+  const sgkBase     = totalGross - mealAyni;
+  const sgkEmp      = Math.round(sgkBase * SGK_EMP * 100) / 100;
+  const sgkEmpr     = Math.round(sgkBase * SGK_EMPR * 100) / 100;
+  const gvBase      = sgkBase - sgkEmp;
+  const cumThis     = PREV_CUM + gvBase;
+  const gvRaw       = cumGV(cumThis) - cumGV(PREV_CUM);
+  const gv          = Math.max(0, Math.round((gvRaw - GV_MIN) * 100) / 100);
+  const dv          = Math.max(0, Math.round((sgkBase * DV_RATE - DV_MIN) * 100) / 100);
+  const eleGecen    = Math.round((totalGross - sgkEmp - gv - dv - mealAyni) * 100) / 100;
+  const net         = eleGecen - otherDed;
+  const maliyet     = totalGross + sgkEmpr;
+
+  document.getElementById('lv_total').textContent    = fmt(totalGross);
+  document.getElementById('lv_sgk_base').textContent = fmt(sgkBase);
+  document.getElementById('lv_sgk_emp').textContent  = '− ' + fmt(sgkEmp);
+  document.getElementById('lv_gv_base').textContent  = fmt(gvBase);
+  document.getElementById('lv_gv').textContent       = '− ' + fmt(gv);
+  document.getElementById('lv_dv').textContent       = '− ' + fmt(dv);
+  document.getElementById('lv_ele').textContent      = fmt(eleGecen);
+  document.getElementById('lv_net').textContent      = fmt(net);
+  document.getElementById('lv_maliyet').textContent  = fmt(maliyet);
+}
+
+// Sayfa açılışında bir kez çalıştır
+if (document.getElementById('inp_gross')) calcLive();
+</script>
+{% endblock %}

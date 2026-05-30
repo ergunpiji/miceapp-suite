@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block page_title %}Ön Ödeme Talebi Oluştur{% endblock %}
+{% block page_title_block %}Ön Ödeme Talebi Oluştur{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3" style="max-width:720px;">
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-4">
+
+      <div class="mb-4 p-3 rounded" style="background:#fefce8;border-left:4px solid #eab308;">
+        <div class="fw-semibold mb-1" style="font-size:13px;color:#713f12;">
+          <i class="bi bi-info-circle me-1"></i>Nasıl çalışır?
+        </div>
+        <div style="font-size:12px;color:#92400e;">
+          Talep oluşturduktan sonra Genel Müdür onayına gider.
+          Onaylandığında Muhasebe ödemeyi işler ve tedarikçi kartına otomatik ön ödeme olarak kaydedilir.
+          Tedarikçiden fatura geldiğinde ön ödeme tutarı otomatik düşülür.
+        </div>
+      </div>
+
+      <form method="post" action="/prepayment-requests/new">
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Tedarikçi <span class="text-danger">*</span></label>
+          <select name="vendor_id" id="vendorSelect" class="form-select" required>
+            <option value="">— Tedarikçi seçin —</option>
+            {% for v in vendors %}
+            <option value="{{ v.id }}" {% if selected_vendor and selected_vendor.id == v.id %}selected{% endif %}>
+              {{ v.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">İlgili Referans <span class="text-muted fw-normal">(opsiyonel)</span></label>
+          <select name="request_id" class="form-select">
+            <option value="">— Referans seçin —</option>
+            {% for req in requests_list %}
+            <option value="{{ req.id }}">
+              {{ req.request_no }}{% if req.event_name %} — {{ req.event_name }}{% endif %}
+              {% if req.customer %} ({{ req.customer.name }}){% endif %}
+            </option>
+            {% endfor %}
+          </select>
+          <div class="form-text">Ön ödeme hangi proje/referans için yapılıyor?</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Tutar (₺) <span class="text-danger">*</span></label>
+          <div class="input-group">
+            <span class="input-group-text">₺</span>
+            <input type="number" name="amount" class="form-control"
+                   step="0.01" min="1" placeholder="0.00" required>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Açıklama</label>
+          <input type="text" name="description" class="form-control"
+                 placeholder="Ön ödemenin amacı (kısa)">
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold">Notlar</label>
+          <textarea name="notes" class="form-control" rows="2"
+                    placeholder="Varsa ek notlar…"></textarea>
+        </div>
+
+        <div class="d-flex gap-2 justify-content-end">
+          <a href="/prepayment-requests" class="btn btn-outline-secondary">İptal</a>
+          <button type="submit" class="btn btn-warning text-dark fw-semibold">
+            <i class="bi bi-send me-1"></i>GM Onayına Gönder
+          </button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

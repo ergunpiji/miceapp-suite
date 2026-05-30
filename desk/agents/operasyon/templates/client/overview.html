@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ event.name }} — Etkinlik Portalı</title>
+  <link rel="stylesheet" href="{{ base_url }}/static/css/style.css">
+  <style>
+    body { background: #f1f5f9; }
+    .client-wrap { max-width: 900px; margin: 0 auto; padding: 24px 16px; }
+
+    /* Header */
+    .client-header {
+      background: linear-gradient(135deg, #1e3a5f, #1e5f8c);
+      color: #fff; border-radius: 14px; padding: 28px 28px 22px; margin-bottom: 20px;
+    }
+    .client-header h1 { margin: 0 0 6px; font-size: 22px; font-weight: 800; }
+    .client-header .meta { font-size: 13px; opacity: .8; margin-bottom: 4px; }
+    .client-header .badge-readonly {
+      display: inline-block; margin-top: 10px;
+      background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.3);
+      border-radius: 20px; padding: 3px 12px; font-size: 11px; font-weight: 600;
+    }
+
+    /* İstatistik kartları */
+    .stats-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .stat-card {
+      background: #fff; border-radius: 10px; padding: 16px 20px;
+      flex: 1; min-width: 120px; text-align: center; border: 1px solid #e2e8f0;
+    }
+    .stat-card .num { font-size: 30px; font-weight: 800; color: #1e3a5f; }
+    .stat-card .lbl { font-size: 12px; color: #64748b; margin-top: 3px; }
+    .stat-card.green .num { color: #16a34a; }
+    .stat-card.amber .num { color: #d97706; }
+
+    /* Program bölümü */
+    .section-title {
+      font-size: 15px; font-weight: 700; color: #1e3a5f;
+      margin: 24px 0 10px; display: flex; align-items: center; gap: 8px;
+    }
+    .day-group { margin-bottom: 16px; }
+    .day-header {
+      background: #e2e8f0; color: #1e3a5f; font-weight: 700;
+      font-size: 13px; padding: 8px 16px; border-radius: 8px 8px 0 0;
+    }
+    .session-row {
+      background: #fff; border: 1px solid #e2e8f0; border-top: none;
+      padding: 12px 16px; display: flex; gap: 14px; align-items: flex-start;
+    }
+    .session-row:last-child { border-radius: 0 0 8px 8px; }
+    .session-time {
+      min-width: 72px; font-size: 12px; font-weight: 700;
+      color: #1e5f8c; padding-top: 2px; white-space: nowrap;
+    }
+    .session-body { flex: 1; }
+    .session-title { font-size: 14px; font-weight: 600; color: #1e293b; }
+    .session-desc { font-size: 12px; color: #64748b; margin-top: 3px; }
+    .session-type-badge {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      padding: 2px 8px; border-radius: 20px; margin-left: 8px;
+      background: #eff6ff; color: #1d4ed8; vertical-align: middle;
+    }
+
+    /* Durum listesi */
+    .status-list { background:#fff; border-radius:10px; border:1px solid #e2e8f0; overflow:hidden; margin-bottom:16px; }
+    .status-list-header {
+      padding:10px 16px; display:flex; justify-content:space-between; align-items:center;
+      background:#f8fafc; border-bottom:1px solid #e2e8f0;
+    }
+    .status-list-title { font-size:13px; font-weight:700; color:#1e3a5f; }
+    .status-list-badge {
+      font-size:12px; font-weight:700; padding:2px 10px; border-radius:20px;
+    }
+    .badge-green { background:#dcfce7; color:#166534; }
+    .badge-amber { background:#fef3c7; color:#92400e; }
+    .status-row {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:10px 16px; border-bottom:1px solid #f1f5f9; gap:10px;
+    }
+    .status-row:last-child { border-bottom:none; }
+    .status-name { font-size:13px; font-weight:600; color:#1e293b; }
+    .status-meta { font-size:11px; color:#94a3b8; margin-top:2px; }
+    .status-ok   { font-size:12px; font-weight:700; color:#16a34a; white-space:nowrap; }
+    .status-wait { font-size:12px; font-weight:700; color:#d97706; white-space:nowrap; }
+
+    /* Grup başlığı */
+    .group-label {
+      padding:8px 16px; background:#eff6ff; font-size:12px;
+      font-weight:700; color:#1e40af; border-bottom:1px solid #e2e8f0;
+    }
+
+    /* Boş program */
+    .empty-state {
+      text-align: center; padding: 48px 20px; color: #94a3b8;
+      background: #fff; border-radius: 10px; border: 1px solid #e2e8f0;
+    }
+    .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+
+    /* Footer */
+    .client-footer {
+      text-align: center; margin-top: 28px;
+      font-size: 12px; color: #94a3b8; line-height: 1.8;
+    }
+  </style>
+</head>
+<body>
+<div class="client-wrap">
+
+  <!-- Başlık -->
+  <div class="client-header">
+    <h1>{{ event.name }}</h1>
+    <div class="meta">
+      📅
+      {{ event.start_date.strftime('%d.%m.%Y') }}
+      {% if event.end_date and event.end_date != event.start_date %}
+        — {{ event.end_date.strftime('%d.%m.%Y') }}
+      {% endif %}
+    </div>
+    {% if event.venue %}<div class="meta">🏛 {{ event.venue }}{% if event.city %} · {{ event.city }}{% endif %}</div>{% elif event.city %}<div class="meta">📍 {{ event.city }}</div>{% endif %}
+    <div class="badge-readonly">Salt Okunur Görünüm</div>
+  </div>
+
+  <!-- Katılımcı İstatistikleri -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="num">{{ participant_count }}</div>
+      <div class="lbl">Toplam Katılımcı</div>
+    </div>
+    <div class="stat-card green">
+      <div class="num">{{ complete_count }}</div>
+      <div class="lbl">Hazır</div>
+    </div>
+    {% if warning_count > 0 %}
+    <div class="stat-card amber">
+      <div class="num">{{ warning_count }}</div>
+      <div class="lbl">Eksik Bilgi</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Konaklama Durumu -->
+  {% if accommodations %}
+  <div class="section-title">🏨 Konaklama Durumu</div>
+  <div class="status-list">
+    <div class="status-list-header">
+      <div class="status-list-title">Otele Giriş</div>
+      <span class="status-list-badge {% if acc_checked_in == accommodations|length %}badge-green{% else %}badge-amber{% endif %}">
+        ✅ {{ acc_checked_in }} / {{ accommodations|length }} giriş yaptı
+      </span>
+    </div>
+    {% for a in accommodations %}
+    <div class="status-row">
+      <div>
+        <div class="status-name">{{ a.participant.full_name }}</div>
+        <div class="status-meta">
+          {{ a.hotel or '—' }}
+          {% if a.room_type %} · {{ a.room_type }}{% endif %}
+          {% if a.room_number %} · Oda {{ a.room_number }}{% endif %}
+        </div>
+      </div>
+      {% if a.checked_in %}
+        <div class="status-ok">
+          ✅ Giriş Yaptı
+          {% if a.checked_in_at %}
+          <div style="font-size:10px; font-weight:400; color:#64748b;">
+            {{ a.checked_in_at.strftime('%d.%m %H:%M') }}
+          </div>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="status-wait">⏳ Bekleniyor</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Transfer Durumu -->
+  {% if transfers %}
+  <div class="section-title">🚌 Transfer Durumu</div>
+  {% if transfer_groups %}
+    {% for group_name, group_transfers in transfer_groups.items() %}
+    {% set g_boarded = group_transfers | selectattr('boarded') | list | length %}
+    {% set g_total   = group_transfers | length %}
+    <div class="status-list" style="margin-bottom:12px;">
+      <div class="status-list-header">
+        <div class="status-list-title">🚌 {{ group_name }}</div>
+        <span class="status-list-badge {% if g_boarded == g_total %}badge-green{% else %}badge-amber{% endif %}">
+          ✅ {{ g_boarded }} / {{ g_total }} bindi
+        </span>
+      </div>
+      {% for t in group_transfers %}
+      <div class="status-row">
+        <div>
+          <div class="status-name">{{ t.participant.full_name }}</div>
+          <div class="status-meta">
+            {% if t.direction == 'in' %}↓ Karşılama{% else %}↑ Gidiş{% endif %}
+            {% if t.from_location %} · {{ t.from_location }}{% endif %}
+            {% if t.to_location %} → {{ t.to_location }}{% endif %}
+          </div>
+        </div>
+        {% if t.boarded %}
+          <div class="status-ok">
+            ✅ Bindi
+            {% if t.boarded_at %}
+            <div style="font-size:10px; font-weight:400; color:#64748b;">
+              {{ t.boarded_at.strftime('%d.%m %H:%M') }}
+            </div>
+            {% endif %}
+          </div>
+        {% else %}
+          <div class="status-wait">⏳ Bekleniyor</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  {% endif %}
+  {% endif %}
+
+  <!-- Program -->
+  <div class="section-title">📅 Etkinlik Programı</div>
+
+  {% if not by_day %}
+  <div class="empty-state">
+    <div class="icon">📋</div>
+    <p>Program henüz eklenmemiş.</p>
+  </div>
+  {% else %}
+  {% for day, sessions in by_day.items() %}
+  <div class="day-group">
+    <div class="day-header">
+      {% if day %}{{ day.strftime('%d %B %Y, %A') }}{% else %}Tarih Belirtilmemiş{% endif %}
+    </div>
+    {% for s in sessions %}
+    <div class="session-row">
+      <div class="session-time">
+        {% if s.start_time %}{{ s.start_time }}{% endif %}
+        {% if s.end_time %}<br><span style="color:#94a3b8;font-weight:400;">{{ s.end_time }}</span>{% endif %}
+      </div>
+      <div class="session-body">
+        <div class="session-title">
+          {{ s.title }}
+          {% if s.session_type and session_types %}
+            {% for st in session_types %}
+              {% if st.value == s.session_type %}
+              <span class="session-type-badge">{{ st.label }}</span>
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+        </div>
+        {% if s.description %}
+        <div class="session-desc">{{ s.description }}</div>
+        {% endif %}
+        {% if s.location %}
+        <div class="session-desc">📍 {{ s.location }}</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  <div class="client-footer">
+    Etkinlik Portalı · {{ event.name }}<br>
+    Bu sayfa yalnızca bilgi amaçlıdır ve düzenleme yapılamaz.
+  </div>
+</div>
+</body>
+</html>

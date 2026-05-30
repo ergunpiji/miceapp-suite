@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block page_title %}Çekler{% endblock %}
+
+{% block topbar_actions %}
+<a href="/cheques/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Yeni Çek</a>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .cheque-table thead th { font-size:11px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.05em; color:#64748b; padding:9px 12px; white-space:nowrap;
+    background:#fafafa; border-bottom:2px solid #e2e8f0; }
+  .cheque-table tbody td { padding:9px 12px; font-size:13.5px; vertical-align:middle;
+    border-bottom:1px solid #f1f5f9; }
+  .cheque-table tbody tr:last-child td { border-bottom:none; }
+  .cheque-table tbody tr:hover { background:#f8fafc; cursor:pointer; }
+
+  .row-overdue td { background:#fff5f5 !important; }
+  .badge-chip { font-size:11px; padding:3px 8px; border-radius:20px; font-weight:600; }
+  .btn-action { font-size:12px; padding:3px 10px; border-radius:6px; }
+
+  .stat-row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid #f1f5f9; }
+  .stat-row:last-child { border-bottom:none; }
+  .stat-label { font-size:12px; color:#64748b; }
+  .stat-value { font-size:14px; font-weight:700; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <!-- Sol: Özet -->
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="text-muted small fw-semibold mb-3">Çek Özeti</div>
+
+        <div class="stat-row">
+          <div class="stat-label"><i class="bi bi-arrow-down-circle text-success me-1"></i>Alınan — Beklemede</div>
+          <div class="stat-value text-success">{{ alinan_bekl | money }}</div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-label"><i class="bi bi-arrow-up-circle text-primary me-1"></i>Verilen — Beklemede</div>
+          <div class="stat-value text-primary">{{ verilen_bekl | money }}</div>
+        </div>
+        {% if vadesi_gecmis_count > 0 %}
+        <div class="stat-row" style="background:#fff5f5;margin:0 -16px;padding:8px 16px;border-radius:0;">
+          <div class="stat-label" style="color:#dc2626"><i class="bi bi-exclamation-circle me-1"></i>Vadesi Geçmiş</div>
+          <div class="stat-value text-danger">{{ vadesi_gecmis_count }} çek</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Sağ: Filtre + Tablo -->
+  <div class="col-md-8">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 pb-0">
+        <form class="d-flex align-items-center gap-2 flex-wrap" method="get">
+          <select name="cheque_type" class="form-select form-select-sm" style="width:130px">
+            <option value="">Tüm Tipler</option>
+            <option value="alinan"  {% if cheque_type=='alinan'  %}selected{% endif %}>Alınan</option>
+            <option value="verilen" {% if cheque_type=='verilen' %}selected{% endif %}>Verilen</option>
+          </select>
+          <select name="status_filter" class="form-select form-select-sm" style="width:150px">
+            <option value="">Tüm Durumlar</option>
+            <option value="beklemede"     {% if status_filter=='beklemede'     %}selected{% endif %}>Beklemede</option>
+            <option value="tahsil_edildi" {% if status_filter=='tahsil_edildi' %}selected{% endif %}>Tahsil Edildi</option>
+            <option value="iade"          {% if status_filter=='iade'          %}selected{% endif %}>İade</option>
+            <option value="karsilıksız"   {% if status_filter=='karsilıksız'   %}selected{% endif %}>Karşılıksız</option>
+            <option value="iptal"         {% if status_filter=='iptal'         %}selected{% endif %}>İptal</option>
+          </select>
+          <button type="submit" class="btn btn-sm btn-outline-secondary">Filtrele</button>
+          {% if cheque_type or status_filter %}
+          <a href="/cheques" class="btn btn-sm btn-link text-muted">Temizle</a>
+          {% endif %}
+        </form>
+      </div>
+
+      <div class="card-body p-0 mt-2">
+        <table class="table cheque-table mb-0">
+          <thead>
+            <tr>
+              <th>Çek No</th>
+              <th>Tip</th>
+              <th>Kişi / Firma</th>
+              <th>Banka</th>
+              <th class="text-end">Tutar</th>
+              <th>Vade</th>
+              <th>Durum</th>
+              <th style="width:200px"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in cheques %}
+            {% set overdue = (c.status == 'beklemede' and c.due_date.isoformat() < today) %}
+            <tr class="{% if overdue %}row-overdue{% endif %}" onclick="window.location='/cheques/{{ c.id }}'">
+              <td class="fw-semibold">{{ c.cheque_no or '—' }}</td>
+              <td>
+                {% if c.cheque_type == 'alinan' %}
+                <span class="badge badge-chip bg-success">Alınan</span>
+                {% else %}
+                <span class="badge badge-chip bg-primary">Verilen</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if c.vendor %}{{ c.vendor.name }}
+                {% elif c.customer %}{{ c.customer.name }}
+                {% else %}—{% endif %}
+                {% if c.attachment %}<i class="bi bi-paperclip text-muted ms-1" title="Belge eklendi"></i>{% endif %}
+              </td>
+              <td class="text-muted">{{ c.bank or '—' }}</td>
+              <td class="text-end fw-semibold">{{ c.amount | money }}</td>
+              <td class="{% if overdue %}text-danger fw-semibold{% endif %}">
+                {{ c.due_date | date_tr }}
+                {% if overdue %}<i class="bi bi-exclamation-circle ms-1"></i>{% endif %}
+              </td>
+              <td>
+                {% set sl = status_labels.get(c.status, ('secondary', c.status)) %}
+                <span class="badge badge-chip bg-{{ sl[0] }}">{{ sl[1] }}</span>
+              </td>
+              <td onclick="event.stopPropagation()">
+                {% if c.status == 'beklemede' %}
+                  {% if c.cheque_type == 'alinan' %}
+                  <button class="btn btn-success btn-action me-1"
+                    onclick="openSettle({{ c.id }}, '{{ c.due_date.isoformat() }}', 'Tahsil Et')">
+                    <i class="bi bi-check-lg me-1"></i>Tahsil Et
+                  </button>
+                  <button class="btn btn-outline-warning btn-action me-1"
+                    onclick="doCancel({{ c.id }}, 'iade', 'İade olarak işaretlensin mi?')">İade</button>
+                  <button class="btn btn-outline-danger btn-action"
+                    onclick="doCancel({{ c.id }}, 'karsilıksız', 'Karşılıksız olarak işaretlensin mi?')">Karşılıksız</button>
+                  {% else %}
+                  <button class="btn btn-primary btn-action me-1"
+                    onclick="openSettle({{ c.id }}, '{{ c.due_date.isoformat() }}', 'Ödendi')">
+                    <i class="bi bi-bank me-1"></i>Ödendi
+                  </button>
+                  <button class="btn btn-outline-dark btn-action me-1"
+                    onclick="doCancel({{ c.id }}, 'iptal', 'Çek iptal edilsin mi?')">İptal</button>
+                  <button class="btn btn-outline-danger btn-action"
+                    onclick="doCancel({{ c.id }}, 'karsilıksız', 'Karşılıksız olarak işaretlensin mi?')">Karşılıksız</button>
+                  {% endif %}
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="8" class="text-center text-muted py-5">Çek bulunamadı.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Settle Modal -->
+<div class="modal fade" id="settleModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header" style="background:linear-gradient(135deg,#1a3a5c,#1e5f8c);color:#fff">
+        <h6 class="modal-title" id="settleModalTitle"><i class="bi bi-bank me-2"></i>İşlemi Onayla</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="settleForm" method="post">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Banka Hesabı <span class="text-danger">*</span></label>
+            <select name="bank_account_id" class="form-select" required>
+              <option value="">— Seçiniz —</option>
+              {% for ba in bank_accounts %}
+              <option value="{{ ba.id }}">{{ ba.name }} — {{ ba.bank_name or '' }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Tarih <span class="text-danger">*</span></label>
+            <input type="date" name="settled_date" id="settleDate" class="form-control" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-primary btn-sm px-4">
+            <i class="bi bi-check-lg me-1"></i>Onayla
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<form id="cancelForm" method="post" style="display:none">
+  <input type="hidden" name="reason" id="cancelReason">
+</form>
+
+<script>
+function openSettle(chequeId, dueDate, label) {
+  document.getElementById('settleModalTitle').innerHTML = '<i class="bi bi-bank me-2"></i>' + label;
+  document.getElementById('settleForm').action = '/cheques/' + chequeId + '/settle';
+  var settleDateEl = document.getElementById('settleDate');
+  settleDateEl.value = dueDate;
+  if (settleDateEl._flatpickr) settleDateEl._flatpickr.setDate(dueDate, false);
+  new bootstrap.Modal(document.getElementById('settleModal')).show();
+}
+
+function doCancel(chequeId, reason, msg) {
+  if (!confirm(msg)) return;
+  const f = document.getElementById('cancelForm');
+  f.action = '/cheques/' + chequeId + '/cancel';
+  document.getElementById('cancelReason').value = reason;
+  f.submit();
+}
+</script>
+{% endblock %}

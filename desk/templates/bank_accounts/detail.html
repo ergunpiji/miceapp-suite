@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block page_title %}{{ account.name }}{% endblock %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body text-center">
+        <div class="text-muted small mb-1">Mevcut Bakiye</div>
+        <div class="fs-1 fw-bold {% if balance >= 0 %}text-success{% else %}text-danger{% endif %}">{{ balance | money }}</div>
+        <div class="text-muted small">{{ account.currency }} · {{ account.bank_name or "" }}</div>
+        {% if account.iban %}<div class="text-muted small font-monospace mt-1">{{ account.iban }}</div>{% endif %}
+      </div>
+    </div>
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <h6 class="fw-bold mb-3">Hareket Ekle</h6>
+        <form method="post" action="/bank-accounts/{{ account.id }}/movements/new">
+          <div class="mb-2">
+            <input type="date" name="movement_date" class="form-control form-control-sm" required value="{{ today }}">
+          </div>
+          <div class="mb-2">
+            <select name="movement_type" class="form-select form-select-sm">
+              <option value="giris">Giriş (+)</option>
+              <option value="cikis">Çıkış (-)</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <input type="number" name="amount" step="0.01" class="form-control form-control-sm" placeholder="Tutar" required>
+          </div>
+          <div class="mb-2">
+            <input type="text" name="description" class="form-control form-control-sm" placeholder="Açıklama">
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm w-100">Ekle</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-8">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0"><span class="fw-semibold">Hareketler</span></div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr><th>Tarih</th><th>Açıklama</th><th class="text-end">Giriş</th><th class="text-end">Çıkış</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for m in movements %}
+            <tr>
+              <td>{{ m.movement_date | date_tr }}</td>
+              <td>{{ m.description or "—" }}</td>
+              <td class="text-end text-success">{% if m.movement_type == 'giris' %}{{ m.amount | money }}{% endif %}</td>
+              <td class="text-end text-danger">{% if m.movement_type == 'cikis' %}{{ m.amount | money }}{% endif %}</td>
+              <td>
+                {% if can_edit(request, 'banks') %}
+                <form method="post" action="/bank-accounts/{{ account.id }}/movements/{{ m.id }}/delete" style="display:inline" onsubmit="return confirm('Sil?')">
+                  <button class="btn btn-xs btn-outline-danger btn-sm py-0"><i class="bi bi-trash"></i></button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="text-center text-muted py-4">Henüz hareket yok.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

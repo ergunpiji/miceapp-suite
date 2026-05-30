@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}{% if event %}Etkinliği Düzenle{% else %}Yeni Etkinlik{% endif %}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">{% if event %}Etkinliği Düzenle{% else %}Yeni Etkinlik{% endif %}</div>
+</div>
+
+<div class="card">
+  <form method="post" action="{% if event %}/events/{{ event.id }}/edit{% else %}/events/new{% endif %}" id="event-form">
+
+    <!-- Gizli E-dem alanları -->
+    <input type="hidden" name="edem_request_id" id="edem_request_id" value="{{ event.edem_request_id or '' if event else '' }}">
+    <input type="hidden" name="edem_request_no" id="edem_request_no" value="{{ event.edem_request_no or '' if event else '' }}">
+
+    <!-- E-dem Referansı Seçici -->
+    {% if edem_available %}
+    <div style="margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid #f1f5f9;">
+      <div class="card-title" style="margin-bottom:10px;">🔗 E-dem Referansı</div>
+
+      {% if event and event.edem_request_no %}
+      <div class="alert alert-info" style="margin-bottom:10px;">
+        Bağlı referans: <strong>{{ event.edem_request_no }}</strong>
+        <button type="button" onclick="clearReference()" class="btn btn-secondary btn-sm" style="margin-left:10px;">Bağlantıyı Kaldır</button>
+      </div>
+      {% endif %}
+
+      <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+        <div style="flex:1; min-width:220px;">
+          <label style="display:block; margin-bottom:5px; font-size:12px; font-weight:600; color:#374151;">E-dem Referansı Seç</label>
+          <input type="text" id="ref-search" placeholder="Referans no veya etkinlik adıyla ara..."
+                 style="width:100%;" oninput="filterRefs(this.value)">
+        </div>
+        <div id="ref-selected-label" style="font-size:12px; color:#64748b; padding-bottom:8px;"></div>
+      </div>
+
+      <!-- Referans listesi -->
+      <div id="ref-list" style="margin-top:10px; max-height:280px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:8px; display:none;">
+        {% for ref in edem_refs %}
+        <div class="ref-item"
+             data-id="{{ ref.id }}"
+             data-no="{{ ref.request_no }}"
+             data-name="{{ ref.event_name }}"
+             data-client="{{ ref.client_name }}"
+             data-checkin="{{ ref.accom_check_in or ref.check_in or '' }}"
+             data-checkout="{{ ref.accom_check_out or ref.check_out or '' }}"
+             data-city="{{ ref.city or '' }}"
+             data-venue="{{ ref.venue_name or '' }}"
+             data-attendee="{{ ref.attendee_count or '' }}"
+             onclick="selectReference(this)"
+             style="padding:12px 14px; border-bottom:1px solid #f1f5f9; cursor:pointer; transition:background 0.1s;">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div>
+              <span style="font-weight:600; font-size:13px;">{{ ref.event_name }}</span>
+              <span style="color:#94a3b8; font-size:12px;"> · {{ ref.client_name }}</span>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <span style="font-size:11px; color:#64748b;">{{ ref.request_no }}</span>
+              <span class="badge badge-{{ 'complete' if ref.status == 'completed' else 'warning' }}" style="font-size:10px;">
+                {{ ref.status_label }}
+              </span>
+            </div>
+          </div>
+          <div style="margin-top:4px; font-size:11px; color:#94a3b8;">
+            {% if ref.check_in %}{{ ref.check_in }} — {{ ref.check_out }}{% endif %}
+            {% if ref.city %} · {{ ref.city }}{% endif %}
+            {% if ref.venue_name %} · {{ ref.venue_name }}{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+
+        {% if not edem_refs %}
+        <div style="padding:20px; text-align:center; color:#94a3b8; font-size:13px;">
+          Aktif referans bulunamadı
+        </div>
+        {% endif %}
+      </div>
+
+      <div style="margin-top:6px;">
+        <span style="font-size:11px; color:#94a3b8;">
+          Bir referans seçince tarihler, mekan ve şehir otomatik dolar. Manuel olarak değiştirebilirsiniz.
+        </span>
+      </div>
+    </div>
+    {% else %}
+    <div class="alert alert-warning" style="margin-bottom:16px;">
+      ⚠️ E-dem veritabanına erişilemiyor — etkinlik bilgilerini manuel girin.
+    </div>
+    {% endif %}
+
+    <!-- Etkinlik Bilgileri -->
+    <div class="card-title" style="margin-bottom:14px;">📅 Etkinlik Bilgileri</div>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Etkinlik Adı *</label>
+        <input type="text" name="name" id="f-name"
+               value="{{ event.name if event else '' }}" required
+               placeholder="ABC Konferansı 2026">
+      </div>
+      <div class="form-group">
+        <label>Başlangıç Tarihi *</label>
+        <input type="date" name="start_date" id="f-start"
+               value="{{ event.start_date if event else '' }}" required>
+      </div>
+      <div class="form-group">
+        <label>Bitiş Tarihi *</label>
+        <input type="date" name="end_date" id="f-end"
+               value="{{ event.end_date if event else '' }}" required>
+      </div>
+      <div class="form-group">
+        <label>Mekan</label>
+        <input type="text" name="venue" id="f-venue"
+               value="{{ event.venue or '' if event else '' }}"
+               placeholder="Rixos Premium Belek">
+      </div>
+      <div class="form-group">
+        <label>Şehir</label>
+        <input type="text" name="city" id="f-city"
+               value="{{ event.city or '' if event else '' }}"
+               placeholder="Antalya">
+      </div>
+      <div class="form-group full">
+        <label>Notlar</label>
+        <textarea name="notes" id="f-notes">{{ event.notes or '' if event else '' }}</textarea>
+      </div>
+    </div>
+    <br>
+    <div class="btn-group">
+      <button type="submit" class="btn btn-primary">{% if event %}Kaydet{% else %}Oluştur{% endif %}</button>
+      <a href="{% if event %}/events/{{ event.id }}{% else %}/events{% endif %}" class="btn btn-secondary">İptal</a>
+    </div>
+  </form>
+</div>
+
+<script>
+const refSearch = document.getElementById('ref-search');
+const refList   = document.getElementById('ref-list');
+const items     = document.querySelectorAll('.ref-item');
+
+// Arama alanına tıklayınca listeyi aç
+if (refSearch) {
+  refSearch.addEventListener('focus', () => {
+    refList.style.display = 'block';
+  });
+
+  // Dışarı tıklayınca kapat
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#ref-search') && !e.target.closest('#ref-list')) {
+      refList.style.display = 'none';
+    }
+  });
+}
+
+function filterRefs(q) {
+  refList.style.display = 'block';
+  const lower = q.toLowerCase();
+  items.forEach(item => {
+    const text = (item.dataset.no + item.dataset.name + item.dataset.client).toLowerCase();
+    item.style.display = text.includes(lower) ? 'block' : 'none';
+  });
+}
+
+function selectReference(el) {
+  // Gizli alanları doldur
+  document.getElementById('edem_request_id').value = el.dataset.id;
+  document.getElementById('edem_request_no').value = el.dataset.no;
+
+  // Form alanlarını doldur (boşsa veya her zaman)
+  setValue('f-name',  el.dataset.name);
+  setValue('f-start', el.dataset.checkin);
+  setValue('f-end',   el.dataset.checkout);
+  setValue('f-venue', el.dataset.venue);
+  setValue('f-city',  el.dataset.city);
+
+  // Seçim göstergesi
+  const label = document.getElementById('ref-selected-label');
+  if (label) {
+    label.innerHTML = `✅ Seçildi: <strong>${el.dataset.no}</strong> — ${el.dataset.name}`;
+  }
+
+  // Arama alanını güncelle ve listeyi kapat
+  refSearch.value = `${el.dataset.no} — ${el.dataset.name}`;
+  refList.style.display = 'none';
+
+  // Seçili öğeyi vurgula
+  items.forEach(i => i.style.background = '');
+  el.style.background = '#eff6ff';
+}
+
+function setValue(id, val) {
+  const el = document.getElementById(id);
+  if (el && val) el.value = val;
+}
+
+function clearReference() {
+  document.getElementById('edem_request_id').value = '';
+  document.getElementById('edem_request_no').value = '';
+  if (refSearch) refSearch.value = '';
+  const label = document.getElementById('ref-selected-label');
+  if (label) label.innerHTML = '';
+}
+
+// Sayfa açılışında mevcut bağlantıyı göster
+const currentNo = document.getElementById('edem_request_no')?.value;
+if (currentNo && refSearch) {
+  const matched = [...items].find(i => i.dataset.no === currentNo);
+  if (matched) {
+    refSearch.value = `${matched.dataset.no} — ${matched.dataset.name}`;
+    matched.style.background = '#eff6ff';
+    document.getElementById('ref-selected-label').innerHTML =
+      `✅ Seçildi: <strong>${matched.dataset.no}</strong> — ${matched.dataset.name}`;
+  }
+}
+</script>
+
+<style>
+.ref-item:hover { background: #f8fafc; }
+</style>
+{% endblock %}

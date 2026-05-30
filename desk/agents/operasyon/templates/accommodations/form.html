@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Konaklama — {{ participant.full_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">🏨 Konaklama — {{ participant.full_name }}</div>
+</div>
+
+<div class="card">
+  <form method="post" action="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}/accommodation/new">
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Otel Adı</label>
+        <input type="text" name="hotel" value="{{ accommodation.hotel or '' if accommodation else '' }}" placeholder="Rixos Premium Belek">
+      </div>
+      <div class="form-group">
+        <label>Oda Numarası</label>
+        <input type="text" name="room_number" value="{{ accommodation.room_number or '' if accommodation else '' }}" placeholder="214">
+      </div>
+      <div class="form-group">
+        <label>Oda Tipi</label>
+        <select name="room_type">
+          <option value="">Seçin...</option>
+          {% for t in ['SGL', 'DBL', 'TWN', 'SUT', 'DBL+EKS'] %}
+          <option value="{{ t }}" {% if accommodation and accommodation.room_type == t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Giriş Tarihi</label>
+        <input type="date" name="check_in" value="{{ accommodation.check_in if accommodation else '' }}">
+      </div>
+      <div class="form-group">
+        <label>Çıkış Tarihi</label>
+        <input type="date" name="check_out" value="{{ accommodation.check_out if accommodation else '' }}">
+      </div>
+      <div class="form-group full">
+        <label>Oda Arkadaşı</label>
+        <select name="roommate_id">
+          <option value="">Yok (tek kişi)</option>
+          {% for p in other_participants %}
+          <option value="{{ p.id }}" {% if accommodation and accommodation.roommate_id == p.id %}selected{% endif %}>
+            {{ p.full_name }}{% if p.company %} — {{ p.company }}{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group full">
+        <label>Notlar</label>
+        <textarea name="notes">{{ accommodation.notes or '' if accommodation else '' }}</textarea>
+      </div>
+    </div>
+    <br>
+    <div class="btn-group">
+      <button type="submit" class="btn btn-primary">Kaydet</button>
+      <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}" class="btn btn-secondary">İptal</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

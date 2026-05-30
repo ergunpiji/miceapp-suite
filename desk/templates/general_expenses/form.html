@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        <form method="post">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Kategori</label>
+            <select name="category_id" class="form-select" required>
+              <option value="">— Seçiniz —</option>
+              {% for c in categories %}
+              {% if not c.parent_id %}
+              <optgroup label="{{ c.name }}">
+                {% for sub in categories %}
+                {% if sub.parent_id == c.id %}
+                <option value="{{ sub.id }}" {% if expense and expense.category_id == sub.id %}selected{% endif %}>{{ sub.name }}</option>
+                {% endif %}
+                {% endfor %}
+              </optgroup>
+              {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Tarih</label>
+              <input type="date" name="expense_date" class="form-control" required value="{{ expense.expense_date.isoformat() if expense and expense.expense_date else '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Tutar</label>
+              <input type="number" name="amount" step="0.01" class="form-control" required value="{{ expense.amount if expense else '' }}">
+            </div>
+          </div>
+          <div class="row g-3 mt-0">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">KDV Oranı</label>
+              <select name="vat_rate" class="form-select">
+                <option value="0" {% if not expense or expense.vat_rate == 0 %}selected{% endif %}>%0</option>
+                <option value="0.08" {% if expense and expense.vat_rate == 0.08 %}selected{% endif %}>%8</option>
+                <option value="0.18" {% if expense and expense.vat_rate == 0.18 %}selected{% endif %}>%18</option>
+                <option value="0.20" {% if expense and expense.vat_rate == 0.20 %}selected{% endif %}>%20</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Ödeme Yöntemi</label>
+              <select name="payment_method" class="form-select">
+                <option value="">— Seçiniz —</option>
+                <option value="nakit" {% if expense and expense.payment_method == 'nakit' %}selected{% endif %}>Nakit</option>
+                <option value="banka" {% if expense and expense.payment_method == 'banka' %}selected{% endif %}>Banka</option>
+                <option value="kredi_karti" {% if expense and expense.payment_method == 'kredi_karti' %}selected{% endif %}>Kredi Kartı</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-3 mt-3">
+            <label class="form-label fw-semibold">Tedarikçi</label>
+            <select name="vendor_id" class="form-select">
+              <option value="">— Seçiniz —</option>
+              {% for v in vendors %}<option value="{{ v.id }}" {% if expense and expense.vendor_id == v.id %}selected{% endif %}>{{ v.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Referans</label>
+            <select name="ref_id" class="form-select">
+              <option value="">— Seçiniz —</option>
+              {% for r in refs %}<option value="{{ r.id }}" {% if expense and expense.ref_id == r.id %}selected{% endif %}>{{ r.ref_no }} — {{ r.title[:30] }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Açıklama</label>
+            <input type="text" name="description" class="form-control" value="{{ expense.description if expense else '' }}">
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Kaydet</button>
+            <a href="/general-expenses" class="btn btn-outline-secondary">İptal</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

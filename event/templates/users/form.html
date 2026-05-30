@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+
+    <div class="mb-3">
+      <a href="/users" class="text-muted text-decoration-none" style="font-size:13px;">
+        <i class="bi bi-arrow-left me-1"></i> Kullanıcı Listesine Dön
+      </a>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <h5 class="fw-bold mb-4">
+          {% if user %}
+            <i class="bi bi-person-gear me-2 text-primary"></i>Kullanıcı Düzenle
+          {% else %}
+            <i class="bi bi-person-plus me-2 text-primary"></i>Yeni Kullanıcı
+          {% endif %}
+        </h5>
+
+        {% if error %}
+        <div class="alert alert-danger d-flex align-items-center gap-2 py-2">
+          <i class="bi bi-exclamation-circle-fill"></i>
+          <small>{{ error }}</small>
+        </div>
+        {% endif %}
+
+        <form method="post" action="{{ '/users/' + user.id + '/edit' if user else '/users/new' }}">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" style="font-size:13px;">Ad <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="form-control"
+                     value="{{ user.name if user else (form_data.name if form_data else '') }}" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" style="font-size:13px;">Soyad <span class="text-danger">*</span></label>
+              <input type="text" name="surname" class="form-control"
+                     value="{{ user.surname if user else (form_data.surname if form_data else '') }}" required>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label fw-semibold" style="font-size:13px;">E-posta <span class="text-danger">*</span></label>
+              <input type="email" name="email" class="form-control"
+                     value="{{ user.email if user else (form_data.email if form_data else '') }}" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" style="font-size:13px;">Rol <span class="text-danger">*</span></label>
+              <select name="role" class="form-select">
+                {% for role in user_roles %}
+                <option value="{{ role.value }}"
+                  {% if (user and user.role == role.value) or (form_data and form_data.role == role.value) %}selected{% endif %}>
+                  {{ role.label }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold" style="font-size:13px;">Organizasyon Unvanı</label>
+              <select name="org_title_id" class="form-select" id="orgTitleSelect">
+                <option value="">— Seçiniz —</option>
+                {% set current_grade = namespace(val=0) %}
+                {% for ot in org_titles %}
+                  {% if ot.grade != current_grade.val %}
+                    {% if current_grade.val > 0 %}</optgroup>{% endif %}
+                    <optgroup label="Kademe {{ ot.grade }}">
+                    {% set current_grade.val = ot.grade %}
+                  {% endif %}
+                  <option value="{{ ot.id }}"
+                    {% set sel_id = user.org_title_id if user else (form_data.org_title_id if form_data else '') %}
+                    {% if sel_id == ot.id %}selected{% endif %}>
+                    {{ ot.name }}{% if ot.parent %} ← {{ ot.parent.name }}{% endif %}
+                  </option>
+                {% endfor %}
+                {% if current_grade.val > 0 %}</optgroup>{% endif %}
+              </select>
+              <div class="form-text" id="budgetLimitHint"></div>
+            </div>
+            {# ── Takım ve Yönetici (yalnızca PM rollerinde göster) ── #}
+            <div class="col-md-6" id="teamField">
+              <label class="form-label fw-semibold" style="font-size:13px;">Etkinlik Takımı</label>
+              <select name="team_id" class="form-select" id="teamSelect">
+                <option value="">— Takım Seçiniz —</option>
+                {% for t in (teams or []) %}
+                <option value="{{ t.id }}"
+                  {% if user and user.team_id == t.id %}selected{% endif %}>
+                  {{ t.name }}{% if t.code %} ({{ t.code }}){% endif %}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6" id="managerField">
+              <label class="form-label fw-semibold" style="font-size:13px;">Doğrudan Yönetici</label>
+              <select name="manager_id" class="form-select" id="managerSelect">
+                <option value="">— Seçiniz —</option>
+                {% for u in (pm_users or []) %}
+                <option value="{{ u.id }}"
+                        data-team="{{ u.team_id or '' }}"
+                        data-role="{{ u.role }}"
+                  {% if user and user.manager_id == u.id %}selected{% endif %}>
+                  {{ u.full_name }}
+                  {% if u.team %} — {{ u.team.name }}{% endif %}
+                  ({{ u.role_label }})
+                </option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Takım seçilince filtrelenir.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" style="font-size:13px;">Ünvan / Pozisyon Notu</label>
+              <input type="text" name="title" class="form-control"
+                     value="{{ user.title if user else (form_data.title if form_data else '') }}"
+                     placeholder="örn. Kıdemli Proje Yöneticisi">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" style="font-size:13px;">Telefon</label>
+              <input type="tel" name="phone" class="form-control"
+                     value="{{ user.phone if user else (form_data.phone if form_data else '') }}"
+                     placeholder="+90 555 000 0000">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold" style="font-size:13px;">
+                Şifre
+                {% if user %}<small class="text-muted fw-normal">(boş bırakırsanız değişmez)</small>{% else %}<span class="text-danger">*</span>{% endif %}
+              </label>
+              <div class="input-group">
+                <input type="password" name="password" id="passwordField" class="form-control"
+                       {% if not user %}required{% endif %}
+                       placeholder="{% if user %}Değiştirmek istemiyorsanız boş bırakın{% else %}En az 6 karakter{% endif %}">
+                <button class="btn btn-outline-secondary" type="button" id="togglePwd" tabindex="-1">
+                  <i class="bi bi-eye" id="eyeIconForm"></i>
+                </button>
+              </div>
+            </div>
+
+            {% if user %}
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" name="active" id="activeCheck"
+                       {% if user.active %}checked{% endif %}>
+                <label class="form-check-label fw-semibold" for="activeCheck" style="font-size:13px;">
+                  Hesap Aktif
+                </label>
+              </div>
+            </div>
+            {% endif %}
+
+            <div class="col-12 pt-2 d-flex gap-2">
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-lg me-1"></i>
+                {% if user %}Güncelle{% else %}Kaydet{% endif %}
+              </button>
+              <a href="/users" class="btn btn-outline-secondary">İptal</a>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  document.getElementById('togglePwd').addEventListener('click', function () {
+    const f = document.getElementById('passwordField');
+    const i = document.getElementById('eyeIconForm');
+    f.type = f.type === 'password' ? 'text' : 'password';
+    i.className = f.type === 'password' ? 'bi bi-eye' : 'bi bi-eye-slash';
+  });
+
+  const TITLE_LIMITS = {
+    {% for ot in org_titles %}
+    "{{ ot.id }}": { limit: {{ ot.budget_limit if ot.budget_limit is not none else 'null' }}, grade: {{ ot.grade }} },
+    {% endfor %}
+  };
+
+  document.getElementById('orgTitleSelect').addEventListener('change', function () {
+    const hint = document.getElementById('budgetLimitHint');
+    const data = TITLE_LIMITS[this.value];
+    if (!data) { hint.textContent = ''; return; }
+    if (data.limit === null) {
+      hint.innerHTML = `<i class="bi bi-infinity me-1"></i>Kademe ${data.grade} — Bütçe limiti tanımlanmamış (limitsiz)`;
+    } else {
+      const fmt = new Intl.NumberFormat('tr-TR').format(data.limit);
+      hint.innerHTML = `<i class="bi bi-cash-stack me-1"></i>Kademe ${data.grade} — Onay limiti: <strong>₺${fmt}</strong>`;
+    }
+  });
+
+  // Sayfa yüklenince mevcut seçimi tetikle
+  document.getElementById('orgTitleSelect').dispatchEvent(new Event('change'));
+
+  // Takım seçince manager dropdown'ını filtrele
+  const teamSelect    = document.getElementById('teamSelect');
+  const managerSelect = document.getElementById('managerSelect');
+
+  // admin, mudur ve muhasebe_muduru takım filtresine takılmaz
+  const TOP_ROLES = new Set(['admin', 'mudur', 'muhasebe_muduru']);
+
+  function filterManagers() {
+    const teamId = teamSelect ? teamSelect.value : '';
+    if (!managerSelect) return;
+    Array.from(managerSelect.options).forEach(opt => {
+      if (!opt.value) { opt.hidden = false; return; }
+      // admin / mudur rolü → takım filtresine takılmaz
+      if (TOP_ROLES.has(opt.dataset.role)) { opt.hidden = false; return; }
+      opt.hidden = teamId ? (opt.dataset.team !== teamId) : false;
+    });
+    // Seçili değer gizlenirse sıfırla
+    const sel = managerSelect.options[managerSelect.selectedIndex];
+    if (sel && sel.hidden) managerSelect.value = '';
+  }
+
+  if (teamSelect) {
+    teamSelect.addEventListener('change', filterManagers);
+    filterManagers();
+  }
+</script>
+{% endblock %}

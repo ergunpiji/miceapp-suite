@@ -1,0 +1,376 @@
+{% extends "base.html" %}
+{% block page_title %}Nakit Akışı{% endblock %}
+{% block page_title_block %}Nakit Akışı{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<style>
+  .cf-chart-wrap {
+    background:#fff; border-radius:12px; border:1px solid #e2e8f0;
+    padding:20px 20px 14px; box-shadow:0 1px 4px rgba(0,0,0,.06);
+  }
+  .week-row { cursor:pointer; transition:background .15s; }
+  .week-row:hover { background:#f8fafc; }
+  .week-row.has-data td:first-child::before {
+    content:''; display:inline-block; width:6px; height:6px;
+    border-radius:50%; background:#cbd5e1; margin-right:6px;
+  }
+  .week-detail { background:#f8fafc; }
+  .week-detail td { padding:0 !important; }
+  .week-detail-inner { padding:12px 16px 16px; }
+  .cf-entry { font-size:12px; padding:6px 0; border-bottom:1px solid #e2e8f0; }
+  .cf-entry:last-child { border-bottom:none; }
+  .cf-section-label {
+    font-size:10px; text-transform:uppercase; letter-spacing:.5px;
+    color:#94a3b8; font-weight:600; padding:8px 0 4px;
+  }
+  .net-positive { color:#16a34a; font-weight:700; }
+  .net-negative { color:#dc2626; font-weight:700; }
+  .weeks-btn.active { background:#1e3a5f; color:#fff; border-color:#1e3a5f; }
+  .cumul-positive { color:#16a34a; }
+  .cumul-negative { color:#dc2626; }
+  .chevron { transition:transform .2s; font-size:10px; color:#94a3b8; }
+  .chevron.open { transform:rotate(90deg); }
+  .stat-pill {
+    background:#f1f5f9; border-radius:8px; padding:10px 16px;
+    text-align:center; flex:1; min-width:120px;
+  }
+  .stat-pill .val { font-size:18px; font-weight:700; }
+  .stat-pill .lbl { font-size:11px; color:#64748b; margin-top:2px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3" style="max-width:1100px;">
+
+  {# Başlık + kontroller #}
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div class="d-flex gap-2 align-items-center">
+      <span class="text-muted" style="font-size:12px;">Görünüm:</span>
+      {% for w, lbl in [(4,'4 Hafta'),(8,'8 Hafta'),(12,'12 Hafta')] %}
+      <a href="/vendors/cash-flow/view?weeks={{ w }}"
+         class="btn btn-outline-secondary btn-sm weeks-btn {% if weeks == w %}active{% endif %}">{{ lbl }}</a>
+      {% endfor %}
+    </div>
+    <a href="/vendors" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-building me-1"></i>Tedarikçiler
+    </a>
+  </div>
+
+  {# Vadesi geçmiş uyarı #}
+  {% if overdue %}
+  <div class="alert alert-danger d-flex align-items-start gap-3 mb-3" role="alert">
+    <i class="bi bi-exclamation-triangle-fill fs-5 mt-1"></i>
+    <div>
+      <strong>Vadesi Geçmiş Ödemeler:</strong>
+      {{ overdue|length }} adet fatura, toplam ₺{{ '{:,.0f}'.format(total_overdue) }} gecikmiş.
+      <div class="mt-1" style="font-size:12px;">
+        {% for inv in overdue[:5] %}
+        <span class="me-2">
+          <a href="{% if inv.vendor %}/vendors/{{ inv.vendor.id }}{% else %}#{% endif %}"
+             class="text-danger text-decoration-none fw-semibold">
+            {{ inv.vendor.name if inv.vendor else inv.vendor_name or '—' }}
+          </a>
+          — ₺{{ '{:,.0f}'.format(inv.total_amount or 0) }} (vade: {{ inv.due_date }})
+        </span>
+        {% endfor %}
+        {% if overdue|length > 5 %}
+        <span class="text-muted">+{{ overdue|length - 5 }} daha…</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# Özet stat pill'leri #}
+  {% set ns = namespace(total_in=0, total_out=0, cumulative=0) %}
+  {% for w in weeks_data %}
+    {% set ns.total_in  = ns.total_in  + w.total_in %}
+    {% set ns.total_out = ns.total_out + w.total_out %}
+  {% endfor %}
+  {% set period_net = ns.total_in - ns.total_out %}
+  <div class="d-flex gap-3 flex-wrap mb-4">
+    <div class="stat-pill">
+      <div class="val" style="color:#16a34a;">+₺{{ '{:,.0f}'.format(ns.total_in) }}</div>
+      <div class="lbl">Dönem Toplam Gelir</div>
+    </div>
+    <div class="stat-pill">
+      <div class="val" style="color:#dc2626;">-₺{{ '{:,.0f}'.format(ns.total_out) }}</div>
+      <div class="lbl">Dönem Toplam Gider</div>
+    </div>
+    <div class="stat-pill">
+      <div class="val {% if period_net >= 0 %}net-positive{% else %}net-negative{% endif %}">
+        {% if period_net > 0 %}+{% elif period_net < 0 %}-{% endif %}₺{{ '{:,.0f}'.format(period_net|abs) }}
+      </div>
+      <div class="lbl">Dönem Net</div>
+    </div>
+    {% if overdue %}
+    <div class="stat-pill">
+      <div class="val" style="color:#dc2626;">₺{{ '{:,.0f}'.format(total_overdue) }}</div>
+      <div class="lbl">Gecikmiş Ödemeler</div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# Grafik #}
+  <div class="cf-chart-wrap mb-4">
+    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+      <span class="fw-semibold" style="font-size:14px;">Haftalık Net &amp; Kümülatif Nakit Akışı</span>
+      <div class="d-flex gap-3" style="font-size:11px;">
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#22c55e;margin-right:4px;"></span>Pozitif Hafta</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#ef4444;margin-right:4px;"></span>Negatif Hafta</span>
+        <span><span style="display:inline-block;width:22px;height:2px;background:#6366f1;margin-right:4px;vertical-align:middle;"></span>Kümülatif</span>
+      </div>
+    </div>
+    <canvas id="cfChart" height="90"></canvas>
+  </div>
+
+  {# Haftalık tablo (collapse ile) #}
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      <table class="table mb-0" style="font-size:13px;">
+        <thead style="background:#f8fafc;">
+          <tr>
+            <th class="ps-4" style="font-size:11px;color:#64748b;text-transform:uppercase;width:30%;">Hafta</th>
+            <th class="text-end" style="font-size:11px;color:#64748b;text-transform:uppercase;">Gelir (Alacak)</th>
+            <th class="text-end" style="font-size:11px;color:#64748b;text-transform:uppercase;">Gider (Borç)</th>
+            <th class="text-end" style="font-size:11px;color:#64748b;text-transform:uppercase;">Net</th>
+            <th class="text-end pe-4" style="font-size:11px;color:#64748b;text-transform:uppercase;">Kümülatif</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set ns2 = namespace(cumulative=0) %}
+          {% for w in weeks_data %}
+          {% set net = w.total_in - w.total_out %}
+          {% set ns2.cumulative = ns2.cumulative + net %}
+          {% set has_detail = w.incoming or w.outgoing %}
+          <tr class="week-row {% if has_detail %}has-data{% endif %}"
+              {% if has_detail %}onclick="toggleWeek({{ loop.index0 }})"{% endif %}>
+            <td class="ps-4 py-2">
+              <i class="bi bi-chevron-right chevron me-1" id="chev-{{ loop.index0 }}"
+                 {% if not has_detail %}style="opacity:0;"{% endif %}></i>
+              <span class="fw-semibold">{{ w.label }}</span>
+              <span class="text-muted ms-2" style="font-size:11px;">{{ w.start }} – {{ w.end }}</span>
+            </td>
+            <td class="text-end py-2">
+              {% if w.total_in > 0 %}
+              <span style="color:#16a34a;">+₺{{ '{:,.0f}'.format(w.total_in) }}</span>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td class="text-end py-2">
+              {% if w.total_out > 0 %}
+              <span style="color:#dc2626;">-₺{{ '{:,.0f}'.format(w.total_out) }}</span>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td class="text-end py-2">
+              {% if net > 0 %}
+              <span class="net-positive">+₺{{ '{:,.0f}'.format(net) }}</span>
+              {% elif net < 0 %}
+              <span class="net-negative">-₺{{ '{:,.0f}'.format(net|abs) }}</span>
+              {% else %}<span class="text-muted">₺0</span>{% endif %}
+            </td>
+            <td class="text-end pe-4 py-2">
+              <span class="{% if ns2.cumulative >= 0 %}cumul-positive{% else %}cumul-negative{% endif %} fw-semibold">
+                {% if ns2.cumulative > 0 %}+{% elif ns2.cumulative < 0 %}-{% endif %}₺{{ '{:,.0f}'.format(ns2.cumulative|abs) }}
+              </span>
+            </td>
+          </tr>
+          {% if has_detail %}
+          <tr class="week-detail" id="detail-{{ loop.index0 }}" style="display:none;">
+            <td colspan="5">
+              <div class="week-detail-inner">
+                <div class="row g-3">
+                  {% if w.incoming %}
+                  <div class="col-12 col-md-6">
+                    <div class="cf-section-label"><i class="bi bi-arrow-down-circle me-1"></i>Alacaklar (Gelir)</div>
+                    {% for inv in w.incoming %}
+                    {% set _rem = [(inv.total_amount or 0) - (inv.paid_amount or 0), 0] | max %}
+                    <div class="cf-entry d-flex justify-content-between align-items-start">
+                      <div>
+                        <span class="fw-semibold" style="color:#16a34a;">
+                          {{ inv.vendor_name or inv.vendor.name if inv.vendor else '—' }}
+                        </span>
+                        {% if inv.request %}
+                        <span class="text-muted ms-1" style="font-size:11px;">{{ inv.request.request_no }}</span>
+                        {% endif %}
+                        <div class="text-muted" style="font-size:11px;">Vade: {{ inv.due_date }}</div>
+                      </div>
+                      <span style="color:#16a34a;font-weight:600;white-space:nowrap;">+₺{{ '{:,.0f}'.format(_rem) }}</span>
+                    </div>
+                    {% endfor %}
+                  </div>
+                  {% endif %}
+                  {% if w.outgoing %}
+                  <div class="col-12 col-md-{% if w.incoming %}6{% else %}12{% endif %}">
+                    <div class="cf-section-label"><i class="bi bi-arrow-up-circle me-1"></i>Borçlar (Gider)</div>
+                    {% for it in w.outgoing %}
+                    <div class="cf-entry d-flex justify-content-between align-items-start">
+                      <div>
+                        {% if it.is_cc_stmt %}
+                        {# Kredi kartı ekstre ödemesi #}
+                        <span class="fw-semibold" style="color:#7c3aed;">
+                          <i class="bi bi-credit-card-2-front me-1"></i>{{ it.card_name }}
+                        </span>
+                        {% if it.card_last4 %}
+                        <span class="text-muted ms-1" style="font-size:11px;">*{{ it.card_last4 }}</span>
+                        {% endif %}
+                        <span class="badge ms-1" style="background:#ede9fe;color:#6d28d9;font-size:9px;">KK Ekstre</span>
+                        <div class="text-muted" style="font-size:11px;">
+                          <i class="bi bi-calendar-check" style="font-size:10px;"></i> Son ödeme: {{ it.eff_date }}
+                          {% if it.card_bank %} · {{ it.card_bank }}{% endif %}
+                        </div>
+                        {% else %}
+                        {% set inv = it.invoice %}
+                        <a href="{% if inv and inv.vendor %}/vendors/{{ inv.vendor.id }}{% else %}#{% endif %}"
+                           class="fw-semibold text-decoration-none" style="color:#dc2626;">
+                          {{ inv.vendor.name if inv and inv.vendor else (inv.vendor_name if inv else '—') }}
+                        </a>
+                        {% if it.is_cc %}
+                        <span class="badge bg-primary ms-1" style="font-size:9px;"><i class="bi bi-credit-card me-1"></i>Kredi Kartı</span>
+                        {% elif inv and inv.payment_method == 'cek' %}
+                        <span class="badge bg-secondary ms-1" style="font-size:9px;">Çek</span>
+                        {% endif %}
+                        {% if inv and inv.payment_status == 'partial' and not it.is_cc %}
+                        <span class="badge ms-1" style="background:#fef9c3;color:#a16207;font-size:9px;">Kalan Bakiye</span>
+                        {% endif %}
+                        {% if inv and inv.request %}
+                        <span class="text-muted ms-1" style="font-size:11px;">{{ inv.request.request_no }}</span>
+                        {% endif %}
+                        <div class="text-muted" style="font-size:11px;">
+                          {% if it.is_cc %}
+                          <i class="bi bi-credit-card" style="font-size:10px;"></i> Kart son ödeme: {{ it.eff_date }}
+                          {% else %}
+                          Vade: {{ it.eff_date }}
+                          {% endif %}
+                        </div>
+                        {% endif %}
+                      </div>
+                      <div class="text-end" style="white-space:nowrap;">
+                        <span style="color:{% if it.is_cc_stmt %}#7c3aed{% else %}#dc2626{% endif %};font-weight:600;">
+                          -₺{{ '{:,.0f}'.format(it.amount) }}
+                        </span>
+                        {% if not it.is_cc_stmt and it.invoice and it.invoice.payment_status == 'partial' %}
+                        <div style="font-size:10px;color:#94a3b8;">fatura: ₺{{ '{:,.0f}'.format(it.invoice.total_amount or 0) }}</div>
+                        {% endif %}
+                      </div>
+                    </div>
+                    {% endfor %}
+                  </div>
+                  {% endif %}
+                </div>
+              </div>
+            </td>
+          </tr>
+          {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% set _has_data = namespace(v=false) %}
+  {% for w in weeks_data %}{% if w.incoming or w.outgoing %}{% set _has_data.v = true %}{% endif %}{% endfor %}
+  {% if not _has_data.v %}
+  <div class="text-center py-5 text-muted">
+    <i class="bi bi-graph-up" style="font-size:3rem;opacity:.3;"></i>
+    <p class="mt-3">Önümüzdeki {{ weeks }} haftada vadesi gelen fatura bulunmuyor.</p>
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+// ── Collapse toggle ───────────────────────────────────────────────────────────
+function toggleWeek(idx) {
+  const detail = document.getElementById('detail-' + idx);
+  const chev   = document.getElementById('chev-' + idx);
+  if (!detail) return;
+  const open = detail.style.display !== 'none';
+  detail.style.display = open ? 'none' : '';
+  if (chev) chev.classList.toggle('open', !open);
+}
+
+// ── Chart.js ─────────────────────────────────────────────────────────────────
+(function () {
+  const labels = [
+    {% for w in weeks_data %}'{{ w.label }}\n{{ w.start }}–{{ w.end }}'{% if not loop.last %},{% endif %}{% endfor %}
+  ];
+  const netValues = [
+    {% for w in weeks_data %}{{ w.total_in - w.total_out }}{% if not loop.last %},{% endif %}{% endfor %}
+  ];
+
+  // Kümülatif
+  let cum = 0;
+  const cumValues = netValues.map(v => { cum += v; return cum; });
+
+  const barColors     = netValues.map(v => v >= 0 ? 'rgba(34,197,94,.85)' : 'rgba(239,68,68,.85)');
+  const barBorderColors = netValues.map(v => v >= 0 ? '#16a34a' : '#dc2626');
+
+  const ctx = document.getElementById('cfChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Net (₺)',
+          data: netValues,
+          backgroundColor: barColors,
+          borderColor: barBorderColors,
+          borderWidth: 1.5,
+          borderRadius: 5,
+          order: 2,
+          yAxisID: 'y',
+        },
+        {
+          type: 'line',
+          label: 'Kümülatif (₺)',
+          data: cumValues,
+          borderColor: '#6366f1',
+          backgroundColor: 'rgba(99,102,241,.08)',
+          borderWidth: 2.5,
+          pointBackgroundColor: cumValues.map(v => v >= 0 ? '#16a34a' : '#dc2626'),
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          tension: 0.35,
+          fill: true,
+          order: 1,
+          yAxisID: 'y',
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const val = ctx.parsed.y;
+              const sign = val >= 0 ? '+' : '';
+              return ` ${ctx.dataset.label}: ${sign}₺${val.toLocaleString('tr-TR')}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 11 } },
+        },
+        y: {
+          grid: { color: '#f1f5f9' },
+          ticks: {
+            font: { size: 11 },
+            callback: v => (v < 0 ? '-₺' : '₺') + Math.abs(v / 1000).toFixed(0) + 'K',
+          },
+        },
+      },
+    },
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block page_title %}Çalışanlar{% endblock %}
+{% block topbar_actions %}
+<a href="/employees/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Yeni Çalışan</a>
+{% endblock %}
+{% block content %}
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-transparent border-0">
+    <form class="d-flex gap-2" method="get">
+      <select name="active_only" class="form-select form-select-sm" style="max-width:160px">
+        <option value="1" {% if active_only=='1' %}selected{% endif %}>Aktif Çalışanlar</option>
+        <option value="0" {% if active_only=='0' %}selected{% endif %}>Tümü</option>
+      </select>
+      <button type="submit" class="btn btn-sm btn-outline-secondary">Filtrele</button>
+    </form>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0" style="font-size:13px;">
+      <thead class="table-light">
+        <tr>
+          <th>Ad Soyad</th>
+          <th>Unvan / Departman</th>
+          <th class="text-end">Brüt Maaş</th>
+          <th class="text-end">Net Maaş</th>
+          <th class="text-end">Açık Avans</th>
+          <th class="text-end">Masraflar</th>
+          <th>Başlangıç</th>
+          <th>Durum</th>
+          <th class="text-end pe-3"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for emp in employees %}
+        {% set adv_bal  = advance_balance.get(emp.id, 0) %}
+        {% set exp_tot  = expense_totals.get(emp.id, 0) %}
+        <tr>
+          <td>
+            <a href="/employees/{{ emp.id }}" class="text-decoration-none fw-semibold">{{ emp.name }}</a>
+          </td>
+          <td>
+            <div>{{ emp.title or "—" }}</div>
+            {% if emp.department %}<div class="text-muted" style="font-size:11px;">{{ emp.department }}</div>{% endif %}
+          </td>
+          <td class="text-end fw-semibold">
+            {% if emp.gross_salary %}{{ emp.gross_salary | money }}{% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td class="text-end text-muted">
+            {% if emp.net_salary %}{{ emp.net_salary | money }}{% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td class="text-end">
+            {% if adv_bal > 0 %}
+            <span style="color:#d97706;font-weight:600;">{{ adv_bal | money }}</span>
+            <div class="text-muted" style="font-size:10px;">Geri alacak</div>
+            {% else %}
+            <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            {% if exp_tot > 0 %}
+            <span style="color:#0369a1;font-weight:600;">{{ exp_tot | money }}</span>
+            <div class="text-muted" style="font-size:10px;">Toplam masraf</div>
+            {% else %}
+            <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>{{ emp.start_date | date_tr }}</td>
+          <td>
+            <span class="badge {% if emp.active %}bg-success{% else %}bg-secondary{% endif %}">
+              {{ "Aktif" if emp.active else "Pasif" }}
+            </span>
+          </td>
+          <td class="text-end pe-3">
+            <div class="d-flex gap-1 justify-content-end">
+              <a href="/employees/{{ emp.id }}/edit" class="btn btn-sm btn-outline-secondary py-0">
+                <i class="bi bi-pencil"></i>
+              </a>
+              {% if current_user.is_admin %}
+              <form method="post" action="/employees/{{ emp.id }}/toggle-active">
+                <button type="submit" class="btn btn-sm py-0
+                  {% if emp.active %}btn-outline-warning{% else %}btn-outline-success{% endif %}"
+                  title="{% if emp.active %}Pasife Al{% else %}Aktifle{% endif %}">
+                  {% if emp.active %}<i class="bi bi-pause-circle"></i>{% else %}<i class="bi bi-play-circle"></i>{% endif %}
+                </button>
+              </form>
+              <form method="post" action="/employees/{{ emp.id }}/delete"
+                    onsubmit="return confirm('{{ emp.name }} çalışanı ve tüm kayıtları silinecek. Emin misiniz?')">
+                <button type="submit" class="btn btn-sm btn-outline-danger py-0" title="Sil">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="text-center text-muted py-4">Çalışan bulunamadı.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/services/template" class="btn btn-outline-success btn-sm">
+  <i class="bi bi-download me-1"></i> Şablon İndir
+</a>
+<button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#importServicesModal">
+  <i class="bi bi-upload me-1"></i> Excel ile Aktar
+</button>
+<button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#newCatModal">
+  <i class="bi bi-tag me-1"></i> Yeni Kategori
+</button>
+<button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#newServiceModal">
+  <i class="bi bi-plus-circle me-1"></i> Yeni Hizmet
+</button>
+{% endblock %}
+
+{% block content %}
+
+{# ─── SEKMELİ GÖRÜNÜM ─── #}
+<div class="card">
+  <div class="card-body p-0">
+
+    {# Sekme başlıkları #}
+    <ul class="nav nav-tabs px-4 pt-3" id="serviceTabs" role="tablist">
+      {% for cat in service_categories %}
+      <li class="nav-item" role="presentation">
+        <button class="nav-link {% if loop.first %}active{% endif %}"
+                id="tab-{{ cat.id }}"
+                data-bs-toggle="tab"
+                data-bs-target="#pane-{{ cat.id }}"
+                type="button" role="tab">
+          {{ cat.icon }} {{ cat.label }}
+          {% if grouped_services.get(cat.id) %}
+          <span class="badge bg-secondary ms-1" style="font-size:10px;">{{ grouped_services[cat.id] | length }}</span>
+          {% endif %}
+        </button>
+      </li>
+      {% endfor %}
+      {% for cat in custom_categories %}
+      <li class="nav-item" role="presentation">
+        <button class="nav-link"
+                id="tab-custom-{{ cat.id }}"
+                data-bs-toggle="tab"
+                data-bs-target="#pane-custom-{{ cat.id }}"
+                type="button" role="tab">
+          <span style="background: {{ cat.bg_color }}; color: {{ cat.txt_color }}; padding: 1px 8px; border-radius: 12px; font-size:12px;">
+            {{ cat.icon }} {{ cat.name }}
+          </span>
+        </button>
+      </li>
+      {% endfor %}
+    </ul>
+
+    <div class="tab-content" id="serviceTabContent">
+
+      {# Standart kategoriler #}
+      {% for cat in service_categories %}
+      <div class="tab-pane fade {% if loop.first %}show active{% endif %}"
+           id="pane-{{ cat.id }}" role="tabpanel">
+        <div class="p-4">
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <h6 class="fw-bold mb-0">{{ cat.icon }} {{ cat.label }}</h6>
+          </div>
+          {% set svcs = grouped_services.get(cat.id, []) %}
+          {% if svcs %}
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th style="width:32px;"></th>
+                  <th>Hizmet Adı</th>
+                  <th>Birim</th>
+                  <th>Durum</th>
+                  <th class="text-end">İşlemler</th>
+                </tr>
+              </thead>
+              <tbody class="sortable-tbody" data-category="{{ cat.id }}">
+                {% for svc in svcs %}
+                <tr data-id="{{ svc.id }}">
+                  <td class="drag-handle text-muted" style="cursor:grab; padding-left:12px;">
+                    <i class="bi bi-grip-vertical"></i>
+                  </td>
+                  <td class="fw-semibold" style="font-size:13px;">{{ svc.name }}</td>
+                  <td style="font-size:13px; color:#64748b;">{{ svc.unit }}</td>
+                  <td>
+                    <form method="post" action="/services/{{ svc.id }}/toggle" class="d-inline">
+                      <button type="submit" class="btn btn-sm {{ 'btn-success' if svc.active else 'btn-outline-secondary' }}">
+                        {% if svc.active %}
+                          <i class="bi bi-toggle-on me-1"></i> Aktif
+                        {% else %}
+                          <i class="bi bi-toggle-off me-1"></i> Pasif
+                        {% endif %}
+                      </button>
+                    </form>
+                  </td>
+                  <td class="text-end">
+                    <form method="post" action="/services/{{ svc.id }}/delete" class="d-inline"
+                          onsubmit="return confirm('{{ svc.name }} hizmetini silmek istediğinizden emin misiniz?')">
+                      <button type="submit" class="btn btn-sm btn-outline-danger">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="text-center py-4 text-muted">
+            <p class="mb-0" style="font-size:13px;">Bu kategoride henüz hizmet bulunmuyor.</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+
+      {# Özel kategoriler #}
+      {% for cat in custom_categories %}
+      <div class="tab-pane fade"
+           id="pane-custom-{{ cat.id }}" role="tabpanel">
+        <div class="p-4">
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <h6 class="fw-bold mb-0">
+              <span style="background: {{ cat.bg_color }}; color: {{ cat.txt_color }}; padding: 2px 12px; border-radius: 20px; font-size:13px;">
+                {{ cat.icon }} {{ cat.name }}
+              </span>
+            </h6>
+            <form method="post" action="/services/categories/{{ cat.id }}/delete" class="d-inline"
+                  onsubmit="return confirm('{{ cat.name }} kategorisini silmek istediğinizden emin misiniz?')">
+              <button type="submit" class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-trash me-1"></i> Kategoriyi Sil
+              </button>
+            </form>
+          </div>
+          {% set svcs = grouped_services.get(cat.id, []) %}
+          {% if svcs %}
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th style="width:32px;"></th>
+                  <th>Hizmet Adı</th>
+                  <th>Birim</th>
+                  <th>Durum</th>
+                  <th class="text-end">İşlemler</th>
+                </tr>
+              </thead>
+              <tbody class="sortable-tbody" data-category="{{ cat.id }}">
+                {% for svc in svcs %}
+                <tr data-id="{{ svc.id }}">
+                  <td class="drag-handle text-muted" style="cursor:grab; padding-left:12px;">
+                    <i class="bi bi-grip-vertical"></i>
+                  </td>
+                  <td class="fw-semibold" style="font-size:13px;">{{ svc.name }}</td>
+                  <td style="font-size:13px; color:#64748b;">{{ svc.unit }}</td>
+                  <td>
+                    <form method="post" action="/services/{{ svc.id }}/toggle" class="d-inline">
+                      <button type="submit" class="btn btn-sm {{ 'btn-success' if svc.active else 'btn-outline-secondary' }}">
+                        {% if svc.active %}<i class="bi bi-toggle-on me-1"></i> Aktif
+                        {% else %}<i class="bi bi-toggle-off me-1"></i> Pasif{% endif %}
+                      </button>
+                    </form>
+                  </td>
+                  <td class="text-end">
+                    <form method="post" action="/services/{{ svc.id }}/delete" class="d-inline"
+                          onsubmit="return confirm('{{ svc.name }} hizmetini silmek istediğinizden emin misiniz?')">
+                      <button type="submit" class="btn btn-sm btn-outline-danger">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="text-center py-4 text-muted">
+            <p class="mb-0" style="font-size:13px;">Bu kategoride henüz hizmet bulunmuyor.</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+
+    </div>
+  </div>
+</div>
+
+{# ─── YENİ HİZMET MODALİ ─── #}
+<div class="modal fade" id="newServiceModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="/services/new">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold">
+            <i class="bi bi-plus-circle me-2 text-primary"></i>Yeni Hizmet
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:13px;">Kategori <span class="text-danger">*</span></label>
+            <select name="category" class="form-select" required>
+              {% for cat in service_categories %}
+              <option value="{{ cat.id }}">{{ cat.icon }} {{ cat.label }}</option>
+              {% endfor %}
+              {% for cat in custom_categories %}
+              <option value="{{ cat.id }}">{{ cat.icon }} {{ cat.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:13px;">Hizmet Adı <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required placeholder="Hizmet adı...">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:13px;">Birim <span class="text-danger">*</span></label>
+            <input type="text" name="unit" class="form-control" required value="Adet" placeholder="örn. Adet, Gün, Kişi">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:13px;">Açıklama</label>
+            <textarea name="description" class="form-control" rows="2"
+                      placeholder="Hizmet hakkında ek bilgi..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg me-1"></i>Kaydet
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# ─── YENİ KATEGORİ MODALİ ─── #}
+<div class="modal fade" id="newCatModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="/services/categories/new">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold">
+            <i class="bi bi-tag me-2 text-primary"></i>Yeni Kategori
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:13px;">Kategori Adı <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required placeholder="Kategori adı...">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:13px;">İkon (emoji)</label>
+            <input type="text" name="icon" class="form-control" value="📋" placeholder="📋" maxlength="4" style="font-size:20px; text-align:center;">
+          </div>
+          <div class="row g-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold" style="font-size:13px;">Arkaplan Rengi</label>
+              <input type="color" name="bg_color" class="form-control form-control-color w-100" value="#e0f2fe">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold" style="font-size:13px;">Metin Rengi</label>
+              <input type="color" name="txt_color" class="form-control form-control-color w-100" value="#0c4a6e">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg me-1"></i>Kaydet
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  let saveTimer = null;
+
+  document.querySelectorAll('.sortable-tbody').forEach(function (tbody) {
+    Sortable.create(tbody, {
+      handle: '.drag-handle',
+      animation: 150,
+      ghostClass: 'table-active',
+      onEnd: function () {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(function () {
+          const ids = Array.from(tbody.querySelectorAll('tr[data-id]'))
+                           .map(tr => tr.dataset.id);
+          fetch('/services/reorder', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ids: ids}),
+          });
+        }, 400);
+      }
+    });
+  });
+});
+</script>
+
+{# ─── Excel İçe Aktar Modal ─── #}
+<div class="modal fade" id="importServicesModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="/services/import" enctype="multipart/form-data">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Excel ile Hizmet Aktar</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          {% if request.query_params.get('import_msg') %}
+          <div class="alert alert-info py-2" style="font-size:13px;">
+            {{ request.query_params.get('import_msg') }}
+          </div>
+          {% endif %}
+          <p class="text-muted" style="font-size:13px;">
+            Önce <a href="/services/template" class="text-primary">şablonu indirin</a>, doldurun ve buradan yükleyin.
+            Aynı kategori + isim kombinasyonu varsa atlanır.
+          </p>
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:13px;">Excel Dosyası (.xlsx)</label>
+            <input type="file" name="file" class="form-control" accept=".xlsx" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-upload me-1"></i>Aktar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

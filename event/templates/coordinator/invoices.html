@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block page_title %}Koordinatör Fatura Onayları{% endblock %}
+
+{% block extra_head %}
+<style>
+  .filter-tab { display:inline-flex; gap:8px; margin-bottom:24px; }
+  .filter-tab a {
+    padding:7px 18px; border-radius:20px; font-size:13px; font-weight:600;
+    text-decoration:none; color:#64748b; background:#f1f5f9; border:1px solid #e2e8f0;
+    transition:all .15s;
+  }
+  .filter-tab a.active { background:#2563eb; color:#fff; border-color:#2563eb; }
+  .filter-tab a:hover:not(.active) { background:#e2e8f0; }
+  .badge-count {
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:20px; height:20px; padding:0 6px;
+    border-radius:10px; font-size:11px; font-weight:700;
+    background:rgba(255,255,255,.25); color:inherit; margin-left:6px;
+  }
+  .filter-tab a.active .badge-count { background:rgba(255,255,255,.3); }
+  .filter-tab a:not(.active) .badge-count { background:#e2e8f0; color:#475569; }
+
+  .inv-card {
+    background:#fff; border:1px solid #e2e8f0; border-radius:12px;
+    padding:20px 24px; margin-bottom:14px;
+    box-shadow:0 1px 3px rgba(0,0,0,.06);
+    display:grid; grid-template-columns:1fr auto;
+    gap:16px; align-items:start;
+  }
+  .inv-ref { font-size:12px; font-weight:700; color:#2563eb; letter-spacing:.3px; margin-bottom:4px; }
+  .inv-title { font-size:15px; font-weight:700; color:#1e293b; margin-bottom:2px; }
+  .inv-meta { font-size:12px; color:#64748b; }
+  .inv-amount { font-size:22px; font-weight:800; color:#1e293b; text-align:right; white-space:nowrap; }
+  .inv-amount .vat { font-size:11px; font-weight:400; color:#94a3b8; display:block; }
+  .inv-actions { display:flex; gap:8px; margin-top:14px; }
+
+  .badge-beklemede  { background:#fef3c7; color:#92400e; font-size:11px; padding:3px 10px; border-radius:20px; font-weight:600; }
+  .badge-onaylandi  { background:#d1fae5; color:#065f46; font-size:11px; padding:3px 10px; border-radius:20px; font-weight:600; }
+  .badge-reddedildi { background:#fee2e2; color:#991b1b; font-size:11px; padding:3px 10px; border-radius:20px; font-weight:600; }
+
+  .empty-state { text-align:center; padding:60px 20px; color:#94a3b8; }
+  .empty-state i { font-size:48px; margin-bottom:16px; display:block; }
+
+  /* Reddet Modal */
+  .modal-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:2000; align-items:center; justify-content:center; }
+  .modal-backdrop.open { display:flex; }
+  .modal-box { background:#fff; border-radius:14px; padding:28px; width:100%; max-width:440px; box-shadow:0 20px 60px rgba(0,0,0,.2); }
+  .modal-title { font-size:16px; font-weight:700; color:#1e293b; margin-bottom:16px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-content">
+
+  <!-- Başlık -->
+  <div class="card-header-custom mb-4">
+    <div>
+      <h4 class="fw-bold mb-1">Koordinatör Fatura Onayları</h4>
+      <p class="text-muted small mb-0">micedesk'te kesilen ve referansa bağlı faturalar onayınızı bekliyor</p>
+    </div>
+  </div>
+
+  <!-- Filtre Sekmeleri -->
+  <div class="filter-tab">
+    <a href="/coordinator/invoices?filter=beklemede"
+       class="{% if filter == 'beklemede' %}active{% endif %}">
+      Beklemede
+      <span class="badge-count">{{ counts.beklemede }}</span>
+    </a>
+    <a href="/coordinator/invoices?filter=onaylandi"
+       class="{% if filter == 'onaylandi' %}active{% endif %}">
+      Onaylananlar
+      <span class="badge-count">{{ counts.onaylandi }}</span>
+    </a>
+    <a href="/coordinator/invoices?filter=reddedildi"
+       class="{% if filter == 'reddedildi' %}active{% endif %}">
+      Reddedilenler
+      <span class="badge-count">{{ counts.reddedildi }}</span>
+    </a>
+    <a href="/coordinator/invoices?filter=tumu"
+       class="{% if filter == 'tumu' %}active{% endif %}">
+      Tümü
+    </a>
+  </div>
+
+  <!-- Fatura Listesi -->
+  {% if invoices %}
+    {% for inv in invoices %}
+      {% set ref = ref_map.get(inv.ref_id) if inv.ref_id else None %}
+      {% set cust = customer_map.get(ref.customer_id) if ref and ref.customer_id else None %}
+      {% set total = (inv.amount or 0) * (1 + (inv.vat_rate or 0)) %}
+
+      <div class="inv-card">
+        <div>
+          {% if ref %}
+            <div class="inv-ref">{{ ref.ref_no }} &nbsp;·&nbsp; {{ ref.title }}</div>
+          {% endif %}
+          <div class="inv-title">
+            {% if cust %}{{ cust.name }}{% else %}{{ inv.vendor_name or "—" }}{% endif %}
+          </div>
+          <div class="inv-meta">
+            Fatura No: <strong>{{ inv.invoice_no or "—" }}</strong>
+            &nbsp;·&nbsp; Tarih: <strong>{{ inv.invoice_date or "—" }}</strong>
+            {% if inv.notes %}&nbsp;·&nbsp; <span class="text-muted">{{ inv.notes[:80] }}{% if inv.notes|length > 80 %}…{% endif %}</span>{% endif %}
+          </div>
+
+          {% if filter != 'beklemede' and inv.coordinator_status %}
+            <div class="mt-2">
+              <span class="badge-{{ inv.coordinator_status }}">
+                {% if inv.coordinator_status == 'onaylandi' %}Onaylandı{% elif inv.coordinator_status == 'reddedildi' %}Reddedildi{% else %}Beklemede{% endif %}
+              </span>
+              {% if inv.coordinator_note %}
+                <span class="text-muted small ms-2">{{ inv.coordinator_note }}</span>
+              {% endif %}
+            </div>
+          {% endif %}
+
+          {% if filter == 'beklemede' %}
+          <div class="inv-actions">
+            <form method="post" action="/coordinator/invoices/{{ inv.id }}/approve" style="display:inline;">
+              <input type="hidden" name="note" value="">
+              <button type="submit" class="btn btn-sm btn-success px-3">
+                <i class="bi bi-check-lg me-1"></i>Onayla
+              </button>
+            </form>
+            <button type="button" class="btn btn-sm btn-danger px-3"
+                    onclick="openRejectModal('{{ inv.id }}')">
+              <i class="bi bi-x-lg me-1"></i>Reddet
+            </button>
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="text-end">
+          <div class="inv-amount">
+            ₺{{ "{:,.0f}".format(total) }}
+            <span class="vat">KDV dahil</span>
+          </div>
+          <div class="text-muted" style="font-size:11px; margin-top:4px;">
+            KDV hariç ₺{{ "{:,.0f}".format(inv.amount or 0) }}
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty-state">
+      <i class="bi bi-inbox"></i>
+      {% if filter == 'beklemede' %}
+        <p class="fw-semibold">Onay bekleyen fatura yok</p>
+        <p class="small">micedesk'te bir referansa bağlı kesilen fatura girildiğinde burada görünür.</p>
+      {% else %}
+        <p class="fw-semibold">Bu kategoride fatura bulunamadı</p>
+      {% endif %}
+    </div>
+  {% endif %}
+
+</div>
+
+<!-- Reddet Modal -->
+<div class="modal-backdrop" id="rejectModal">
+  <div class="modal-box">
+    <div class="modal-title"><i class="bi bi-x-circle text-danger me-2"></i>Faturayı Reddet</div>
+    <form method="post" id="rejectForm">
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Red Gerekçesi <span class="text-danger">*</span></label>
+        <textarea name="note" class="form-control" rows="3"
+                  placeholder="Koordinatörün neden reddettiğini açıklayın…" required></textarea>
+      </div>
+      <div class="d-flex gap-2 justify-content-end">
+        <button type="button" class="btn btn-outline-secondary" onclick="closeRejectModal()">İptal</button>
+        <button type="submit" class="btn btn-danger">Reddet</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openRejectModal(invoiceId) {
+  document.getElementById('rejectForm').action = '/coordinator/invoices/' + invoiceId + '/reject';
+  document.getElementById('rejectModal').classList.add('open');
+}
+function closeRejectModal() {
+  document.getElementById('rejectModal').classList.remove('open');
+}
+document.getElementById('rejectModal').addEventListener('click', function(e) {
+  if (e.target === this) closeRejectModal();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/bordro/settings/edit" class="btn btn-outline-secondary btn-sm">
+  <i class="bi bi-gear me-1"></i>Ayarlar
+</a>
+<a href="/bordro/kidem-ihbar" class="btn btn-outline-secondary btn-sm ms-1">
+  <i class="bi bi-calculator me-1"></i>Kıdem/İhbar
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-3 align-items-end">
+  <div class="col-auto">
+    <form class="d-flex gap-2 align-items-end" method="get">
+      <div>
+        <label class="form-label small fw-semibold mb-1">Dönem</label>
+        <input type="month" name="period" value="{{ period }}" class="form-control form-control-sm">
+      </div>
+      <button type="submit" class="btn btn-outline-secondary btn-sm">Göster</button>
+    </form>
+  </div>
+  <div class="col-auto">
+    <form method="post" action="/bordro/generate">
+      <input type="hidden" name="period" value="{{ period }}">
+      <button class="btn btn-primary btn-sm">
+        <i class="bi bi-arrow-clockwise me-1"></i>
+        {% if unpaid_employees %}
+          Taslak Oluştur / Yenile ({{ unpaid_employees|length }} yeni + {{ records|selectattr('status','eq','taslak')|list|length }} taslak)
+        {% else %}
+          Taslakları Yenile ({{ records|selectattr('status','eq','taslak')|list|length }})
+        {% endif %}
+      </button>
+    </form>
+  </div>
+  {% if records %}
+  {% set onaylandi_count = records | selectattr('status','eq','onaylandi') | list | length %}
+  {% if onaylandi_count > 0 %}
+  <div class="col-auto ms-auto">
+    <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#payAllModal">
+      <i class="bi bi-send me-1"></i>Toplu Öde ({{ onaylandi_count }} onaylı)
+    </button>
+  </div>
+  {% endif %}
+  {% endif %}
+</div>
+
+{% if records %}
+<!-- Özet kartlar -->
+<div class="row g-3 mb-3">
+  <div class="col-auto">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body py-2 px-3">
+        <div class="small text-muted">Toplam Brüt</div>
+        <div class="fw-bold fs-6">{{ total_gross | money }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-auto">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body py-2 px-3">
+        <div class="small text-muted">Toplam Ele Geçen</div>
+        <div class="fw-bold fs-6 text-primary">{{ total_net | money }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-auto">
+    <div class="card border-0 shadow-sm bg-danger bg-opacity-10">
+      <div class="card-body py-2 px-3">
+        <div class="small text-muted">İşveren Toplam Maliyet</div>
+        <div class="fw-bold fs-6 text-danger">{{ total_cost | money }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0" style="font-size:13px">
+      <thead class="table-light">
+        <tr>
+          <th>Çalışan</th>
+          <th>Unvan</th>
+          <th class="text-end">Brüt</th>
+          <th class="text-end">SGK (Çalışan)</th>
+          <th class="text-end">Gelir V.</th>
+          <th class="text-end">Damga V.</th>
+          <th class="text-end fw-semibold">Ele Geçen</th>
+          <th class="text-end text-danger">İşveren Maliyet</th>
+          <th>Durum</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in records %}
+        {% set status_map = {'taslak':('secondary','Taslak'),'onaylandi':('primary','Onaylı'),'odendi':('success','Ödendi')} %}
+        {% set sl = status_map.get(r.status, ('secondary', r.status)) %}
+        <tr>
+          <td class="fw-semibold">{{ r.employee.name }}</td>
+          <td class="text-muted">{{ r.employee.title or '—' }}</td>
+          <td class="text-end">{{ r.total_gross | money }}</td>
+          <td class="text-end">{{ (r.sgk_employee + r.unemployment_emp) | money }}</td>
+          <td class="text-end">{{ r.income_tax | money }}</td>
+          <td class="text-end">{{ r.stamp_tax | money }}</td>
+          <td class="text-end fw-bold text-primary">{{ r.ele_gecen | money }}</td>
+          <td class="text-end text-danger">{{ r.employer_cost | money }}</td>
+          <td><span class="badge bg-{{ sl[0] }}">{{ sl[1] }}</span>
+            {% if r.employee.is_retired %}<span class="badge bg-warning text-dark ms-1" style="font-size:10px">SGDP</span>{% endif %}
+          </td>
+          <td>
+            <a href="/bordro/{{ r.id }}" class="btn btn-xs btn-outline-secondary btn-sm py-0">Detay</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-light fw-bold">
+        <tr>
+          <td colspan="2">Toplam</td>
+          <td class="text-end">{{ total_gross | money }}</td>
+          <td class="text-end">{{ (records | sum(attribute='sgk_employee') + records | sum(attribute='unemployment_emp')) | money }}</td>
+          <td class="text-end">{{ records | sum(attribute='income_tax') | money }}</td>
+          <td class="text-end">{{ records | sum(attribute='stamp_tax') | money }}</td>
+          <td class="text-end text-primary">{{ total_net | money }}</td>
+          <td class="text-end text-danger">{{ total_cost | money }}</td>
+          <td colspan="2"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+  <i class="bi bi-info-circle me-2"></i>Bu dönem için bordro kaydı yok.
+  {% if unpaid_employees %}Yukarıdaki "Taslak Oluştur" butonuyla tüm aktif çalışanlar için taslak oluşturabilirsiniz.{% endif %}
+</div>
+{% endif %}
+
+<!-- Toplu ödeme modal -->
+{% if records %}
+<div class="modal fade" id="payAllModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title">Toplu Bordro Ödemesi — {{ period }}</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/bordro/pay-all">
+        <input type="hidden" name="period" value="{{ period }}">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Ödeme Yöntemi</label>
+            <select name="payment_method" class="form-select" id="payAllMethod"
+                    onchange="document.getElementById('payAllBankDiv').style.display=this.value=='banka'?'block':'none'">
+              <option value="banka">Banka</option>
+              <option value="nakit">Nakit</option>
+            </select>
+          </div>
+          <div id="payAllBankDiv" class="mb-3">
+            <label class="form-label fw-semibold">Banka Hesabı</label>
+            <select name="bank_account_id" class="form-select">
+              <option value="">— Seç —</option>
+              {% for ba in bank_accounts %}
+              <option value="{{ ba.id }}">{{ ba.name }} — {{ ba.bank_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-success">Tüm Onaylıları Öde</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

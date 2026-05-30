@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Program — {{ event.name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">📅 Günlük Program</div>
+    <div class="page-subtitle">{{ event.name }}</div>
+  </div>
+  <div style="display:flex; gap:8px; align-items:center;">
+    {% if event.edem_request_id %}
+    <form method="post" action="{{ base_url }}/events/{{ event.id }}/agenda/import-edem"
+          onsubmit="return confirm('E-dem bütçesindeki toplantı ve yemek kalemleri programa eklenecek. Devam?')">
+      <button type="submit" class="btn btn-secondary"
+              style="font-size:13px;">📥 E-dem'den Aktar</button>
+    </form>
+    {% endif %}
+    <a href="{{ base_url }}/events/{{ event.id }}/agenda/new" class="btn btn-primary">+ Oturum Ekle</a>
+  </div>
+</div>
+
+{% if request.query_params.get('imported') %}
+<div style="background:#dcfce7; color:#166534; border-radius:8px; padding:10px 16px;
+            margin-bottom:12px; font-size:14px; font-weight:600;">
+  ✅ E-dem bütçesinden kalemler programa eklendi.
+</div>
+{% endif %}
+
+{% if by_day %}
+  {% for day, sessions in by_day.items() %}
+  <div style="margin-bottom: 28px;">
+    {# Gün başlığı #}
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+      <div style="background:#1e3a5f; color:#fff; border-radius:10px;
+                  padding:8px 18px; font-weight:700; font-size:15px;">
+        {{ day.strftime('%A') }} &nbsp;·&nbsp; {{ day.strftime('%d %B %Y') }}
+      </div>
+      <a href="{{ base_url }}/events/{{ event.id }}/agenda/new?session_date={{ day }}"
+         class="btn btn-secondary btn-sm">+ Bu Güne Ekle</a>
+    </div>
+
+    {# Timeline kartları #}
+    <div style="display:flex; flex-direction:column; gap:8px; padding-left:8px;
+                border-left:3px solid #e2e8f0;">
+      {% for s in sessions %}
+      {% set type_info = session_types.get(s.session_type, ('📌','Diğer')) %}
+      <div style="display:flex; gap:12px; align-items:flex-start;">
+        {# Saat kolonu #}
+        <div style="width:90px; flex-shrink:0; text-align:right; padding-top:10px;">
+          {% if s.start_time %}
+          <div style="font-size:15px; font-weight:700; color:#1e3a5f;">{{ s.start_time }}</div>
+          {% if s.end_time %}
+          <div style="font-size:11px; color:#94a3b8;">{{ s.end_time }}</div>
+          {% endif %}
+          {% if s.duration_minutes %}
+          <div style="font-size:10px; color:#cbd5e1;">{{ s.duration_minutes }} dk</div>
+          {% endif %}
+          {% else %}
+          <div style="font-size:12px; color:#cbd5e1;">—</div>
+          {% endif %}
+        </div>
+
+        {# İçerik kartı #}
+        <div style="flex:1; background:#fff; border:1px solid #e2e8f0; border-radius:10px;
+                    padding:12px 16px; position:relative;">
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:8px;">
+            <div style="flex:1;">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; flex-wrap:wrap;">
+                <span style="font-size:18px;">{{ type_info[0] }}</span>
+                <strong style="font-size:14px;">{{ s.title }}</strong>
+                {% if s.hall %}
+                <span style="background:#f1f5f9; color:#475569; border-radius:6px;
+                              padding:1px 8px; font-size:11px; font-weight:600;">
+                  🏛 {{ s.hall }}
+                </span>
+                {% endif %}
+                <span style="background:#f0f9ff; color:#0369a1; border-radius:6px;
+                              padding:1px 8px; font-size:11px;">{{ s.type_label }}</span>
+              </div>
+              {% if s.speaker or s.moderator %}
+              <div style="font-size:12px; color:#64748b; margin-bottom:3px;">
+                {% if s.speaker %}🎤 {{ s.speaker }}{% endif %}
+                {% if s.speaker and s.moderator %} &nbsp;·&nbsp; {% endif %}
+                {% if s.moderator %}🎙 Moderatör: {{ s.moderator }}{% endif %}
+              </div>
+              {% endif %}
+              {% if s.description %}
+              <div style="font-size:12px; color:#475569; margin-top:4px;">{{ s.description }}</div>
+              {% endif %}
+              {% if s.notes %}
+              <div style="font-size:11px; color:#94a3b8; margin-top:4px; font-style:italic;">
+                📝 {{ s.notes }}
+              </div>
+              {% endif %}
+            </div>
+            <div style="display:flex; gap:4px; flex-shrink:0;">
+              <a href="{{ base_url }}/events/{{ event.id }}/agenda/{{ s.id }}/edit"
+                 class="btn btn-secondary btn-sm">Düzenle</a>
+              <form method="post" action="{{ base_url }}/events/{{ event.id }}/agenda/{{ s.id }}/delete"
+                    style="display:inline;"
+                    onsubmit="return confirm('Bu oturumu sil?')">
+                <button type="submit" class="btn btn-secondary btn-sm"
+                        style="color:#dc2626;">Sil</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <div class="empty-state-icon">📅</div>
+    <div class="empty-state-title">Program henüz oluşturulmadı</div>
+    <div class="empty-state-text">Günlük oturumları, molalar ve diğer aktiviteleri buraya ekleyin.</div>
+    <br>
+    <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+      <a href="{{ base_url }}/events/{{ event.id }}/agenda/new" class="btn btn-primary">+ İlk Oturumu Ekle</a>
+      {% if event.edem_request_id %}
+      <form method="post" action="{{ base_url }}/events/{{ event.id }}/agenda/import-edem"
+            onsubmit="return confirm('E-dem bütçesindeki kalemler programa eklenecek. Devam?')">
+        <button type="submit" class="btn btn-secondary">📥 E-dem'den Aktar</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

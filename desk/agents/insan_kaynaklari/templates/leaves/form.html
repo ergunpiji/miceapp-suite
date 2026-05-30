@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Yeni İzin Talebi — HR Ajanı{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div><div class="page-title">Yeni İzin Talebi</div></div>
+  <a href="/leaves" class="btn btn-secondary">Geri</a>
+</div>
+
+{% if leave_balance %}
+<div class="alert alert-info" style="margin-bottom:16px">
+  Bu yıl kalan yıllık izin: <strong>{{ leave_balance.remaining_days }} gün</strong>
+  (toplam {{ leave_balance.total_days }}, kullanılan {{ leave_balance.used_days }}, bekleyen {{ leave_balance.pending_days }})
+</div>
+{% endif %}
+
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+<form method="post" action="/leaves/new">
+  <div class="card">
+    <div class="card-body">
+      <div class="form-grid">
+        {% if user.role in ('hr_admin', 'hr_manager') %}
+        <div class="form-group form-grid-full">
+          <label>Çalışan *</label>
+          <select name="employee_id" required>
+            <option value="">— Çalışan Seçin —</option>
+            {% for emp in employees %}
+            <option value="{{ emp.id }}">{{ emp.full_name }} ({{ emp.employee_no }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+        <div class="form-group">
+          <label>İzin Türü</label>
+          <select name="leave_type" id="leaveType">
+            {% for t in leave_types %}
+            <option value="{{ t.value }}">{{ t.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group" style="grid-column:1/-1"><!-- spacer --></div>
+        <div class="form-group">
+          <label>Başlangıç Tarihi *</label>
+          <input type="date" name="start_date" id="startDate" required>
+        </div>
+        <div class="form-group">
+          <label>Bitiş Tarihi *</label>
+          <input type="date" name="end_date" id="endDate" required>
+        </div>
+        <div class="form-group" style="display:flex;align-items:flex-end">
+          <div style="padding:8px;background:#f8fafc;border-radius:6px;font-size:13px">
+            İş Günü: <strong id="dayCount">—</strong>
+          </div>
+        </div>
+        <div class="form-group form-grid-full">
+          <label>Açıklama / Gerekçe</label>
+          <textarea name="reason" placeholder="İzin gerekçenizi belirtin..."></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:16px;display:flex;gap:8px">
+    <button type="submit" class="btn btn-primary">Talep Oluştur</button>
+    <a href="/leaves" class="btn btn-secondary">İptal</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function calcWorkdays(start, end) {
+  let count = 0, cur = new Date(start);
+  const e = new Date(end);
+  while (cur <= e) {
+    if (cur.getDay() !== 0 && cur.getDay() !== 6) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
+document.getElementById('startDate').addEventListener('change', updateDays);
+document.getElementById('endDate').addEventListener('change', updateDays);
+function updateDays() {
+  const s = document.getElementById('startDate').value;
+  const e = document.getElementById('endDate').value;
+  if (s && e && s <= e) {
+    document.getElementById('dayCount').textContent = calcWorkdays(s, e) + ' gün';
+  } else {
+    document.getElementById('dayCount').textContent = '—';
+  }
+}
+// Min tarih bugün
+const today = new Date().toISOString().split('T')[0];
+document.getElementById('startDate').min = today;
+document.getElementById('endDate').min = today;
+</script>
+{% endblock %}

@@ -1,0 +1,680 @@
+{% extends "base.html" %}
+{% block page_title %}Haftalık Ödeme Listesi{% endblock %}
+
+{% block content %}
+<style>
+  .summary-card { transition: transform .12s; }
+  .summary-card:hover { transform: translateY(-2px); }
+  .gm-badge-decided { font-size: 11px; padding: 2px 8px; }
+  .action-btn-group .btn { padding: 2px 8px; font-size: 12px; }
+  .vade-cell { white-space: nowrap; }
+  tr.row-approved { background-color: #f0fdf4; }
+  tr.row-postponed { background-color: #f8fafc; }
+</style>
+
+<!-- Üst özet: Banka / Kasa / KK -->
+<div class="row g-3 mb-3">
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm summary-card h-100">
+      <div class="card-body">
+        <div class="text-muted small mb-1">Banka Toplamı</div>
+        <div class="fs-3 fw-bold" style="color:{% if bank_balance >= 0 %}#16a34a{% else %}#dc2626{% endif %}">{{ bank_balance | money }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm summary-card h-100">
+      <div class="card-body">
+        <div class="text-muted small mb-1">Kasa Toplamı</div>
+        <div class="fs-3 fw-bold" style="color:{% if cash_balance >= 0 %}#16a34a{% else %}#dc2626{% endif %}">{{ cash_balance | money }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm summary-card h-100">
+      <div class="card-body">
+        <div class="text-muted small mb-1">Kredi Kartı Müsait Limit</div>
+        <div class="fs-3 fw-bold" style="color:{% if cc_total_available > 0 %}#16a34a{% else %}#dc2626{% endif %}">{{ cc_total_available | money }}</div>
+        <div class="text-muted small">Kullanılan: {{ cc_total_used | money }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if card_summary %}
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-header bg-transparent fw-semibold">Kredi Kartları</div>
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0 no-sort">
+      <thead class="table-light">
+        <tr>
+          <th class="text-center">Kart</th>
+          <th class="text-center">Limit</th>
+          <th class="text-center">Kullanılan</th>
+          <th class="text-center">Kalan</th>
+          <th class="vade-cell text-center">Son Ödeme Tarihi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in card_summary %}
+        <tr>
+          <td class="text-center"><a href="/credit-cards/{{ c.id }}" class="text-decoration-none">{{ c.name }}</a></td>
+          <td class="text-center">{{ c.limit | money }}</td>
+          <td class="text-center text-danger">{{ c.used | money }}</td>
+          <td class="text-center fw-semibold" style="color:{% if c.available > 0 %}#16a34a{% else %}#dc2626{% endif %}">{{ c.available | money }}</td>
+          <td class="vade-cell text-center">{% if c.next_due %}{{ c.next_due | date_tr }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Ödeme günü ayarı -->
+<!-- Cycle status & submit -->
+<div class="card border-0 shadow-sm mb-3" style="border-left: 4px solid {% if cycle_status == 'submitted' %}#16a34a{% else %}#f59e0b{% endif %} !important;">
+  <div class="card-body d-flex align-items-center flex-wrap gap-2">
+    <div>
+      Sonraki ödeme günü: <strong>{{ next_date | date_tr }}</strong>
+      <span class="ms-2">
+        {% if cycle_status == 'submitted' %}
+          <span class="badge bg-success"><i class="bi bi-check2-circle"></i> GM Onayında</span>
+        {% else %}
+          <span class="badge bg-warning text-dark"><i class="bi bi-pencil-square"></i> Hazırlık</span>
+        {% endif %}
+      </span>
+    </div>
+    <div class="ms-auto d-flex align-items-center gap-2">
+      {% if cycle_status == 'draft' and not current_user.is_approver %}
+        <form method="post" action="/payments/weekly/submit" class="d-inline"
+              onsubmit="return confirm('Liste GM onayına gönderilecek. Devam edilsin mi?');">
+          <button class="btn btn-sm btn-primary"><i class="bi bi-send"></i> GM'ye Gönder</button>
+        </form>
+      {% elif cycle_status == 'submitted' and (current_user.is_admin or current_user.is_approver) %}
+        <form method="post" action="/payments/weekly/unsubmit" class="d-inline">
+          <button class="btn btn-sm btn-outline-warning"><i class="bi bi-arrow-counterclockwise"></i> Hazırlığa Geri Al</button>
+        </form>
+      {% endif %}
+      {% if current_user.is_admin %}
+      <form method="post" action="/payments/settings/weekday" class="d-flex align-items-center gap-2">
+        <label class="text-muted small mb-0">Ödeme Günü:</label>
+        <select name="weekday" class="form-select form-select-sm" style="width:auto;">
+          {% for i in range(7) %}
+          <option value="{{ i }}" {% if i == weekday %}selected{% endif %}>{{ weekdays_tr[i] }}</option>
+          {% endfor %}
+        </select>
+        <button class="btn btn-sm btn-outline-primary">Kaydet</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% set gm_locked = current_user.is_approver and cycle_status == 'draft' %}
+
+{% if gm_locked %}
+<!-- GM hazırlık aşamasında listeyi göremez -->
+<div class="card border-0 shadow-sm">
+  <div class="card-body text-center py-5">
+    <i class="bi bi-hourglass-split" style="font-size: 48px; color: #94a3b8;"></i>
+    <h5 class="mt-3 mb-2">Liste Hazırlık Aşamasında</h5>
+    <p class="text-muted mb-0">
+      Operatör listeyi hazırlıyor. <strong>"GM'ye Gönder"</strong> denildiğinde
+      ödemeler burada onayınıza sunulacak.
+    </p>
+  </div>
+</div>
+{% else %}
+
+{% if cycle_status == 'draft' or current_user.is_approver %}
+<!-- Manuel kalem ekleme — hazırlıkta operatör; submitted'ta GM ekleyebilir -->
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-header bg-transparent">
+    <button class="btn btn-sm btn-outline-secondary" type="button"
+            data-bs-toggle="collapse" data-bs-target="#manualForm">
+      <i class="bi bi-plus-circle"></i> Manuel Ödeme Kalemi Ekle
+    </button>
+    <span class="text-muted small ms-2">Sistemde fatura/çek/ekstre olarak kayıtlı olmayan ödemeleri buradan ekleyin.</span>
+  </div>
+  <div id="manualForm" class="collapse">
+    <div class="card-body">
+      <form method="post" action="/payments/weekly/manual/new" class="row g-2">
+        <div class="col-md-4">
+          <label class="form-label small">Açıklama <span class="text-danger">*</span></label>
+          <input type="text" name="description" class="form-control form-control-sm" required
+                 placeholder="örn: Ofis kirası Mayıs 2026">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small">Karşı Taraf</label>
+          <input type="text" name="party" class="form-control form-control-sm"
+                 placeholder="örn: ABC Emlak">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Tutar <span class="text-danger">*</span></label>
+          <input type="number" step="0.01" min="0.01" name="amount" class="form-control form-control-sm" required>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Yöntem</label>
+          <select name="payment_method" class="form-select form-select-sm">
+            {% for code, label in payment_methods %}
+            <option value="{{ code }}" {% if code == 'banka' %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Vade</label>
+          <input type="date" name="due_date" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">Referans <span class="text-muted">(opsiyonel)</span></label>
+          <select name="ref_id" class="form-select form-select-sm">
+            <option value="">— Yok (Genel Giderlere düşsün) —</option>
+            {% for r in active_references %}
+            <option value="{{ r.id }}">{{ r.ref_no }} · {{ r.title[:40] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-5">
+          <label class="form-label small">Notlar</label>
+          <input type="text" name="notes" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+          <button class="btn btn-primary btn-sm w-100"><i class="bi bi-plus"></i> Listeye Ekle</button>
+        </div>
+        <div class="col-12 small text-muted mt-1">
+          <i class="bi bi-info-circle"></i> Referans seçilirse harcama o referansa atanır.
+          Seçilmezse ödeme yapıldığında <strong>Genel Giderler</strong>'e otomatik kaydedilir.
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Ödeme listesi -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-transparent d-flex align-items-center flex-wrap gap-2">
+    <span class="fw-semibold">Vadesi Gelen Ödemeler ({{ items | length }} kalem)</span>
+    {% if not current_user.is_approver %}
+    <span class="badge bg-light text-dark ms-2 fw-normal" title="Onay yetkisi yalnızca Genel Müdür'dedir">
+      <i class="bi bi-info-circle"></i> Onayı Genel Müdür verir
+    </span>
+    {% endif %}
+    <a href="/payments/weekly/export" class="btn btn-sm btn-outline-success ms-auto" title="Excel olarak indir">
+      <i class="bi bi-file-earmark-excel"></i> Excel
+    </a>
+    {% if current_user.is_approver and cycle_status == 'submitted' %}
+    <button type="button" id="bulk-approve-btn" class="btn btn-sm btn-success">
+      <i class="bi bi-check-all"></i> Seçilenleri Onayla (<span id="selected-count">0</span>)
+    </button>
+    {% endif %}
+    <span class="fs-5 fw-bold text-danger ms-2">Toplam: {{ grand_total | money }}</span>
+  </div>
+
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th class="no-sort" style="width:36px;">{% if current_user.is_approver and cycle_status == 'submitted' %}<input type="checkbox" id="check-all" class="form-check-input">{% endif %}</th>
+          <th>Tip</th>
+          <th>Tedarikçi / İlgili</th>
+          <th>Referans</th>
+          <th class="vade-cell">Vade</th>
+          <th class="text-end">Tutar</th>
+          <th>Yöntem</th>
+          <th>Durum</th>
+          <th class="text-end no-sort" style="min-width:230px;">Aksiyonlar</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items %}
+        <tr class="{% if it.gm_decision == 'approved' %}row-approved{% elif it.gm_decision == 'postponed' %}row-postponed{% endif %}">
+          <td>
+            {% if it.actionable and current_user.is_approver and cycle_status == 'submitted' %}
+            <input type="checkbox" class="form-check-input row-check"
+                   data-type="{{ it.kalem_type }}" data-id="{{ it.kalem_id }}">
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge bg-{{ it.type_color }}">{{ it.type_label }}</span>
+            {% if it.detail_url %}
+            <a href="{{ it.detail_url }}?popup=1" class="popup-link text-decoration-none ms-1"
+               data-popup-title="{{ it.type_label }} Detayı"
+               title="{{ it.type_label }} kartını aç">
+              <i class="bi bi-box-arrow-up-right small text-muted"></i>
+            </a>
+            {% endif %}
+          </td>
+          <td>
+            {% if it.party_url %}
+            <a href="{{ it.party_url }}?popup=1" class="popup-link text-decoration-none"
+               data-popup-title="Tedarikçi/İlgili Kart">{{ it.party }}</a>
+            {% else %}{{ it.party }}{% endif %}
+          </td>
+          <td>
+            {% if it.ref_url %}
+            <a href="{{ it.ref_url }}?popup=1" class="popup-link text-decoration-none"
+               data-popup-title="Referans Detayı">{{ it.ref_no }}</a>
+            {% else %}{{ it.ref_no }}{% endif %}
+          </td>
+          <td class="vade-cell">{% if it.due_date %}{{ it.due_date | date_tr }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+          <td class="text-end fw-semibold">{{ it.amount | money }}</td>
+          <td>
+            {{ it.method_label }}
+            {% if it.method_override %}<i class="bi bi-pencil-fill text-warning small" title="GM tarafından değiştirildi"></i>{% endif %}
+          </td>
+          <td>
+            {% set badge_title = it.gm_decision_note or "" %}
+            {% if it.gm_decision == 'postponed' %}
+              <span class="badge bg-secondary gm-badge-decided" {% if badge_title %}title="{{ badge_title }}"{% endif %}>Ertelendi → {{ it.gm_postpone_until | date_tr }}</span>
+            {% elif it.gm_decision == 'approved' and it.gm_approved_amount %}
+              <span class="badge bg-info text-dark gm-badge-decided" title="{% if badge_title %}{{ badge_title }} | {% endif %}Kalan ödeme {{ it.gm_postpone_until | date_tr }} tarihine ertelendi"><i class="bi bi-check-lg"></i> Kısmi: {{ it.gm_approved_amount | money }} → kalan {{ it.gm_postpone_until | date_tr }}</span>
+            {% elif it.gm_decision == 'approved' %}
+              <span class="badge bg-success gm-badge-decided" {% if badge_title %}title="Not: {{ badge_title }}"{% endif %}><i class="bi bi-check-lg"></i> Onaylandı{% if badge_title %} <i class="bi bi-chat-text"></i>{% endif %}</span>
+            {% elif it.gm_decision == 'rejected' %}
+              <span class="badge bg-danger gm-badge-decided" {% if badge_title %}title="Not: {{ badge_title }}"{% endif %}>Reddedildi{% if badge_title %} <i class="bi bi-chat-text"></i>{% endif %}</span>
+            {% else %}
+              <span class="badge bg-warning text-dark gm-badge-decided">Bekliyor</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <div class="d-flex gap-1 justify-content-end action-btn-group">
+              {% set _can_edit = (cycle_status == 'draft') or current_user.is_approver %}
+              {% if _can_edit %}
+              <button type="button" class="btn btn-sm {% if it.preparer_note %}btn-warning{% else %}btn-outline-secondary{% endif %}"
+                      data-bs-toggle="modal" data-bs-target="#preparerNoteModal"
+                      data-kalem-type="{{ it.kalem_type }}" data-kalem-id="{{ it.kalem_id }}"
+                      data-party="{{ it.party }}"
+                      data-current-note="{{ it.preparer_note or '' }}"
+                      title="{% if it.preparer_note %}Not (mevcut): {{ it.preparer_note }}{% else %}GM için not düş{% endif %}">
+                <i class="bi bi-{% if it.preparer_note %}chat-text-fill{% else %}chat-text{% endif %}"></i>
+              </button>
+              {% elif it.preparer_note %}
+              <span class="text-muted small" title="Hazırlayan notu (salt görüntü): {{ it.preparer_note }}">
+                <i class="bi bi-chat-text-fill text-warning"></i>
+              </span>
+              {% endif %}
+              {% if it.actionable and current_user.is_approver and cycle_status == 'submitted' %}
+              <button type="button" class="btn btn-sm btn-success"
+                      data-bs-toggle="modal" data-bs-target="#approveModal"
+                      data-kalem-type="{{ it.kalem_type }}" data-kalem-id="{{ it.kalem_id }}"
+                      data-party="{{ it.party }}" data-amount="{{ it.amount | money }}"
+                      data-amount-raw="{{ it.amount }}"
+                      data-preparer-note="{{ it.preparer_note or '' }}"
+                      title="Onayla"><i class="bi bi-check-lg"></i></button>
+              <form method="post" action="/payments/weekly/decide" class="d-inline"
+                    onsubmit="return confirm('Bu kalemi reddetmek istediğinizden emin misiniz?');">
+                <input type="hidden" name="kalem_type" value="{{ it.kalem_type }}">
+                <input type="hidden" name="kalem_id" value="{{ it.kalem_id }}">
+                <input type="hidden" name="action" value="reject">
+                <button class="btn btn-sm btn-danger" title="Reddet"><i class="bi bi-x-lg"></i></button>
+              </form>
+              {% elif cycle_status == 'draft' and current_user.is_approver %}
+              <span class="text-muted small fst-italic">Liste hazırlık aşamasında</span>
+              {% endif %}
+              {% if _can_edit %}
+              <button type="button" class="btn btn-sm btn-outline-secondary"
+                      data-bs-toggle="modal" data-bs-target="#postponeModal"
+                      data-kalem-type="{{ it.kalem_type }}" data-kalem-id="{{ it.kalem_id }}"
+                      title="Ertele"><i class="bi bi-clock"></i></button>
+              <button type="button" class="btn btn-sm btn-outline-primary"
+                      data-bs-toggle="modal" data-bs-target="#methodModal"
+                      data-kalem-type="{{ it.kalem_type }}" data-kalem-id="{{ it.kalem_id }}"
+                      data-current-method="{{ it.method_code or '' }}"
+                      data-amount-raw="{{ it.amount }}"
+                      title="Yöntem"><i class="bi bi-credit-card"></i></button>
+              {% endif %}
+              {% if it.kalem_type == 'manual' and it.manual_can_delete and _can_edit %}
+              <form method="post" action="/payments/weekly/manual/{{ it.kalem_id }}/delete" class="d-inline"
+                    onsubmit="return confirm('Bu manuel kalemi silmek istiyor musun?');">
+                <button class="btn btn-sm btn-outline-danger" title="Manuel kalemi sil"><i class="bi bi-trash"></i></button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="text-muted text-center py-4">Bu hafta vadesi gelen ödeme yok.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if items %}
+      <tfoot class="table-light">
+        <tr class="fw-bold">
+          <td colspan="5" class="text-end">GENEL TOPLAM</td>
+          <td class="text-end text-danger fs-5">{{ grand_total | money }}</td>
+          <td colspan="3"></td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+
+<!-- Detay Popup (iframe) -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable" style="max-width: 95%;">
+    <div class="modal-content" style="height: 90vh;">
+      <div class="modal-header">
+        <h5 class="modal-title" id="popup-title">Detay</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0" style="overflow: hidden;">
+        <iframe id="popup-iframe" src="" style="width:100%; height:100%; border:0;"></iframe>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Hazırlayan Notu Modal -->
+<div class="modal fade" id="preparerNoteModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="/payments/weekly/preparer-note" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-chat-text"></i> Genel Müdür için Not</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" name="kalem_type" id="prepnote-kalem-type">
+        <input type="hidden" name="kalem_id" id="prepnote-kalem-id">
+        <div class="mb-2">
+          <div class="text-muted small">İlgili Taraf</div>
+          <div class="fw-semibold" id="prepnote-party">—</div>
+        </div>
+        <label class="form-label">Not (GM bunu görecek)</label>
+        <textarea name="note" id="prepnote-textarea" class="form-control" rows="4"
+                  placeholder="Önemli, ertelenebilir, açıklama..."></textarea>
+        <div class="form-text">Boş bırakılırsa not silinir.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+        <button type="submit" class="btn btn-primary">Kaydet</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Onay Modal (GM) -->
+{% if current_user.is_approver %}
+<div class="modal fade" id="approveModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="/payments/weekly/decide" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-check-circle text-success"></i> Ödemeyi Onayla</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" name="kalem_type" id="approve-kalem-type">
+        <input type="hidden" name="kalem_id" id="approve-kalem-id">
+        <input type="hidden" name="action" value="approve">
+        <div class="mb-2">
+          <div class="text-muted small">İlgili Taraf</div>
+          <div class="fw-semibold" id="approve-party">—</div>
+        </div>
+        <div class="mb-3">
+          <div class="text-muted small">Toplam Tutar</div>
+          <div class="fw-bold fs-5" id="approve-amount">—</div>
+        </div>
+        <div id="approve-preparer-note-box" class="alert alert-info py-2 mb-3" style="display:none;">
+          <div class="small text-muted mb-1"><i class="bi bi-chat-text"></i> Hazırlayanın Notu</div>
+          <div id="approve-preparer-note-text" class="fw-semibold"></div>
+        </div>
+        <label class="form-label">Onaylanacak Tutar</label>
+        <input type="number" step="0.01" min="0.01" name="approved_amount" id="approve-amount-input" class="form-control" required>
+        <div class="form-text">Tam tutarı bırakın → tam onay. Daha az girilirse kalanı erteleme tarihi sorulur.</div>
+
+        <div id="partial-postpone-section" class="mt-3" style="display:none;">
+          <div class="alert alert-warning py-2 mb-2">
+            <strong>Kısmi onay</strong> — kalan <strong id="partial-remaining">—</strong> seçilen tarihte yeniden listeye gelecek.
+          </div>
+          <label class="form-label">Kalanın Erteleme Tarihi</label>
+          <input type="date" name="postpone_date" id="approve-postpone-date" class="form-control" value="{{ next_payment_after_iso }}">
+        </div>
+
+        <label class="form-label mt-3">Not (opsiyonel)</label>
+        <textarea name="note" class="form-control" rows="3" placeholder="Onaya dair açıklama..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+        <button type="submit" class="btn btn-success"><i class="bi bi-check-lg"></i> Onayla</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Toplu Onay Modal -->
+<div class="modal fade" id="bulkApproveModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form id="bulk-approve-form-modal" method="post" action="/payments/weekly/bulk-approve" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-check-all text-success"></i> Seçilenleri Onayla</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p><strong><span id="bulk-modal-count">0</span></strong> kalem onaylanacak.</p>
+        <div id="bulk-hidden-items"></div>
+        <label class="form-label">Not (opsiyonel — hepsine uygulanır)</label>
+        <textarea name="note" class="form-control" rows="3" placeholder="Toplu onaya dair açıklama..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+        <button type="submit" class="btn btn-success"><i class="bi bi-check-all"></i> Hepsini Onayla</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- Erteleme Modal -->
+<div class="modal fade" id="postponeModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="/payments/weekly/decide" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Ödemeyi Ertele</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" name="kalem_type" id="postpone-kalem-type">
+        <input type="hidden" name="kalem_id" id="postpone-kalem-id">
+        <input type="hidden" name="action" value="postpone">
+        <label class="form-label">Yeni Tarih</label>
+        <input type="date" name="postpone_date" id="postpone-date-input" class="form-control" value="{{ next_payment_after_iso }}" required>
+        <div class="text-muted small mt-2">Varsayılan: bir sonraki ödeme günü ({{ next_payment_after | date_tr }}). Bu kalem o tarihteki haftanın ödeme listesinde otomatik olarak yeniden çıkacak.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+        <button type="submit" class="btn btn-warning">Ertele</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Yöntem Değiştirme Modal -->
+<div class="modal fade" id="methodModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="/payments/weekly/decide" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Ödeme Yöntemini Değiştir</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" name="kalem_type" id="method-kalem-type">
+        <input type="hidden" name="kalem_id" id="method-kalem-id">
+        <input type="hidden" name="action" value="method">
+        <label class="form-label">Yeni Ödeme Yöntemi</label>
+        <select name="method_override" id="method-select" class="form-select" required>
+          {% for code, label in payment_methods %}
+          <option value="{{ code }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+        <div id="cc-limit-warning" class="alert alert-warning mt-3" style="display:none;">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          <strong>Uyarı: Kredi kartı limiti aşılıyor!</strong>
+          <div class="small mt-1">
+            Ödeme tutarı: <strong id="cc-warn-amount">—</strong><br>
+            Toplam müsait limit: <strong id="cc-warn-available">—</strong><br>
+            Aşan: <strong id="cc-warn-excess" class="text-danger">—</strong>
+          </div>
+          <div class="small mt-2">Yine de devam edebilirsiniz.</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+        <button type="submit" class="btn btn-primary">Kaydet</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  // ---- Detail Popup (iframe) ----
+  document.querySelectorAll('.popup-link').forEach(function (link) {
+    link.addEventListener('click', function (e) {
+      e.preventDefault();
+      var url = this.getAttribute('href');
+      var title = this.dataset.popupTitle || 'Detay';
+      document.getElementById('popup-iframe').src = url;
+      document.getElementById('popup-title').textContent = title;
+      new bootstrap.Modal(document.getElementById('detailModal')).show();
+    });
+  });
+  document.getElementById('detailModal').addEventListener('hidden.bs.modal', function () {
+    document.getElementById('popup-iframe').src = '';
+  });
+
+  // ---- Preparer Note Modal ----
+  document.getElementById('preparerNoteModal').addEventListener('show.bs.modal', function (e) {
+    var btn = e.relatedTarget;
+    document.getElementById('prepnote-kalem-type').value = btn.dataset.kalemType;
+    document.getElementById('prepnote-kalem-id').value = btn.dataset.kalemId;
+    document.getElementById('prepnote-party').textContent = btn.dataset.party || '—';
+    document.getElementById('prepnote-textarea').value = btn.dataset.currentNote || '';
+  });
+
+  // ---- Postpone Modal ----
+  document.getElementById('postponeModal').addEventListener('show.bs.modal', function (e) {
+    var btn = e.relatedTarget;
+    document.getElementById('postpone-kalem-type').value = btn.dataset.kalemType;
+    document.getElementById('postpone-kalem-id').value = btn.dataset.kalemId;
+    var postponeDateEl = document.getElementById('postpone-date-input');
+    postponeDateEl.value = "{{ next_payment_after_iso }}";
+    if (postponeDateEl._flatpickr) postponeDateEl._flatpickr.setDate("{{ next_payment_after_iso }}", false);
+  });
+
+  // ---- Method (Yöntem Değiştir) Modal + KK limit uyarısı ----
+  var CC_TOTAL_AVAILABLE = {{ cc_total_available | round(2) }};
+  function ccFormatTL(n) {
+    return '₺' + Number(n).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function ccCheckLimit() {
+    var sel = document.getElementById('method-select');
+    var amt = parseFloat(document.getElementById('methodModal').dataset.itemAmount || '0');
+    var warn = document.getElementById('cc-limit-warning');
+    if (sel.value === 'kredi_karti' && amt > CC_TOTAL_AVAILABLE) {
+      document.getElementById('cc-warn-amount').textContent = ccFormatTL(amt);
+      document.getElementById('cc-warn-available').textContent = ccFormatTL(CC_TOTAL_AVAILABLE);
+      document.getElementById('cc-warn-excess').textContent = ccFormatTL(amt - CC_TOTAL_AVAILABLE);
+      warn.style.display = 'block';
+    } else {
+      warn.style.display = 'none';
+    }
+  }
+  document.getElementById('methodModal').addEventListener('show.bs.modal', function (e) {
+    var btn = e.relatedTarget;
+    document.getElementById('method-kalem-type').value = btn.dataset.kalemType;
+    document.getElementById('method-kalem-id').value = btn.dataset.kalemId;
+    this.dataset.itemAmount = btn.dataset.amountRaw || '0';
+    var current = btn.dataset.currentMethod || '';
+    var sel = document.getElementById('method-select');
+    if (current) for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === current) { sel.selectedIndex = i; break; }
+    }
+    ccCheckLimit();
+  });
+  document.getElementById('method-select').addEventListener('change', ccCheckLimit);
+
+  {% if current_user.is_approver %}
+  // ---- Onay Modal (kısmi onay desteği) ----
+  function fmtTL(n) {
+    return '₺' + Number(n).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  var approveFullAmount = 0;
+  document.getElementById('approveModal').addEventListener('show.bs.modal', function (e) {
+    var btn = e.relatedTarget;
+    document.getElementById('approve-kalem-type').value = btn.dataset.kalemType;
+    document.getElementById('approve-kalem-id').value = btn.dataset.kalemId;
+    document.getElementById('approve-party').textContent = btn.dataset.party || '—';
+    document.getElementById('approve-amount').textContent = btn.dataset.amount || '—';
+    approveFullAmount = parseFloat(btn.dataset.amountRaw || '0');
+    var inp = document.getElementById('approve-amount-input');
+    inp.value = approveFullAmount.toFixed(2);
+    inp.max = approveFullAmount.toFixed(2);
+    document.getElementById('partial-postpone-section').style.display = 'none';
+    var appPostponeDateEl = document.getElementById('approve-postpone-date');
+    appPostponeDateEl.value = "{{ next_payment_after_iso }}";
+    if (appPostponeDateEl._flatpickr) appPostponeDateEl._flatpickr.setDate("{{ next_payment_after_iso }}", false);
+    var ta = document.querySelector('#approveModal textarea[name="note"]');
+    if (ta) ta.value = '';
+    // Hazırlayan notu göster
+    var pnote = btn.dataset.preparerNote || '';
+    var box = document.getElementById('approve-preparer-note-box');
+    if (pnote) {
+      document.getElementById('approve-preparer-note-text').textContent = pnote;
+      box.style.display = 'block';
+    } else {
+      box.style.display = 'none';
+    }
+  });
+  document.getElementById('approve-amount-input').addEventListener('input', function () {
+    var v = parseFloat(this.value || '0');
+    var section = document.getElementById('partial-postpone-section');
+    var dateInp = document.getElementById('approve-postpone-date');
+    if (v > 0 && v < approveFullAmount - 0.005) {
+      section.style.display = 'block';
+      document.getElementById('partial-remaining').textContent = fmtTL(approveFullAmount - v);
+      dateInp.required = true;
+    } else {
+      section.style.display = 'none';
+      dateInp.required = false;
+    }
+  });
+
+  // ---- Toplu Onay (modal) ----
+  function updateSelectedCount() {
+    var n = document.querySelectorAll('.row-check:checked').length;
+    var el = document.getElementById('selected-count');
+    if (el) el.textContent = n;
+  }
+  var checkAll = document.getElementById('check-all');
+  if (checkAll) checkAll.addEventListener('change', function (e) {
+    document.querySelectorAll('.row-check').forEach(function (c) { c.checked = e.target.checked; });
+    updateSelectedCount();
+  });
+  document.querySelectorAll('.row-check').forEach(function (c) {
+    c.addEventListener('change', updateSelectedCount);
+  });
+  var bulkBtn = document.getElementById('bulk-approve-btn');
+  if (bulkBtn) bulkBtn.addEventListener('click', function () {
+    var checks = document.querySelectorAll('.row-check:checked');
+    if (checks.length === 0) { alert('Lütfen onaylanacak kalemleri seçin.'); return; }
+    var holder = document.getElementById('bulk-hidden-items');
+    holder.innerHTML = '';
+    checks.forEach(function (c) {
+      var inp = document.createElement('input');
+      inp.type = 'hidden';
+      inp.name = 'items';
+      inp.value = c.dataset.type + ':' + c.dataset.id;
+      holder.appendChild(inp);
+    });
+    document.getElementById('bulk-modal-count').textContent = checks.length;
+    var modal = new bootstrap.Modal(document.getElementById('bulkApproveModal'));
+    modal.show();
+  });
+  {% endif %}
+</script>
+
+{% endif %}{# gm_locked else #}
+{% endblock %}

@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block page_title %}{{ year }} Resmi Tatiller{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#newHolidayModal">
+  <i class="bi bi-plus-lg me-1"></i>Tatil Ekle
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- Yıl seçici -->
+<div class="d-flex gap-2 mb-3 align-items-center">
+  <a href="/admin/leaves/holidays?year={{ year - 1 }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-left"></i></a>
+  <span class="fw-bold fs-5">{{ year }}</span>
+  <a href="/admin/leaves/holidays?year={{ year + 1 }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-right"></i></a>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0" style="font-size:13px">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Tarih</th>
+          <th>Gün</th>
+          <th>Ad</th>
+          <th>Tür</th>
+          <th class="pe-3"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set TR_DAYS = ['Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi','Pazar'] %}
+        {% for h in holidays %}
+        <tr>
+          <td class="ps-3 fw-semibold">{{ h.date | date_tr }}</td>
+          <td class="text-muted">{{ TR_DAYS[h.date.weekday()] }}</td>
+          <td>{{ h.name }}</td>
+          <td>
+            {% if h.is_half %}
+            <span class="badge bg-warning text-dark">Yarım Gün</span>
+            {% else %}
+            <span class="badge bg-danger">Tam Gün</span>
+            {% endif %}
+          </td>
+          <td class="pe-3 text-end">
+            <form method="post" action="/admin/leaves/holidays/{{ h.id }}/delete"
+              onsubmit="return confirm('Silinsin mi?')" class="d-inline">
+              <button class="btn btn-xs btn-outline-danger" style="font-size:11px;padding:2px 7px">Sil</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-center text-muted py-4">{{ year }} yılı için tatil tanımlanmamış.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Yeni Tatil Modal -->
+<div class="modal fade" id="newHolidayModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header" style="background:linear-gradient(135deg,#1a3a5c,#1e5f8c);color:#fff">
+        <h6 class="modal-title">Resmi Tatil Ekle</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/admin/leaves/holidays/new">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Tarih <span class="text-danger">*</span></label>
+            <input type="date" name="hdate" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Ad <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required placeholder="ör. Cumhuriyet Bayramı">
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" name="is_half" value="1" id="isHalfCheck">
+            <label class="form-check-label" for="isHalfCheck">Yarım Gün Tatil</label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-primary btn-sm px-4">Kaydet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

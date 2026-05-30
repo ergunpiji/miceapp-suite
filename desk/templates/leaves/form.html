@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block page_title %}Yeni İzin Talebi{% endblock %}
+
+{% block extra_css %}
+<style>
+  .type-card { border:2px solid #e2e8f0; border-radius:10px; padding:12px 16px; cursor:pointer; transition:.15s; height:100%; display:flex; flex-direction:column; justify-content:space-between; }
+  .type-card:hover { border-color:#1e5f8c; background:#f0f7ff; }
+  .type-card.selected { border-color:#1a3a5c; background:#e8f0fe; }
+  .type-card input[type=radio] { display:none; }
+  .type-card-meta { display:flex; flex-direction:column; gap:2px; margin-top:6px; padding-left:20px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header" style="background:linear-gradient(135deg,#1a3a5c,#1e5f8c);color:#fff;border-radius:8px 8px 0 0">
+        <h6 class="mb-0"><i class="bi bi-calendar-plus me-2"></i>Yeni İzin Talebi</h6>
+      </div>
+      <div class="card-body p-4">
+        {% if error %}
+        <div class="alert alert-danger py-2 mb-3" style="font-size:13px">
+          <i class="bi bi-x-circle me-1"></i>{{ error }}
+        </div>
+        {% endif %}
+        <form method="post" id="leaveForm">
+
+          <!-- İzin Türü -->
+          <div class="mb-4">
+            <label class="form-label fw-semibold">İzin Türü <span class="text-danger">*</span></label>
+            <div class="row g-2">
+              {% for lt in leave_types %}
+              <div class="col-md-6 d-flex">
+                <label class="type-card w-100" id="card_{{ lt.id }}">
+                  <input type="radio" name="leave_type_id" value="{{ lt.id }}"
+                    data-remaining="{{ balances[lt.id].remaining_days if balances is defined and lt.id in balances else 'null' }}"
+                    onchange="onTypeChange({{ lt.id }}, {{ lt.default_days or 'null' }}, {{ 'true' if lt.requires_report else 'false' }}, {{ 'true' if lt.requires_balance else 'false' }}, this.dataset.remaining)">
+                  <div class="d-flex align-items-center gap-2">
+                    <span style="width:12px;height:12px;border-radius:50%;background:{{ lt.color }};flex-shrink:0;display:inline-block"></span>
+                    <span class="fw-semibold" style="font-size:13px">{{ lt.name }}</span>
+                    {% if not lt.is_paid %}<span class="badge bg-warning text-dark ms-auto" style="font-size:10px">Ücretsiz</span>{% endif %}
+                  </div>
+                  <div class="type-card-meta">
+                    {% set bal = balances.get(lt.id) if balances is defined else none %}
+                    {% if bal %}
+                    <div style="font-size:11px">
+                      <span class="fw-semibold text-primary">{{ bal.remaining_days }} gün</span>
+                      <span class="text-muted"> kalan / {{ bal.entitled_days + bal.carried_over_days }} gün hak</span>
+                    </div>
+                    {% elif lt.default_days %}
+                    <div class="text-muted" style="font-size:11px">{{ lt.default_days }} iş günü</div>
+                    {% else %}
+                    <div style="font-size:11px">&nbsp;</div>
+                    {% endif %}
+                    {% if lt.requires_report %}
+                    <div class="text-danger" style="font-size:11px"><i class="bi bi-file-medical"></i> Rapor gerekli</div>
+                    {% else %}
+                    <div style="font-size:11px">&nbsp;</div>
+                    {% endif %}
+                  </div>
+                </label>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <!-- Yarım Gün -->
+          <div class="mb-3">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="halfDaySwitch" name="half_day" value="1"
+                onchange="toggleHalfDay(this.checked)">
+              <label class="form-check-label fw-semibold" for="halfDaySwitch">Yarım Gün</label>
+            </div>
+          </div>
+
+          <!-- Yarım gün periyot -->
+          <div id="halfDayPeriod" class="mb-3" style="display:none">
+            <label class="form-label fw-semibold">Periyot <span class="text-danger">*</span></label>
+            <div class="d-flex gap-3">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="half_day_period" id="hd_sabah" value="sabah" checked>
+                <label class="form-check-label" for="hd_sabah">Sabah (09:00 – 13:00)</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="half_day_period" id="hd_ogleden" value="ogleden_sonra">
+                <label class="form-check-label" for="hd_ogleden">Öğleden Sonra (13:00 – 18:00)</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tarih(ler) -->
+          <div class="row g-3 mb-3" id="dateSection">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Başlangıç <span class="text-danger">*</span></label>
+              <input type="date" name="start_date" id="startDate" class="form-control" required
+                value="{{ today }}" min="{{ today }}" onchange="onStartChange()">
+            </div>
+            <div class="col-md-6" id="endDateCol">
+              <label class="form-label fw-semibold">İşe Dönüş <span class="text-danger">*</span></label>
+              <input type="date" name="return_date" id="returnDate" class="form-control"
+                value="{{ today }}" min="{{ today }}" onchange="calcDays()">
+            </div>
+          </div>
+
+          <!-- Gün sayısı göstergesi -->
+          <div id="daysBadge" class="mb-3" style="display:none">
+            <span class="badge bg-primary fs-6" id="daysLabel">—</span>
+            <small class="text-muted ms-2">iş günü (hafta sonu ve resmi tatil hariç)</small>
+            <div id="balanceWarn" class="alert alert-danger py-2 mt-2 mb-0" style="display:none;font-size:13px">
+              <i class="bi bi-exclamation-triangle-fill me-1"></i>
+              <span id="balanceWarnText"></span> — talep yine de gönderilebilir.
+            </div>
+          </div>
+
+          <!-- Rapor var mı? -->
+          <div class="mb-3" id="reportSection" style="display:none">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="hasReport" name="has_report" value="1">
+              <label class="form-check-label" for="hasReport">
+                <i class="bi bi-file-medical text-danger me-1"></i>
+                Doktor raporu/belgesi mevcut
+              </label>
+            </div>
+          </div>
+
+          <!-- Açıklama -->
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Açıklama</label>
+            <textarea name="reason" class="form-control" rows="2" placeholder="İsteğe bağlı..."></textarea>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary px-4">
+              <i class="bi bi-send me-1"></i>Talebi Gönder
+            </button>
+            <a href="/leaves" class="btn btn-outline-secondary">İptal</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let isHalf = false;
+let hasDefaultDays = false;
+let selectedRemaining = null;
+
+function onTypeChange(id, defaultDays, requiresReport, requiresBalance, remaining) {
+  document.querySelectorAll('.type-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('card_' + id).classList.add('selected');
+  document.getElementById('reportSection').style.display = requiresReport ? 'block' : 'none';
+  hasDefaultDays = defaultDays !== null;
+  selectedRemaining = (remaining === 'null' || remaining === null || remaining === undefined) ? null : parseFloat(remaining);
+  if (hasDefaultDays && !isHalf) {
+    document.getElementById('endDateCol').style.display = 'none';
+    document.getElementById('daysBadge').style.display = 'block';
+    document.getElementById('daysLabel').textContent = defaultDays + ' iş günü';
+    checkBalanceWarn(defaultDays);
+  } else {
+    document.getElementById('endDateCol').style.display = '';
+    calcDays();
+  }
+}
+
+function checkBalanceWarn(days) {
+  const warn = document.getElementById('balanceWarn');
+  const warnText = document.getElementById('balanceWarnText');
+  if (selectedRemaining !== null && days > selectedRemaining) {
+    warnText.textContent = 'Bakiye yetersiz: ' + days + ' gün talep edildi, ' + selectedRemaining + ' gün kaldı';
+    warn.style.display = 'block';
+  } else {
+    warn.style.display = 'none';
+  }
+}
+
+function toggleHalfDay(checked) {
+  isHalf = checked;
+  document.getElementById('halfDayPeriod').style.display = checked ? 'block' : 'none';
+  document.getElementById('endDateCol').style.display = (checked || hasDefaultDays) ? 'none' : '';
+  if (checked) {
+    document.getElementById('daysBadge').style.display = 'block';
+    document.getElementById('daysLabel').textContent = '0.5 iş günü';
+  } else if (!hasDefaultDays) {
+    calcDays();
+  }
+}
+
+function onStartChange() {
+  const s = document.getElementById('startDate').value;
+  const ret = document.getElementById('returnDate');
+  if (s) {
+    const next = new Date(s);
+    next.setDate(next.getDate() + 1);
+    const nextStr = next.toISOString().split('T')[0];
+    ret.min = nextStr;
+    if (ret._flatpickr) ret._flatpickr.set('minDate', nextStr);
+    if (ret.value && ret.value <= s) {
+      ret.value = nextStr;
+      if (ret._flatpickr) ret._flatpickr.setDate(nextStr, false);
+    }
+  }
+  calcDays();
+}
+
+function calcDays() {
+  if (isHalf || hasDefaultDays) return;
+  const s = document.getElementById('startDate').value;
+  const r = document.getElementById('returnDate').value;
+  if (!s || !r) return;
+  // İşe dönüş tarihi - 1 gün = son izin günü
+  const ret = new Date(r);
+  ret.setDate(ret.getDate() - 1);
+  const e = ret.toISOString().split('T')[0];
+  const badge = document.getElementById('daysBadge');
+  const label = document.getElementById('daysLabel');
+  badge.style.display = 'block';
+  label.textContent = '...';
+  fetch(`/leaves/calc-days?start=${s}&end=${e}`)
+    .then(r => r.json())
+    .then(d => {
+      label.textContent = d.days + ' iş günü';
+      checkBalanceWarn(d.days);
+    })
+    .catch(() => { label.textContent = '?'; });
+}
+</script>
+{% endblock %}

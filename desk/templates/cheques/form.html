@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header" style="background:linear-gradient(135deg,#1a3a5c,#1e5f8c);color:#fff;border-radius:8px 8px 0 0">
+        <h6 class="mb-0">
+          <i class="bi bi-file-earmark-text me-2"></i>{{ page_title }}
+        </h6>
+      </div>
+      <div class="card-body p-4">
+        <form method="post" enctype="multipart/form-data">
+          <div class="row g-3">
+
+            <!-- Tip -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Çek Tipi <span class="text-danger">*</span></label>
+              <select name="cheque_type" class="form-select" required>
+                <option value="alinan"  {% if cheque and cheque.cheque_type == 'alinan'  %}selected{% endif %}>Alınan (Müşteriden)</option>
+                <option value="verilen" {% if cheque and cheque.cheque_type == 'verilen' %}selected{% endif %}>Verilen (Tedarikçiye)</option>
+              </select>
+            </div>
+
+            <!-- Çek No -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Çek No</label>
+              <input type="text" name="cheque_no" class="form-control"
+                value="{{ cheque.cheque_no if cheque else '' }}" placeholder="ör. 0001234">
+            </div>
+
+            <!-- Tedarikçi -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Tedarikçi</label>
+              <select name="vendor_id" class="form-select">
+                <option value="">— Seçiniz —</option>
+                {% for v in vendors %}
+                <option value="{{ v.id }}" {% if cheque and cheque.vendor_id == v.id %}selected{% endif %}>{{ v.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Müşteri -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Müşteri</label>
+              <select name="customer_id" class="form-select">
+                <option value="">— Seçiniz —</option>
+                {% for c in customers %}
+                <option value="{{ c.id }}" {% if cheque and cheque.customer_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Banka -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Banka</label>
+              <input type="text" name="bank" class="form-control"
+                value="{{ cheque.bank if cheque else '' }}" placeholder="ör. Garanti">
+            </div>
+
+            <!-- Şube -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Şube</label>
+              <input type="text" name="branch" class="form-control"
+                value="{{ cheque.branch if cheque else '' }}" placeholder="ör. Kadıköy">
+            </div>
+
+            <!-- Tutar + Para Birimi -->
+            <div class="col-md-8">
+              <label class="form-label fw-semibold">Tutar <span class="text-danger">*</span></label>
+              <input type="number" name="amount" step="0.01" min="0.01" class="form-control"
+                value="{{ cheque.amount if cheque else '' }}" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Para Birimi</label>
+              <select name="currency" class="form-select">
+                <option value="TRY" {% if not cheque or cheque.currency == 'TRY' %}selected{% endif %}>TRY</option>
+                <option value="USD" {% if cheque and cheque.currency == 'USD' %}selected{% endif %}>USD</option>
+                <option value="EUR" {% if cheque and cheque.currency == 'EUR' %}selected{% endif %}>EUR</option>
+              </select>
+            </div>
+
+            <!-- Keşide Tarihi -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Keşide Tarihi <span class="text-danger">*</span></label>
+              <input type="date" name="cheque_date" class="form-control"
+                value="{{ cheque.cheque_date.isoformat() if cheque else '' }}" required>
+            </div>
+
+            <!-- Vade Tarihi -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Vade Tarihi <span class="text-danger">*</span></label>
+              <input type="date" name="due_date" class="form-control"
+                value="{{ cheque.due_date.isoformat() if cheque else '' }}" required>
+            </div>
+
+            <!-- Varsayılan Banka Hesabı -->
+            <div class="col-12">
+              <label class="form-label fw-semibold">Banka Hesabı (Tahsilat/Ödeme için)</label>
+              <select name="bank_account_id" class="form-select">
+                <option value="">— Sonradan seçilebilir —</option>
+                {% for ba in bank_accounts %}
+                <option value="{{ ba.id }}" {% if cheque and cheque.bank_account_id == ba.id %}selected{% endif %}>
+                  {{ ba.name }}{% if ba.bank_name %} — {{ ba.bank_name }}{% endif %}
+                </option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Çek tahsil/ödendiğinde bu hesaba hareket kaydedilir.</div>
+            </div>
+
+            <!-- Notlar -->
+            <div class="col-12">
+              <label class="form-label fw-semibold">Notlar</label>
+              <textarea name="notes" class="form-control" rows="2">{{ cheque.notes if cheque else '' }}</textarea>
+            </div>
+
+            <!-- Belge Yükleme -->
+            <div class="col-12">
+              <label class="form-label fw-semibold">
+                <i class="bi bi-paperclip me-1"></i>Çek Fotoğrafı / Taraması
+              </label>
+              {% if cheque and cheque.attachment %}
+              <div class="alert alert-info py-2 mb-2" style="font-size:12px">
+                <i class="bi bi-check-circle me-1"></i>Mevcut belge var.
+                Yeni dosya seçerseniz değiştirilir.
+              </div>
+              {% endif %}
+              <input type="file" name="attachment" class="form-control"
+                accept=".jpg,.jpeg,.png,.pdf,.heic,.webp">
+              <div class="form-text">JPG, PNG, HEIC, PDF desteklenir.</div>
+            </div>
+
+          </div>
+
+          <div class="d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-primary px-4">
+              <i class="bi bi-check-lg me-1"></i>Kaydet
+            </button>
+            <a href="{% if cheque %}/cheques/{{ cheque.id }}{% else %}/cheques{% endif %}"
+              class="btn btn-outline-secondary">İptal</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

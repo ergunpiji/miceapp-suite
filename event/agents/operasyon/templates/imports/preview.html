@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Önizleme — Excel Aktar{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">📋 Aktarma Önizlemesi</div>
+    <div class="page-subtitle">{{ parsed | length }} katılımcı bulundu — "{{ filename }}"</div>
+  </div>
+</div>
+
+<div class="alert alert-info">
+  ℹ️ Aşağıdaki veriler yapay zeka tarafından dosyanızdan çıkarıldı.
+  Hatalı görünen varsa aktarmadan sonra düzenleyebilirsiniz.
+  <strong>Onaylayın</strong> diyerek tüm katılımcıları sisteme ekleyin.
+</div>
+
+<!-- Özet -->
+<div class="stats-grid" style="margin-bottom:20px;">
+  <div class="stat-card">
+    <div class="stat-icon">👥</div>
+    <div class="stat-value">{{ parsed | length }}</div>
+    <div class="stat-label">Katılımcı</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon">✈️</div>
+    <div class="stat-value">{{ parsed | selectattr('flight_in') | list | length }}</div>
+    <div class="stat-label">Geliş Uçuşu</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon">✈️</div>
+    <div class="stat-value">{{ parsed | selectattr('flight_out') | list | length }}</div>
+    <div class="stat-label">Dönüş Uçuşu</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon">🏨</div>
+    <div class="stat-value">{{ parsed | selectattr('accommodation') | list | length }}</div>
+    <div class="stat-label">Konaklama</div>
+  </div>
+</div>
+
+<!-- Katılımcı kartları -->
+<div style="max-height:500px; overflow-y:auto; margin-bottom:20px;">
+  {% for p in parsed %}
+  <div class="preview-participant">
+    <div class="preview-name">
+      {{ p.first_name }} {{ p.last_name }}
+      {% if p.company %}<span style="color:#64748b; font-size:12px;"> — {{ p.company }}</span>{% endif %}
+    </div>
+    <div class="preview-tags">
+      {% if p.email %}<span class="preview-tag has">📧 E-posta</span>{% endif %}
+      {% if p.phone %}<span class="preview-tag has">📞 Telefon</span>{% endif %}
+      {% if p.flight_in %}
+        <span class="preview-tag has">↓ {{ p.flight_in.flight_number or 'Geliş uçuşu' }}</span>
+      {% else %}
+        <span class="preview-tag empty">↓ Geliş yok</span>
+      {% endif %}
+      {% if p.flight_out %}
+        <span class="preview-tag has">↑ {{ p.flight_out.flight_number or 'Dönüş uçuşu' }}</span>
+      {% else %}
+        <span class="preview-tag empty">↑ Dönüş yok</span>
+      {% endif %}
+      {% if p.accommodation %}
+        <span class="preview-tag has">🏨 {{ p.accommodation.hotel or 'Konaklama' }}</span>
+      {% else %}
+        <span class="preview-tag empty">🏨 Konaklama yok</span>
+      {% endif %}
+      {% if p.dietary %}<span class="preview-tag has">🍽 {{ p.dietary }}</span>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Onay formu -->
+<form method="post" action="{{ base_url }}/events/{{ event.id }}/import/confirm">
+  <input type="hidden" name="parsed_json" value="{{ parsed_json | e }}">
+  <div class="btn-group">
+    <button type="submit" class="btn btn-primary">✅ {{ parsed | length }} Katılımcıyı Aktar</button>
+    <a href="{{ base_url }}/events/{{ event.id }}/import" class="btn btn-secondary">← İptal, Yeniden Yükle</a>
+  </div>
+</form>
+{% endblock %}

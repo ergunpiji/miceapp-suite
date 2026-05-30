@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}{% if session %}Oturumu Düzenle{% else %}Yeni Oturum{% endif %} — {{ event.name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">
+    {% if session %}✏️ Oturumu Düzenle{% else %}📅 Yeni Oturum Ekle{% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <form method="post" action="{{ base_url }}/events/{{ event.id }}/agenda/{% if session %}{{ session.id }}/edit{% else %}new{% endif %}">
+    <div class="form-grid cols-3">
+
+      <div class="form-group">
+        <label>Tarih <span style="color:#dc2626">*</span></label>
+        <select name="session_date" required>
+          {% for d in event_dates %}
+          <option value="{{ d }}"
+            {% if session and session.session_date == d %}selected
+            {% elif not session and prefill_date == d|string %}selected{% endif %}>
+            {{ d.strftime('%d %B %Y — %A') }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Başlangıç Saati</label>
+        <input type="time" name="start_time"
+               value="{{ session.start_time if session else '' }}">
+      </div>
+
+      <div class="form-group">
+        <label>Bitiş Saati</label>
+        <input type="time" name="end_time"
+               value="{{ session.end_time if session else '' }}">
+      </div>
+
+      <div class="form-group full">
+        <label>Oturum Başlığı <span style="color:#dc2626">*</span></label>
+        <input type="text" name="title" required
+               value="{{ session.title if session else '' }}"
+               placeholder="Örn: Açılış Konuşması, Coffee Break, Öğle Yemeği...">
+      </div>
+
+      <div class="form-group">
+        <label>Oturum Tipi</label>
+        <select name="session_type">
+          {% for type_key, (icon, label) in session_types.items() %}
+          <option value="{{ type_key }}"
+            {% if session and session.session_type == type_key %}selected
+            {% elif not session and type_key == 'plenary' %}selected{% endif %}>
+            {{ icon }} {{ label }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Salon / Konum</label>
+        <input type="text" name="hall"
+               value="{{ session.hall if session else '' }}"
+               placeholder="Ana Salon, Fuaye, B Salonu...">
+      </div>
+
+      <div class="form-group"></div>
+
+      <div class="form-group">
+        <label>Konuşmacı</label>
+        <input type="text" name="speaker"
+               value="{{ session.speaker if session else '' }}"
+               placeholder="Ad Soyad, Ünvan">
+      </div>
+
+      <div class="form-group">
+        <label>Moderatör</label>
+        <input type="text" name="moderator"
+               value="{{ session.moderator if session else '' }}"
+               placeholder="Ad Soyad">
+      </div>
+
+      <div class="form-group"></div>
+
+      <div class="form-group full">
+        <label>Açıklama</label>
+        <textarea name="description" rows="2"
+                  placeholder="Oturum hakkında kısa bilgi...">{{ session.description if session else '' }}</textarea>
+      </div>
+
+      <div class="form-group full">
+        <label>Notlar</label>
+        <textarea name="notes" rows="2"
+                  placeholder="İç notlar, hatırlatmalar...">{{ session.notes if session else '' }}</textarea>
+      </div>
+    </div>
+
+    <br>
+    <div class="btn-group">
+      <button type="submit" class="btn btn-primary">Kaydet</button>
+      <a href="{{ base_url }}/events/{{ event.id }}/agenda" class="btn btn-secondary">İptal</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

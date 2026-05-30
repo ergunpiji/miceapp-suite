@@ -1,0 +1,43 @@
+/* =============================================================
+   miceapp Design System — Shared Tokens
+   Import in both miceapp and micedesk before app-specific styles
+   ============================================================= */
+
+:root {
+  /* ── Renkler ── */
+  --mice-primary:       #2563eb;
+  --mice-primary-dark:  #1d4ed8;
+  --mice-primary-bg:    #dbeafe;
+
+  --mice-text:          #1e293b;
+  --mice-text-muted:    #64748b;
+  --mice-text-faint:    #94a3b8;
+
+  --mice-surface:       #ffffff;
+  --mice-page-bg:       #f1f5f9;
+  --mice-border:        #e2e8f0;
+  --mice-border-light:  #f8fafc;
+
+  --mice-danger:        #dc2626;
+  --mice-danger-bg:     #fef2f2;
+  --mice-warning-bg:    #fef3c7;
+  --mice-success-bg:    #d1fae5;
+
+  /* ── Sidebar ── */
+  --mice-sidebar-width:      260px;
+  --mice-sidebar-bg:         #1e293b;
+  --mice-sidebar-hover:      rgba(255,255,255,.07);
+  --mice-sidebar-active-bg:  rgba(96,165,250,.15);
+  --mice-sidebar-active-clr: #93c5fd;
+  --mice-sidebar-active-bdr: #60a5fa;
+
+  /* ── Topbar ── */
+  --mice-topbar-height: 60px;
+
+  /* ── Köşe yarıçapı ── */
+  --mice-radius:    12px;
+  --mice-radius-sm:  8px;
+
+  /* ── Tipografi ── */
+  --mice-font: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}

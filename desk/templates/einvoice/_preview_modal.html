@@ -1,0 +1,151 @@
+{# E-Fatura Inbox preview — modal içeriği. AJAX ile yüklenir. #}
+<div class="modal-header">
+  <h5 class="modal-title">
+    <i class="bi bi-receipt"></i> E-Fatura Önizleme — {{ detail.invoice_no or item.invoice_no }}
+  </h5>
+  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<div class="modal-body">
+  <div class="row g-3 mb-3">
+    <div class="col-md-6">
+      <div class="card border-0 bg-light">
+        <div class="card-body">
+          <h6 class="mb-2"><i class="bi bi-building"></i> Gönderen</h6>
+          <div class="fw-bold">{{ detail.sender_name or item.sender_name }}</div>
+          <div class="text-muted small">Vergi No: <code>{{ detail.sender_tax_no or item.sender_tax_no }}</code></div>
+          {% if detail.sender_address %}<div class="text-muted small mt-1">{{ detail.sender_address }}</div>{% endif %}
+          {% if detail.sender_email %}<div class="text-muted small">{{ detail.sender_email }}</div>{% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card border-0 bg-light">
+        <div class="card-body">
+          <h6 class="mb-2"><i class="bi bi-calendar3"></i> Fatura Bilgileri</h6>
+          <div><strong>No:</strong> {{ detail.invoice_no or item.invoice_no }}</div>
+          <div><strong>Tarih:</strong> {{ item.invoice_date | date_tr }}</div>
+          {% if detail.due_date %}<div><strong>Vade:</strong> {{ detail.due_date }}</div>{% endif %}
+          <div><strong>UUID/ETTN:</strong> <code class="small">{{ item.external_uuid }}</code></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Kalemler #}
+  <h6 class="mt-3 mb-2"><i class="bi bi-list-ul"></i> Fatura Kalemleri</h6>
+  <table class="table table-sm table-bordered no-sort">
+    <thead class="table-light">
+      <tr>
+        <th>Açıklama</th>
+        <th class="text-center">Mik.</th>
+        <th class="text-center">Br.</th>
+        <th class="text-end">Birim Fiyat</th>
+        <th class="text-center">KDV %</th>
+        <th class="text-end">KDV Tutarı</th>
+        <th class="text-end">Toplam</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for line in (detail.lines or []) %}
+      <tr>
+        <td>{{ line.description }}</td>
+        <td class="text-center">{{ line.qty }}</td>
+        <td class="text-center small">{{ line.unit }}</td>
+        <td class="text-end">{{ line.unit_price | money }}</td>
+        <td class="text-center">%{{ ((line.vat_rate or 0) * 100) | int }}</td>
+        <td class="text-end text-muted">{{ line.vat_amount | money }}</td>
+        <td class="text-end fw-semibold">{{ line.total | money }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="text-muted text-center py-2">Kalem detayı alınamadı</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot class="table-light">
+      <tr class="fw-bold">
+        <td colspan="5" class="text-end">Mal/Hizmet Toplamı</td>
+        <td></td>
+        <td class="text-end">{{ detail.subtotal | money }}</td>
+      </tr>
+      <tr class="fw-bold">
+        <td colspan="5" class="text-end">KDV Toplamı</td>
+        <td></td>
+        <td class="text-end text-muted">{{ detail.vat_total | money }}</td>
+      </tr>
+      <tr class="fw-bold" style="background:#1A3A5C;color:#fff;">
+        <td colspan="5" class="text-end">GENEL TOPLAM</td>
+        <td></td>
+        <td class="text-end fs-5">{{ detail.total_amount | money }}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  {% if detail.pdf_url %}
+  <div class="text-end mt-2">
+    <a href="{{ detail.pdf_url }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-file-earmark-pdf"></i> Resmi PDF (yeni sekmede)
+    </a>
+  </div>
+  {% endif %}
+
+  <hr class="my-3">
+
+  {# 8 günlük yasal yanıt uyarısı #}
+  <div class="alert alert-warning py-2 small mb-3">
+    <i class="bi bi-exclamation-triangle-fill"></i>
+    <strong>Yasal süre:</strong> Bu e-faturaya 8 gün içinde uygulama yanıtı (kabul/red) verilmelidir.
+    Yanıt verilmezse <strong>otomatik kabul</strong> edilir.
+  </div>
+
+  {# KARAR butonları #}
+  <div class="d-flex gap-2 align-items-start">
+    {# Kabul / İçe Aktar — modal içinde aynı form #}
+    <form method="post" action="/einvoice-ui/inbox/{{ item.id }}/import" class="flex-fill">
+      <div class="card border-success">
+        <div class="card-header bg-success text-white py-2">
+          <i class="bi bi-check-circle-fill"></i> KABUL ET (İçe Aktar)
+        </div>
+        <div class="card-body">
+          <label class="form-label small">Tedarikçi Eşleştirme</label>
+          <select name="vendor_id" class="form-select form-select-sm mb-2">
+            <option value="">— Vergi no ile otomatik / yoksa yeni yarat —</option>
+            {% for v in vendors %}
+            <option value="{{ v.id }}">{{ v.name }} {% if v.tax_no %}({{ v.tax_no }}){% endif %}</option>
+            {% endfor %}
+          </select>
+          <input type="text" name="new_vendor_name" class="form-control form-control-sm mb-2"
+                 placeholder="Yeni tedarikçi adı (eşleşme yoksa)">
+          <select name="ref_id" class="form-select form-select-sm mb-2">
+            <option value="">— Referans yok —</option>
+            {% for r in references %}
+            <option value="{{ r.id }}">{{ r.ref_no }} · {{ r.title[:30] }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-success w-100">
+            <i class="bi bi-check-lg"></i> Kabul ve Faturayı Yarat
+          </button>
+        </div>
+      </div>
+    </form>
+
+    {# Red / İade #}
+    <form method="post" action="/einvoice-ui/inbox/{{ item.id }}/return" class="flex-fill"
+          onsubmit="return confirm('Bu faturayı reddetmek (iade) istediğinizden emin misiniz? GİB sistemine iade yanıtı gider.');">
+      <div class="card border-danger">
+        <div class="card-header bg-danger text-white py-2">
+          <i class="bi bi-x-circle-fill"></i> RED ET (İade)
+        </div>
+        <div class="card-body">
+          <label class="form-label small">Red Sebebi</label>
+          <textarea name="reason" class="form-control form-control-sm" rows="3" required
+                    placeholder="örn: Sipariş bilgileri uyuşmuyor, hatalı kalem, vb."></textarea>
+          <button type="submit" class="btn btn-danger w-100 mt-2">
+            <i class="bi bi-x-lg"></i> İade Et (Red Yanıtı Gönder)
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+<div class="modal-footer">
+  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat (sonra karar veririm)</button>
+</div>

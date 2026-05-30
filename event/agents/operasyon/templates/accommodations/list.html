@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}Konaklama — {{ event.name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">🏨 Konaklama Listesi</div>
+    <div class="page-subtitle">{{ accommodations | length }} konaklama kaydı</div>
+  </div>
+  <a href="{{ base_url }}/supplier/{{ event.supplier_token }}/accommodations" target="_blank"
+     class="btn btn-secondary" title="Tedarikçi bağlantısı">🔗 Tedarikçi Linki</a>
+</div>
+
+{% if request.query_params.get('checked_in') %}
+<div class="alert alert-success">✅ Toplu giriş kaydı yapıldı.</div>
+{% endif %}
+
+{# İsim arama #}
+<form method="get" class="filter-bar" style="flex-wrap:wrap; gap:8px; margin-bottom:4px;">
+  <input type="text" name="search" value="{{ search }}" placeholder="İsim ara..."
+         class="search-input" style="flex:1; min-width:160px;">
+  {% if hotel_filter %}<input type="hidden" name="hotel" value="{{ hotel_filter }}">{% endif %}
+  {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+  <button type="submit" class="btn btn-secondary">Ara</button>
+  {% if search %}<a href="{{ base_url }}/events/{{ event.id }}/accommodations{% if hotel_filter or status_filter %}?{% endif %}{% if hotel_filter %}hotel={{ hotel_filter }}{% endif %}{% if hotel_filter and status_filter %}&{% endif %}{% if status_filter %}status={{ status_filter }}{% endif %}" class="btn btn-secondary">✕</a>{% endif %}
+</form>
+
+{# Filtre çubuğu #}
+<div class="filter-bar" style="flex-wrap:wrap; gap:8px;">
+  {# Otel filtresi #}
+  <a href="{{ base_url }}/events/{{ event.id }}/accommodations{% if search %}?search={{ search }}{% endif %}"
+     class="btn {% if not hotel_filter and not status_filter %}btn-primary{% else %}btn-secondary{% endif %}">Tüm Oteller</a>
+  {% for h in hotels %}
+  <a href="{{ base_url }}/events/{{ event.id }}/accommodations?hotel={{ h }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search %}&search={{ search }}{% endif %}"
+     class="btn {% if hotel_filter == h %}btn-primary{% else %}btn-secondary{% endif %}">{{ h }}</a>
+  {% endfor %}
+  <span style="border-left:1px solid #e2e8f0; margin:0 4px;"></span>
+  {# Durum filtresi #}
+  <a href="{{ base_url }}/events/{{ event.id }}/accommodations{% if hotel_filter or search %}?{% endif %}{% if hotel_filter %}hotel={{ hotel_filter }}{% endif %}{% if hotel_filter and search %}&{% endif %}{% if search %}search={{ search }}{% endif %}"
+     class="btn {% if not status_filter %}btn-secondary{% endif %}">Tümü</a>
+  <a href="{{ base_url }}/events/{{ event.id }}/accommodations?status=pending{% if hotel_filter %}&hotel={{ hotel_filter }}{% endif %}{% if search %}&search={{ search }}{% endif %}"
+     class="btn {% if status_filter == 'pending' %}btn-warning{% else %}btn-secondary{% endif %}">⏳ Giriş Yapılmadı</a>
+  <a href="{{ base_url }}/events/{{ event.id }}/accommodations?status=checked_in{% if hotel_filter %}&hotel={{ hotel_filter }}{% endif %}{% if search %}&search={{ search }}{% endif %}"
+     class="btn {% if status_filter == 'checked_in' %}btn-success{% else %}btn-secondary{% endif %}">✅ Giriş Yapıldı</a>
+</div>
+
+{% if accommodations %}
+<form method="post" action="{{ base_url }}/events/{{ event.id }}/accommodations/bulk-checkin">
+  <div style="display:flex; justify-content:flex-end; margin-bottom:8px; gap:8px; align-items:center;">
+    <label style="font-size:13px; color:#64748b;">
+      <input type="checkbox" id="select-all" onchange="document.querySelectorAll('input[name=acc_ids]').forEach(c=>c.checked=this.checked)">
+      Tümünü seç
+    </label>
+    <button type="submit" class="btn btn-primary btn-sm"
+            onclick="return confirm('Seçili kişileri giriş yaptı olarak işaretle?')">
+      ✅ Seçilenleri Giriş Yaptı İşaretle
+    </button>
+  </div>
+
+  <div class="card" style="padding:0">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:36px;"></th>
+            <th>Katılımcı</th>
+            <th>Otel</th>
+            <th>Oda No</th>
+            <th>Oda Tipi</th>
+            <th>Oda Arkadaşı</th>
+            <th>Giriş</th>
+            <th>Çıkış</th>
+            <th>Gece</th>
+            <th>Durum</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in accommodations %}
+          <tr {% if a.checked_in %}style="background:#f0fdf4;"{% endif %}>
+            <td>
+              {% if not a.checked_in %}
+              <input type="checkbox" name="acc_ids" value="{{ a.id }}">
+              {% endif %}
+            </td>
+            <td>
+              <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ a.participant_id }}" class="table-link">
+                {{ a.participant.full_name }}
+              </a>
+            </td>
+            <td>{{ a.hotel or '—' }}</td>
+            <td>{{ a.room_number or '—' }}</td>
+            <td>{{ a.room_type or '—' }}</td>
+            <td>
+              {% if a.roommate %}
+              <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ a.roommate.id }}" class="table-link" style="font-size:12px;">
+                {{ a.roommate.full_name }}
+              </a>
+              {% else %}—{% endif %}
+            </td>
+            <td>{{ a.check_in.strftime('%d.%m.%Y') if a.check_in else '—' }}</td>
+            <td>{{ a.check_out.strftime('%d.%m.%Y') if a.check_out else '—' }}</td>
+            <td>{{ a.nights or '—' }}</td>
+            <td>
+              {% if a.checked_in %}
+                <span style="color:#16a34a; font-size:12px; white-space:nowrap;">✅ Giriş Yaptı</span>
+                {% if a.checked_in_at %}
+                <div style="font-size:10px; color:#64748b;">
+                  {{ a.checked_in_at.strftime('%d.%m %H:%M') }}
+                  {% if a.checked_in_by %} · {{ a.checked_in_by }}{% endif %}
+                </div>
+                {% endif %}
+              {% else %}
+                <span style="color:#94a3b8; font-size:12px;">⏳ Bekliyor</span>
+              {% endif %}
+            </td>
+            <td>
+              <form method="post"
+                    action="{{ base_url }}/events/{{ event.id }}/accommodations/{{ a.id }}/checkin"
+                    style="display:inline;">
+                <input type="hidden" name="redirect_to"
+                       value="/events/{{ event.id }}/accommodations{% if hotel_filter or status_filter %}?{% endif %}{% if hotel_filter %}hotel={{ hotel_filter }}{% endif %}{% if hotel_filter and status_filter %}&{% endif %}{% if status_filter %}status={{ status_filter }}{% endif %}">
+                <button type="submit" class="btn btn-sm
+                        {% if a.checked_in %}btn-secondary{% else %}btn-primary{% endif %}"
+                        title="{% if a.checked_in %}Girişi geri al{% else %}Giriş yaptı işaretle{% endif %}">
+                  {% if a.checked_in %}↩{% else %}✅{% endif %}
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</form>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <div class="empty-state-icon">🏨</div>
+    <div class="empty-state-title">Konaklama kaydı yok</div>
+    <div class="empty-state-text">Katılımcı kartlarından konaklama ekleyebilirsiniz.</div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

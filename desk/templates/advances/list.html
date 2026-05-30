@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/advances/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Avans Talep Et</a>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .adv-card { background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; }
+  .adv-card thead th { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#64748b; padding:10px 14px; border-bottom:2px solid #e2e8f0; background:#fafafa; white-space:nowrap; }
+  .adv-card tbody td { padding:10px 14px; border-bottom:1px solid #f1f5f9; font-size:13.5px; vertical-align:middle; }
+  .adv-card tbody tr:last-child td { border-bottom:none; }
+  .adv-card tbody tr:hover { background:#f8fafc; }
+
+  .filter-tabs { display:flex; gap:4px; margin-bottom:14px; }
+  .filter-tabs a { padding:5px 14px; border-radius:20px; font-size:13px; text-decoration:none; color:#64748b; background:#f1f5f9; border:1px solid #e2e8f0; }
+  .filter-tabs a.active { background:#1e40af; color:#fff; border-color:#1e40af; }
+
+  .approve-panel { background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:10px 14px; }
+  .reject-panel  { background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:10px 14px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% if no_employee %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle me-2"></i>
+  Kullanıcı hesabınız bir çalışan profiline bağlı değil. Yöneticinizden profilinizi bağlamasını isteyin.
+</div>
+{% else %}
+
+{% if is_manager %}
+<!-- Yönetici filtre tabları -->
+<div class="filter-tabs">
+  <a href="/advances?status_filter=bekleyen" class="{% if status_filter=='bekleyen' %}active{% endif %}">
+    Onay Bekleyen
+    {% if pending_count %}<span class="badge bg-danger ms-1" style="font-size:10px">{{ pending_count }}</span>{% endif %}
+  </a>
+  <a href="/advances?status_filter=onaylandi" class="{% if status_filter=='onaylandi' %}active{% endif %}">Onaylananlar</a>
+  <a href="/advances?status_filter=reddedildi" class="{% if status_filter=='reddedildi' %}active{% endif %}">Reddedilenler</a>
+  <a href="/advances" class="{% if status_filter=='all' %}active{% endif %}">Tümü</a>
+</div>
+{% endif %}
+
+<div class="adv-card">
+  <table class="table table-hover mb-0">
+    <thead>
+      <tr>
+        <th>Çalışan</th>
+        <th>Tür</th>
+        <th>Talep Tarihi</th>
+        <th>Tutar</th>
+        <th>Referans</th>
+        <th>Gerekçe</th>
+        <th>Durum</th>
+        {% if is_manager %}<th>İşlem</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for adv in advances %}
+      {% set astat = adv.approval_status or 'onaylandi' %}
+      {% set albl, abadge = approval_labels.get(astat, ('—','bg-secondary')) %}
+      <tr>
+        <td class="fw-semibold">{{ adv.employee.name if adv.employee else '—' }}</td>
+        <td>
+          <span class="badge {% if adv.advance_type=='is' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+            {{ type_labels.get(adv.advance_type, adv.advance_type) }}
+          </span>
+        </td>
+        <td class="text-muted" style="font-size:12px">
+          {{ adv.approved_at.strftime('%d.%m.%Y') if adv.approved_at else (adv.advance_date.strftime('%d.%m.%Y') if adv.advance_date else '—') }}
+        </td>
+        <td class="fw-bold text-danger">{{ adv.amount | money }}</td>
+        <td>
+          {% if adv.reference %}
+          <a href="/references/{{ adv.ref_id }}" class="text-decoration-none" style="font-size:12px">
+            <span class="badge bg-primary">{{ adv.reference.ref_no }}</span>
+          </a>
+          {% else %}—{% endif %}
+        </td>
+        <td style="font-size:12px;color:#475569;max-width:200px">{{ adv.reason or '—' }}</td>
+        <td><span class="badge {{ abadge }}">{{ albl }}</span></td>
+        {% if is_manager %}
+        <td>
+          {% if astat == 'talep' %}
+          <div class="d-flex gap-1 flex-wrap">
+            <form method="post" action="/advances/{{ adv.id }}/approve" class="d-inline">
+              <input type="hidden" name="approval_note" value="">
+              <button class="btn btn-success btn-sm py-0"
+                      onclick="return confirm('{{ adv.employee.name }} — ₺{{ adv.amount }} avans onaylansın mı?')">
+                <i class="bi bi-check-lg"></i> Onayla
+              </button>
+            </form>
+            <button class="btn btn-outline-danger btn-sm py-0"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#reject-{{ adv.id }}">
+              <i class="bi bi-x-lg"></i> Reddet
+            </button>
+          </div>
+          <div class="collapse mt-2 reject-panel" id="reject-{{ adv.id }}">
+            <form method="post" action="/advances/{{ adv.id }}/reject" class="d-flex gap-2">
+              <input type="text" name="approval_note" class="form-control form-control-sm" placeholder="Red gerekçesi" required>
+              <button type="submit" class="btn btn-danger btn-sm text-nowrap">Reddet</button>
+            </form>
+          </div>
+          {% elif astat == 'onaylandi' %}
+          <a href="/employees/{{ adv.employee_id }}" class="btn btn-outline-secondary btn-sm py-0">
+            <i class="bi bi-person"></i> Profil
+          </a>
+          {% else %}
+          <span class="text-muted" style="font-size:12px">{{ adv.approval_note or '—' }}</span>
+          {% endif %}
+        </td>
+        {% endif %}
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="{% if is_manager %}8{% else %}7{% endif %}" class="text-center text-muted py-5">
+          {% if status_filter == 'bekleyen' %}Bekleyen talep yok.
+          {% else %}Henüz avans talebi bulunmuyor.{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

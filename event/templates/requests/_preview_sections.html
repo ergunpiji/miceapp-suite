@@ -1,0 +1,81 @@
+{# Teklif önizleme içerik bölümleri — preview.html'de iki kez include edilir (KDV hariç / dahil) #}
+{# d = data_excl veya data_incl #}
+
+{% for sec in d.sections %}
+<div class="section-title">{{ sec.label }}</div>
+<table class="offer-table">
+  <thead>
+    <tr>
+      <th style="width:42%">Hizmet</th>
+      <th>Birim</th>
+      <th class="num">Miktar</th>
+      {% if sec.rows and sec.rows[0].is_accommodation %}<th class="num">Gece</th>{% endif %}
+      <th class="num">Birim Fiyat</th>
+      <th class="num">Toplam</th>
+      <th class="num">KDV %</th>
+      <th class="num">KDV</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in sec.rows %}
+    <tr>
+      <td>{{ row.description }}</td>
+      <td>{{ row.unit }}</td>
+      <td class="num">{{ row.qty | int if row.qty == row.qty | int else row.qty }}</td>
+      {% if sec.rows[0].is_accommodation %}<td class="num">{{ row.nights | int }}</td>{% endif %}
+      <td class="num">{{ d.sym }} {{ "{:,.2f}".format(row.sale_price) }}</td>
+      <td class="num">{{ d.sym }} {{ "{:,.2f}".format(row.sale_total) }}</td>
+      <td class="num">%{{ row.vat_rate | int }}</td>
+      <td class="num">{{ d.sym }} {{ "{:,.2f}".format(row.vat_total) }}</td>
+    </tr>
+    {% endfor %}
+    <tr class="subtotal-row">
+      <td colspan="{% if sec.rows and sec.rows[0].is_accommodation %}5{% else %}4{% endif %}"></td>
+      <td class="num">{{ d.sym }} {{ "{:,.2f}".format(sec.subtotal) }}</td>
+      <td></td>
+      <td class="num">{{ d.sym }} {{ "{:,.2f}".format(sec.subtotal_vat) }}</td>
+    </tr>
+  </tbody>
+</table>
+{% endfor %}
+
+{# Hizmet Bedeli #}
+{% if d.sf_sale > 0 %}
+<div class="section-title">Hizmet Bedeli</div>
+<table class="offer-table">
+  <thead>
+    <tr>
+      <th>Açıklama</th>
+      <th class="num">Tutar</th>
+      <th class="num">KDV</th>
+      <th class="num">Toplam</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="sf-row">
+      <td>Organizasyon Hizmet Bedeli</td>
+      <td class="num">{{ d.sym }} {{ "{:,.2f}".format(d.sf_sale) }}</td>
+      <td class="num">{{ d.sym }} {{ "{:,.2f}".format(d.sf_vat) }}</td>
+      <td class="num">{{ d.sym }} {{ "{:,.2f}".format(d.sf_total) }}</td>
+    </tr>
+  </tbody>
+</table>
+{% endif %}
+
+{# Genel Toplam #}
+<table class="offer-table" style="margin-top:12px;">
+  <tbody>
+    <tr>
+      <td style="width:60%">Ara Toplam (KDV Hariç)</td>
+      <td class="num" colspan="3">{{ d.sym }} {{ "{:,.2f}".format(d.grand_sale + d.sf_sale) }}</td>
+    </tr>
+    <tr>
+      <td>Toplam KDV</td>
+      <td class="num" colspan="3">{{ d.sym }} {{ "{:,.2f}".format(d.grand_vat + d.sf_vat) }}</td>
+    </tr>
+    <tr class="total-row">
+      <td>GENEL TOPLAM (KDV Dahil)</td>
+      <td class="num" colspan="3">{{ d.sym }} {{ "{:,.2f}".format(d.final_total) }}</td>
+    </tr>
+  </tbody>
+</table>

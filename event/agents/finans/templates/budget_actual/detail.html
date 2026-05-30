@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} — Bütçe{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">{{ project.name }}</div>
+    <div class="page-subtitle">
+      {% if project.edem_request_no %}<span class="font-mono">{{ project.edem_request_no }}</span> &nbsp;·&nbsp;{% endif %}
+      {% if project.customer_name %}{{ project.customer_name }} &nbsp;·&nbsp;{% endif %}
+      {% if project.event_date %}{{ project.event_date | fmtdate }}{% endif %}
+    </div>
+  </div>
+  <div class="flex gap-2">
+    <a href="/projects/{{ project.id }}/edit" class="btn btn-outline">✏️ Düzenle</a>
+    <a href="/projects" class="btn btn-secondary">← Geri</a>
+  </div>
+</div>
+
+<!-- Özet KPI'lar -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Toplam Bütçe</div>
+    <div class="stat-value">{{ project.total_budgeted | currency }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Gerçekleşen</div>
+    <div class="stat-value">{{ project.total_actual | currency }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Sapma</div>
+    <div class="stat-value {% if project.variance >= 0 %}positive{% else %}negative{% endif %}">
+      {{ project.variance | currency }}
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Gerçekleşme</div>
+    <div class="stat-value {% if project.completion_pct > 100 %}negative{% else %}positive{% endif %}">
+      {{ project.completion_pct }}%
+    </div>
+    <div class="progress mt-4" style="margin-top:6px">
+      <div class="progress-bar {% if project.completion_pct > 100 %}over{% endif %}"
+           style="width:{{ [project.completion_pct, 100] | min }}%"></div>
+    </div>
+  </div>
+</div>
+
+<div class="grid-2">
+
+  <!-- Bütçe kalemleri -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">📋 Bütçe Kalemleri</span>
+      <button class="btn btn-sm btn-primary" data-modal="modal-add-budget">+ Ekle</button>
+    </div>
+    <div class="card-body" style="padding:0">
+      {% if grouped or uncategorized %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Kategori / Açıklama</th><th class="text-right">Bütçe</th><th class="text-right">Gerçekleşen</th><th class="text-right">Sapma</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for key, grp in grouped.items() %}
+            <tr style="background:#f8fafc">
+              <td colspan="4" style="font-weight:700;font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;padding:6px 12px">{{ grp.label }}</td>
+              <td></td>
+            </tr>
+            {% for bl in grp.lines %}
+            <tr>
+              <td style="padding-left:24px">{{ bl.description }}</td>
+              <td class="text-right font-mono">{{ bl.amount | currency }}</td>
+              <td class="text-right font-mono">{{ bl.actual_total | currency }}</td>
+              <td class="text-right font-mono {% if bl.variance >= 0 %}amount-positive{% else %}amount-negative{% endif %}">{{ bl.variance | currency }}</td>
+              <td>
+                <form method="post" action="/projects/{{ project.id }}/budget-lines/{{ bl.id }}/delete"
+                      data-confirm="Bu bütçe kalemini silmek istediğinize emin misiniz?">
+                  <button class="btn btn-xs btn-danger">✕</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <div class="empty-state-icon">📋</div>
+        <div class="empty-state-text">Bütçe kalemi yok</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Gerçekleşen giderler -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">💸 Gerçekleşen Giderler</span>
+      <button class="btn btn-sm btn-primary" data-modal="modal-add-actual">+ Ekle</button>
+    </div>
+    <div class="card-body" style="padding:0">
+      {% if project.actual_entries %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Tarih</th><th>Açıklama</th><th>Tedarikçi</th><th class="text-right">Tutar</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for ae in project.actual_entries | sort(attribute='entry_date', reverse=True) %}
+            <tr>
+              <td class="nowrap">{{ ae.entry_date | fmtdate }}</td>
+              <td>{{ ae.description }}</td>
+              <td>{{ ae.supplier_name or '—' }}</td>
+              <td class="text-right font-mono amount-negative">{{ ae.amount | currency }}</td>
+              <td>
+                <form method="post" action="/projects/{{ project.id }}/actual/{{ ae.id }}/delete"
+                      data-confirm="Bu gider kaydını silmek istediğinize emin misiniz?">
+                  <button class="btn btn-xs btn-danger">✕</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr class="totals-row">
+              <td colspan="3" style="text-align:right">Toplam:</td>
+              <td class="text-right font-mono amount-negative">{{ project.total_actual | currency }}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <div class="empty-state-icon">💸</div>
+        <div class="empty-state-text">Gerçekleşen gider yok</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal: Bütçe kalemi ekle -->
+<div class="modal-overlay" id="modal-add-budget">
+  <div class="modal-box">
+    <div class="modal-title">📋 Bütçe Kalemi Ekle</div>
+    <form method="post" action="/projects/{{ project.id }}/budget-lines/add">
+      <div class="form-grid">
+        <div class="form-group form-grid-full">
+          <label>Açıklama *</label>
+          <input name="description" required>
+        </div>
+        <div class="form-group">
+          <label>Kategori</label>
+          <select name="category">
+            {% for c in categories %}
+            <option value="{{ c.value }}">{{ c.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Tutar (₺)</label>
+          <input name="amount" type="number" step="0.01" min="0" value="0">
+        </div>
+        <div class="form-group form-grid-full">
+          <label>Notlar</label>
+          <textarea name="notes" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary">Ekle</button>
+        <button type="button" class="btn btn-secondary" data-close-modal>İptal</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Gerçekleşen gider ekle -->
+<div class="modal-overlay" id="modal-add-actual">
+  <div class="modal-box">
+    <div class="modal-title">💸 Gerçekleşen Gider Ekle</div>
+    <form method="post" action="/projects/{{ project.id }}/actual/add">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Tarih *</label>
+          <input name="entry_date" type="date" required value="{{ today }}">
+        </div>
+        <div class="form-group">
+          <label>Tutar (₺)</label>
+          <input name="amount" type="number" step="0.01" min="0" value="0">
+        </div>
+        <div class="form-group form-grid-full">
+          <label>Açıklama *</label>
+          <input name="description" required>
+        </div>
+        <div class="form-group">
+          <label>Kategori</label>
+          <select name="category">
+            {% for c in categories %}
+            <option value="{{ c.value }}">{{ c.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Bütçe Kalemi (opsiyonel)</label>
+          <select name="budget_line_id">
+            <option value="">— Seç —</option>
+            {% for bl in project.budget_lines %}
+            <option value="{{ bl.id }}">{{ bl.description }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Tedarikçi</label>
+          <input name="supplier_name">
+        </div>
+        <div class="form-group">
+          <label>Fatura No</label>
+          <input name="invoice_no">
+        </div>
+        <div class="form-group">
+          <label>Ödeme Yöntemi</label>
+          <select name="payment_method">
+            <option value="">— Seç —</option>
+            {% for m in payment_methods %}
+            <option value="{{ m.value }}">{{ m.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group form-grid-full">
+          <label>Notlar</label>
+          <textarea name="notes" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary">Ekle</button>
+        <button type="button" class="btn btn-secondary" data-close-modal>İptal</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+  const todayVal = new Date().toISOString().slice(0,10);
+  document.querySelectorAll('input[name="entry_date"]').forEach(el => { if (!el.value) el.value = todayVal; });
+</script>
+{% endblock %}

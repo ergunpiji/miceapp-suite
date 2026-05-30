@@ -1,0 +1,471 @@
+{% extends "base.html" %}
+{% block page_title %}Faaliyet Raporu — {{ year }}{% endblock %}
+
+{# Para formatı makrosu — TL eki ile #}
+{% macro m(v, zero="—") -%}
+  {%- if v and v != 0 -%}
+    <span class="mval">{{ v | money }}</span><span class="tl">&#8239;TL</span>
+  {%- else -%}
+    <span class="mzero">{{ zero }}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% block extra_css %}
+<style>
+  .act-wrap { overflow-x: auto; }
+  .act-table { border-collapse: collapse; min-width: 100%; font-size: 12.5px; }
+  .act-table th, .act-table td { padding: 5px 9px; white-space: nowrap; border-bottom: 1px solid #e2e8f0; }
+
+  /* Sticky label column */
+  .act-table .col-label {
+    position: sticky; left: 0; z-index: 2;
+    min-width: 190px; max-width: 190px;
+    overflow: hidden; text-overflow: ellipsis;
+    background: white;
+  }
+
+  /* Header */
+  .act-table thead th {
+    background: #1e293b; color: #cbd5e1;
+    font-size: 10.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .05em;
+    position: sticky; top: 0; z-index: 3;
+    text-align: right;
+  }
+  .act-table thead th.col-label { z-index: 4; text-align: left; background: #1e293b; }
+
+  /* Section header rows — açık arka plan, koyu metin */
+  .act-table .sec-row td {
+    background: #f1f5f9;
+    color: #1e293b;
+    font-weight: 700;
+    font-size: 11.5px;
+    border-top: 2px solid #94a3b8;
+    border-bottom: 1px solid #cbd5e1;
+  }
+  .act-table .sec-row .col-label { background: #f1f5f9; padding-left: 6px; }
+  .sec-row .col-ytd  { background: #dbeafe !important; color: #1d4ed8 !important; }
+  .sec-row .col-forecast { background: #dcfce7 !important; color: #15803d !important; }
+  .sec-row .budget-cell  { background: #fef9c3 !important; color: #92400e !important; }
+
+  /* Data rows */
+  .act-table .data-row td { background: #fff; color: #334155; }
+  .act-table .data-row:hover td { background: #f8fafc; }
+  .act-table .data-row .col-label { background: #fff; padding-left: 22px; font-weight: 400; color: #475569; }
+  .act-table .data-row:hover .col-label { background: #f8fafc; }
+
+  /* Grand total */
+  .act-table .grand-row td {
+    background: #1e293b;
+    color: #f8fafc;
+    font-weight: 800;
+    font-size: 12.5px;
+    border-top: 2px solid #334155;
+  }
+  .act-table .grand-row td .mval { color: #fca5a5; }
+  .act-table .grand-row td .tl   { color: #fca5a5; }
+  .act-table .grand-row .col-label { background: #1e293b; padding-left: 6px; }
+  .act-table .grand-row .col-ytd  { background: #1d3461 !important; }
+  .act-table .grand-row .col-ytd .mval { color: #93c5fd; }
+  .act-table .grand-row .col-ytd .tl   { color: #93c5fd; }
+  .act-table .grand-row .col-forecast  { background: #14532d !important; }
+  .act-table .grand-row .col-forecast .mval { color: #86efac; }
+  .act-table .grand-row .col-forecast .tl   { color: #86efac; }
+
+  /* Numerics */
+  .act-table td.num, .act-table th.num { text-align: right; }
+  .mzero { color: #cbd5e1; }
+  .tl { font-size: 9.5px; font-weight: 500; opacity: .65; letter-spacing: .02em; }
+
+  /* YTD col */
+  .col-ytd { background: #eff6ff !important; }
+  .col-ytd .mval { color: #1d4ed8; font-weight: 700; }
+  .col-ytd .tl   { color: #1d4ed8; }
+
+  /* Forecast col */
+  .col-forecast { background: #f0fdf4 !important; }
+  .col-forecast .mval { color: #15803d; font-weight: 700; }
+  .col-forecast .tl   { color: #15803d; }
+
+  /* Budget input */
+  .budget-input {
+    width: 80px; border: 1px solid #fbbf24; border-radius: 3px;
+    padding: 2px 5px; font-size: 11.5px; text-align: right;
+    background: #fffbeb; color: #78350f; display: block;
+  }
+  .budget-input:focus { outline: none; border-color: #f59e0b; background: #fef3c7; }
+  .budget-cell { background: #fffbeb !important; }
+
+  /* KPI */
+  .kpi-card { border-radius: 10px; padding: 14px 18px; flex: 1; min-width: 140px; }
+  .kpi-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; opacity: .75; margin-bottom: 4px; }
+  .kpi-val { font-size: 19px; font-weight: 800; line-height: 1.1; }
+  .kpi-tl { font-size: 11px; font-weight: 600; opacity: .65; }
+
+  /* Section reorder */
+  .sec-move { background: none; border: none; color: #94a3b8; padding: 0 2px; font-size: 12px; cursor: pointer; line-height: 1; }
+  .sec-move:hover { color: #334155; }
+  /* Remove row */
+  .rm-row { background: none; border: none; color: #94a3b8; font-size: 11px; cursor: pointer; padding: 0 2px; margin-left: 2px; }
+  .rm-row:hover { color: #ef4444; }
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+<div class="d-flex gap-2 align-items-center">
+  <select class="form-select form-select-sm" style="width:auto;"
+          onchange="location.href='/reports/activity?year='+this.value">
+    {% for y in range(2024, 2029) %}
+    <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+    {% endfor %}
+  </select>
+  <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#catSelectModal">
+    <i class="bi bi-list-check me-1"></i>Kalemler
+  </button>
+  <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#addFixedModal">
+    <i class="bi bi-pin me-1"></i>Sabit Gider
+  </button>
+  <a href="/reports/activity/export?year={{ year }}" class="btn btn-sm btn-success">
+    <i class="bi bi-file-earmark-excel me-1"></i>Excel
+  </a>
+  <button class="btn btn-sm btn-primary" onclick="document.getElementById('budgetForm').submit()">
+    <i class="bi bi-floppy me-1"></i>Bütçeyi Kaydet
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+{# KPI Cards #}
+<div class="d-flex gap-3 mb-3 flex-wrap">
+  <div class="kpi-card" style="background:#f8fafc;border:1px solid #e2e8f0;">
+    <div class="kpi-label" style="color:#475569;">{{ year_prev }} Gerçekleşen</div>
+    <div class="kpi-val" style="color:#1e293b;">{{ grand_prev | money }} <span class="kpi-tl">TL</span></div>
+  </div>
+  <div class="kpi-card" style="background:#eff6ff;border:1px solid #bfdbfe;">
+    <div class="kpi-label" style="color:#1d4ed8;">{{ year }} Gerçekleşen (YTD)</div>
+    <div class="kpi-val" style="color:#1d4ed8;">{{ grand_curr_ytd | money }} <span class="kpi-tl">TL</span></div>
+  </div>
+  <div class="kpi-card" style="background:#f0fdf4;border:1px solid #bbf7d0;">
+    <div class="kpi-label" style="color:#15803d;">{{ year }} Öngörü</div>
+    <div class="kpi-val" style="color:#15803d;">{{ grand_forecast | money }} <span class="kpi-tl">TL</span></div>
+  </div>
+  <div class="kpi-card" style="background:#fefce8;border:1px solid #fde68a;">
+    <div class="kpi-label" style="color:#92400e;">Sabit Gider</div>
+    <div class="kpi-val" style="color:#92400e;">{{ fixed_monthly | sum | money }} <span class="kpi-tl">TL</span></div>
+  </div>
+</div>
+
+<div class="mb-2 d-flex gap-3 align-items-center flex-wrap" style="font-size:11px;color:#64748b;">
+  <span style="background:#fff;border:1px solid #e2e8f0;padding:2px 8px;border-radius:4px;">Geçmiş = gerçekleşen</span>
+  <span style="background:#fffbeb;border:1px solid #fbbf24;padding:2px 8px;border-radius:4px;color:#92400e;">Gelecek = bütçe (düzenlenebilir)</span>
+  <span style="background:#f0fdf4;border:1px solid #bbf7d0;padding:2px 8px;border-radius:4px;color:#15803d;">Öngörü = gerçek + bütçe</span>
+  <span class="ms-auto text-muted">↑↓ section sırala · × satır kaldır · <strong>Kalemler</strong> butonuyla seç</span>
+</div>
+
+<form id="budgetForm" method="post" action="/reports/activity/budget">
+<input type="hidden" name="year" value="{{ year }}">
+<input type="hidden" name="section_order_json" id="sectionOrderInput" value="">
+
+<div class="card border-0 shadow-sm mb-4">
+  <div class="act-wrap">
+    <table class="act-table">
+      <thead>
+        <tr>
+          <th class="col-label">Gider Kalemi</th>
+          <th class="num">{{ year_prev }}<br>Gerçekleşen</th>
+          <th class="num col-ytd">{{ year }}<br>Gerçekleşen</th>
+          {% for mo in months_short %}<th class="num">{{ mo }}</th>{% endfor %}
+          <th class="num col-forecast">Öngörü</th>
+        </tr>
+      </thead>
+
+      {% for section in sections %}
+      <tbody class="section-group" id="section-body-{{ section.cat_id }}">
+
+        {# Section header #}
+        <tr class="sec-row {% if not section.has_active %}d-none{% endif %}"
+            id="section-header-{{ section.cat_id }}">
+          <td class="col-label">
+            <button type="button" class="sec-move" onclick="moveSection({{ section.cat_id }}, -1)" title="Yukarı">▲</button>
+            <button type="button" class="sec-move" onclick="moveSection({{ section.cat_id }}, 1)" title="Aşağı">▼</button>
+            {{ section.label | upper }}
+          </td>
+          <td class="num">{{ m(section.prev_total) }}</td>
+          <td class="num col-ytd">{{ m(section.curr_ytd) }}</td>
+          {% for i in range(12) %}
+            {% set mo = i + 1 %}
+            {% if year < today.year or (year == today.year and mo <= today.month) %}
+              <td class="num">{{ m(section.monthly_total[i]) }}</td>
+            {% else %}
+              <td class="num budget-cell">{{ m(section.budget_monthly[i]) }}</td>
+            {% endif %}
+          {% endfor %}
+          <td class="num col-forecast">{{ m(section.forecast) }}</td>
+        </tr>
+
+        {# Data rows #}
+        {% for row in section.rows %}
+        <tr class="data-row {% if not row.active %}d-none{% endif %}"
+            id="cat-row-{{ row.cat_id }}"
+            data-section="{{ section.cat_id }}">
+          <td class="col-label">
+            <input type="hidden" name="show_cat_{{ row.cat_id }}" id="showcat-{{ row.cat_id }}"
+                   value="1" {% if not row.active %}disabled{% endif %}>
+            <input type="hidden" name="label_cat_{{ row.cat_id }}" value="{{ row.label }}">
+            {{ row.label }}
+            {% if not row.has_actual %}
+            <button type="button" class="rm-row" title="Kaldır"
+                    onclick="setCatVisible({{ row.cat_id }}, {{ section.cat_id }}, false)">×</button>
+            {% endif %}
+          </td>
+          <td class="num">{{ m(row.prev_total) }}</td>
+          <td class="num col-ytd">{{ m(row.curr_ytd) }}</td>
+          {% for i in range(12) %}
+            {% set mo = i + 1 %}
+            {% if year < today.year or (year == today.year and mo <= today.month) %}
+              <td class="num">{{ m(row.monthly[i]) }}</td>
+            {% else %}
+              <td class="num budget-cell">
+                <input type="number" step="1" min="0"
+                       name="line_cat_{{ row.cat_id }}_month_{{ mo }}"
+                       class="budget-input"
+                       value="{{ row.budget[i] | int if row.budget[i] else '' }}"
+                       placeholder="0"
+                       {% if not row.active %}disabled{% endif %}>
+              </td>
+            {% endif %}
+          {% endfor %}
+          <td class="num col-forecast">{{ m(row.forecast) }}</td>
+        </tr>
+        {% endfor %}
+
+      </tbody>
+      {% endfor %}
+
+      {# Grand total #}
+      <tbody>
+        <tr class="grand-row">
+          <td class="col-label">TOPLAM GİDERLER</td>
+          <td class="num">{{ m(grand_prev) }}</td>
+          <td class="num col-ytd">{{ m(grand_curr_ytd) }}</td>
+          {% for i in range(12) %}
+            {% set mo = i + 1 %}
+            {% if year < today.year or (year == today.year and mo <= today.month) %}
+              <td class="num">{{ m(grand_monthly[i]) }}</td>
+            {% else %}
+              {% set ns = namespace(bsum=0) %}
+              {% for section in sections %}{% set ns.bsum = ns.bsum + section.budget_monthly[i] %}{% endfor %}
+              <td class="num budget-cell">{{ m(ns.bsum) }}</td>
+            {% endif %}
+          {% endfor %}
+          <td class="num col-forecast">{{ m(grand_forecast) }}</td>
+        </tr>
+      </tbody>
+
+    </table>
+  </div>
+</div>
+</form>
+
+{# Sabit Giderler #}
+{% if fixed_expenses %}
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-header bg-transparent border-0 py-2">
+    <span class="fw-bold" style="font-size:13px;">Sabit Giderler</span>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0" style="font-size:12.5px;">
+      <thead style="background:#f8fafc;">
+        <tr>
+          <th>Gider</th>
+          <th class="text-end">Tutar</th>
+          <th>Tekrar</th>
+          <th>Başlangıç</th>
+          <th>Bitiş</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for fe in fixed_expenses %}
+        <tr>
+          <td class="fw-semibold">{{ fe.label }}</td>
+          <td class="text-end">{{ fe.amount | money }} <span class="tl">TL</span></td>
+          <td><span class="badge bg-light text-dark border" style="font-size:10px;">
+            {% if fe.recurrence == 'monthly' %}Aylık
+            {% elif fe.recurrence == 'quarterly' %}3 Aylık
+            {% elif fe.recurrence == 'yearly' %}Yıllık
+            {% else %}Tek Seferlik{% endif %}
+          </span></td>
+          <td class="text-muted">{{ fe.start_date | date_tr }}</td>
+          <td class="text-muted">{{ fe.end_date | date_tr if fe.end_date else "Süresiz" }}</td>
+          <td>
+            <form method="post" action="/reports/activity/fixed-expense/{{ fe.id }}/delete"
+                  onsubmit="return confirm('Silinsin mi?')" style="display:inline;">
+              <input type="hidden" name="year" value="{{ year }}">
+              <button class="btn btn-link btn-sm text-danger p-0"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# Modal: Kategori Seç #}
+<div class="modal fade" id="catSelectModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold">Gider Kalemlerini Seç</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">Tabloda görmek istediğiniz kalemleri seçin. Gerçek verisi olan kalemler otomatik görünür.</p>
+        <div class="row g-3">
+          {% for section in sections %}
+          <div class="col-md-6">
+            <div class="fw-bold text-uppercase" style="font-size:11px;color:#475569;margin-bottom:6px;border-bottom:1px solid #e2e8f0;padding-bottom:3px;">{{ section.label }}</div>
+            {% for row in section.rows %}
+            <div class="form-check py-0">
+              <input type="checkbox" class="form-check-input cat-cb"
+                     id="cb_{{ row.cat_id }}"
+                     value="{{ row.cat_id }}"
+                     data-section="{{ section.cat_id }}"
+                     {% if row.active %}checked{% endif %}>
+              <label class="form-check-label" for="cb_{{ row.cat_id }}" style="font-size:13px;">
+                {{ row.label }}
+                {% if row.has_actual %}<span class="badge bg-light text-dark border ms-1" style="font-size:9px;">veri var</span>{% endif %}
+              </label>
+            </div>
+            {% endfor %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+        <button type="button" class="btn btn-primary" onclick="applyCategories()">Uygula</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Modal: Sabit Gider Ekle #}
+<div class="modal fade" id="addFixedModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="/reports/activity/fixed-expense/add">
+      <input type="hidden" name="year" value="{{ year }}">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold">Sabit Gider Ekle</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Gider Adı</label>
+            <input type="text" name="label" class="form-control" placeholder="Kira, SGK, Sigorta..." required>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col">
+              <label class="form-label fw-semibold">Tutar (₺)</label>
+              <input type="number" step="0.01" name="amount" class="form-control" required>
+            </div>
+            <div class="col">
+              <label class="form-label fw-semibold">Tekrar</label>
+              <select name="recurrence" class="form-select">
+                <option value="monthly">Aylık</option>
+                <option value="quarterly">3 Aylık</option>
+                <option value="yearly">Yıllık</option>
+                <option value="once">Bir Kere</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Bütçe Kategorisi <small class="text-muted">(seçilirse otomatik doldurur)</small></label>
+            <select name="category_id" class="form-select">
+              <option value="">— Seçme —</option>
+              {% for section in sections %}
+              <optgroup label="{{ section.label }}">
+                {% for row in section.rows %}<option value="{{ row.cat_id }}">{{ row.label }}</option>{% endfor %}
+              </optgroup>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="row g-2 mb-2">
+            <div class="col">
+              <label class="form-label fw-semibold">Başlangıç</label>
+              <input type="date" name="start_date" class="form-control" required>
+            </div>
+            <div class="col">
+              <label class="form-label fw-semibold">Bitiş (boş = süresiz)</label>
+              <input type="date" name="end_date" class="form-control">
+            </div>
+          </div>
+          <div class="mb-0">
+            <label class="form-label fw-semibold">Notlar</label>
+            <input type="text" name="notes" class="form-control">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-primary">Kaydet & Bütçeye Aktar</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let sectionOrder = [{% for s in sections %}{{ s.cat_id }}{% if not loop.last %},{% endif %}{% endfor %}];
+
+function moveSection(catId, dir) {
+  const idx = sectionOrder.indexOf(catId);
+  if (idx < 0) return;
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= sectionOrder.length) return;
+  [sectionOrder[idx], sectionOrder[newIdx]] = [sectionOrder[newIdx], sectionOrder[idx]];
+  const grandBody = document.querySelector('.grand-row').closest('tbody');
+  const parent = grandBody.parentNode;
+  sectionOrder.forEach(id => {
+    const tbody = document.getElementById('section-body-' + id);
+    if (tbody) parent.insertBefore(tbody, grandBody);
+  });
+  document.getElementById('sectionOrderInput').value = JSON.stringify(sectionOrder);
+}
+
+function setCatVisible(catId, sectionId, visible) {
+  const row = document.getElementById('cat-row-' + catId);
+  if (!row) return;
+  row.classList.toggle('d-none', !visible);
+  row.querySelectorAll('input, select').forEach(el => { el.disabled = !visible; });
+  updateSectionHeader(sectionId);
+}
+
+function updateSectionHeader(sectionId) {
+  const body = document.getElementById('section-body-' + sectionId);
+  if (!body) return;
+  const hasVisible = body.querySelectorAll('.data-row:not(.d-none)').length > 0;
+  const header = document.getElementById('section-header-' + sectionId);
+  if (header) header.classList.toggle('d-none', !hasVisible);
+}
+
+function applyCategories() {
+  document.querySelectorAll('.cat-cb').forEach(cb => {
+    setCatVisible(parseInt(cb.value), parseInt(cb.dataset.section), cb.checked);
+  });
+  bootstrap.Modal.getInstance(document.getElementById('catSelectModal')).hide();
+}
+
+document.getElementById('catSelectModal').addEventListener('show.bs.modal', () => {
+  document.querySelectorAll('.cat-cb').forEach(cb => {
+    const row = document.getElementById('cat-row-' + cb.value);
+    if (row) cb.checked = !row.classList.contains('d-none');
+  });
+});
+</script>
+{% endblock %}

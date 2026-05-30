@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+{% if current_user.role in ('admin', 'e_dem') %}
+<a href="/budgets/new" class="btn btn-primary btn-sm">
+  <i class="bi bi-plus-circle me-1"></i> Yeni Bütçe
+</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th class="ps-4">Mekan Adı</th>
+            <th>Referans No</th>
+            <th>Etkinlik</th>
+            <th>Durum</th>
+            {% if current_user.role in ('admin', 'e_dem') %}
+            <th>Toplam Maliyet (KDV dahil)</th>
+            {% else %}
+            <th>Toplam Satış (KDV dahil)</th>
+            {% endif %}
+            <th>Oluşturma Tarihi</th>
+            <th class="text-end pe-4">İşlemler</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for budget in budgets %}
+          {% set bs = budget.budget_status if budget.budget_status else 'draft_edem' %}
+          {% set slabel = status_labels.get(bs, bs) %}
+          {% set scolor = status_colors.get(bs, 'secondary') %}
+          <tr>
+            <td class="ps-4">
+              <div class="fw-semibold" style="font-size:13px;">{{ budget.venue_name or '—' }}</div>
+            </td>
+            <td>
+              {% if budget.request %}
+              <span class="badge bg-primary bg-opacity-10 text-primary fw-semibold" style="font-size:11px; letter-spacing:.5px;">
+                {{ budget.request.request_no }}
+              </span>
+              {% else %}—{% endif %}
+            </td>
+            <td style="font-size:13px;">
+              {% if budget.request %}
+              <div>{{ budget.request.event_name }}</div>
+              <div class="text-muted" style="font-size:11px;">{{ budget.request.client_name }}</div>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              <span class="badge bg-{{ scolor }} bg-opacity-15 text-{{ scolor }}" style="font-size:11px; font-weight:600;">
+                {{ slabel }}
+              </span>
+            </td>
+            <td>
+              {% if current_user.role in ('admin', 'e_dem') %}
+              <span class="fw-bold text-secondary" style="font-size:14px;">
+                {{ budget.grand_cost | money }}
+              </span>
+              {% else %}
+              <span class="fw-bold text-success" style="font-size:14px;">
+                {{ budget.grand_sale | money }}
+              </span>
+              {% endif %}
+            </td>
+            <td style="font-size:12px; color:#64748b; white-space:nowrap;">
+              {{ budget.created_at | date_tr }}
+            </td>
+            <td class="text-end pe-4">
+              <a href="/budgets/{{ budget.id }}" class="btn btn-sm btn-outline-secondary" title="Görüntüle">
+                <i class="bi bi-eye"></i>
+              </a>
+
+              {# E-dem / Asistan: düzenle butonu (draft_edem veya revision_requested ise) #}
+              {% if current_user.role in ('admin', 'e_dem', 'asistan') and bs in ('draft_edem', 'revision_requested') %}
+              <a href="/budgets/{{ budget.id }}/edit" class="btn btn-sm btn-outline-primary ms-1" title="Maliyeti Düzenle">
+                <i class="bi bi-pencil"></i>
+              </a>
+              {% endif %}
+
+              {# Manager: fiyat gir butonu (pending_manager veya draft_manager ise) #}
+              {% if current_user.role in ('admin', 'mudur', 'yonetici') and bs in ('pending_manager', 'draft_manager') %}
+              <a href="/budgets/{{ budget.id }}/price" class="btn btn-sm btn-warning ms-1" title="Satış Fiyatı Gir">
+                <i class="bi bi-tag"></i> Fiyat Gir
+              </a>
+              {% endif %}
+
+              {# Manager: Excel indir (approved ise) #}
+              {% if current_user.role in ('admin', 'mudur', 'yonetici') and bs == 'approved' %}
+              <a href="/budgets/{{ budget.id }}/export" class="btn btn-sm btn-outline-success ms-1" title="Excel İndir">
+                <i class="bi bi-file-earmark-excel"></i>
+              </a>
+              {% endif %}
+
+              {# Sil (sadece draft_edem, admin veya e_dem) #}
+              {% if current_user.role == 'admin' or (current_user.role == 'e_dem' and bs == 'draft_edem') %}
+              <form method="post" action="/budgets/{{ budget.id }}/delete" class="d-inline ms-1"
+                    onsubmit="return confirm('Bu bütçeyi silmek istediğinizden emin misiniz?')">
+                <button type="submit" class="btn btn-sm btn-outline-danger">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" class="text-center py-5 text-muted">
+              <i class="bi bi-calculator" style="font-size:3rem; opacity:.3;"></i>
+              <p class="mt-2 mb-0">Henüz bütçe bulunmuyor.</p>
+              {% if current_user.role in ('admin', 'e_dem') %}
+              <a href="/budgets/new" class="btn btn-primary btn-sm mt-3">
+                <i class="bi bi-plus-circle me-1"></i> İlk Bütçeyi Oluştur
+              </a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

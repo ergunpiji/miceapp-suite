@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ customer.name }} — Şablon Eşleştirme</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root { --brand:#1a3a5c; --brand2:#1e5f8c; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; margin: 0; font-family: 'Segoe UI', sans-serif; font-size: 13px; }
+
+    .editor-root { display:flex; flex-direction:column; height:100vh; }
+    .topbar {
+      background: var(--brand); color:white; padding:8px 16px;
+      display:flex; align-items:center; gap:10px; flex-shrink:0;
+    }
+    .topbar .brand { font-size:16px; font-weight:900; color:#93c5fd; }
+    .editor-body { display:flex; flex:1; overflow:hidden; }
+
+    /* ── Sol panel ── */
+    .left-panel {
+      width:260px; min-width:260px; background:#0f2744; color:white;
+      overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:10px;
+    }
+    .panel-section-title {
+      font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px;
+      color:#94a3b8; margin-bottom:4px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,.1);
+    }
+    .field-chip {
+      display:inline-flex; align-items:center; gap:4px;
+      padding:3px 8px; border-radius:12px; font-size:11px; font-weight:600;
+      cursor:pointer; margin:2px; transition:.15s;
+      background:rgba(255,255,255,.12); color:rgba(255,255,255,.85);
+      border:2px solid transparent; user-select:none;
+    }
+    .field-chip:hover { background:rgba(255,255,255,.22); }
+    .field-chip.active { background:#f59e0b; color:#1a1a1a; border-color:#fbbf24; }
+    .field-chip.assigned { background:#059669; color:white; }
+    .field-chip.assigned.active { background:#f59e0b; color:#1a1a1a; }
+    .chip-x { font-size:10px; opacity:.7; }
+    .chip-x:hover { opacity:1; }
+
+    /* ── Sağ panel ── */
+    .right-panel { flex:1; overflow:auto; padding:12px; background:#f1f5f9; display:flex; flex-direction:column; gap:8px; }
+    .excel-wrap { background:white; border-radius:8px; box-shadow:0 2px 12px rgba(0,0,0,.08); overflow:auto; flex:1; }
+
+    /* ── Sheet tab bar ── */
+    .sheet-tab-bar { display:flex; align-items:center; gap:4px; flex-shrink:0; }
+    .sheet-tab {
+      padding:4px 14px; border-radius:6px 6px 0 0; font-size:12px; font-weight:600; cursor:pointer;
+      border:1px solid #cbd5e1; border-bottom:none; background:#e2e8f0; color:#475569;
+      transition:.12s;
+    }
+    .sheet-tab:hover { background:#bfdbfe; color:#1e3a5f; }
+    .sheet-tab.active { background:white; color:#1a3a5c; border-color:#93c5fd; border-bottom:1px solid white; margin-bottom:-1px; }
+    .sheet-tab-loading { font-size:11px; color:#64748b; margin-left:6px; }
+
+    /* ── Excel tablo ── */
+    table.xl { border-collapse:collapse; font-size:12px; white-space:nowrap; }
+    table.xl th.ch {
+      background:#e2e8f0; color:#475569; font-weight:700; text-align:center;
+      padding:4px 14px; border:1px solid #cbd5e1; min-width:90px;
+      cursor:pointer; position:sticky; top:0; z-index:3;
+    }
+    table.xl th.ch:hover  { background:#bfdbfe; }
+    table.xl th.ch.col-assigned { background:#bbf7d0; color:#065f46; }
+    table.xl th.rh {
+      background:#e2e8f0; color:#64748b; font-weight:700; text-align:center;
+      padding:4px 10px; border:1px solid #cbd5e1;
+      cursor:pointer; position:sticky; left:0; z-index:2; min-width:36px;
+    }
+    table.xl th.rh:hover { background:#bfdbfe; }
+    table.xl th.rh.start-row { background:#fef3c7; color:#92400e; }
+    table.xl td {
+      border:1px solid #e2e8f0; padding:3px 8px; color:#1e293b;
+      cursor:pointer; max-width:180px; overflow:hidden; text-overflow:ellipsis; position:relative;
+    }
+    table.xl td:hover { background:#eff6ff; }
+    table.xl td.hdr-assigned { background:#d1fae5; }
+    table.xl tr.start-row-tr td, table.xl tr.start-row-tr th.rh { background:#fffbeb; }
+    .cell-badge {
+      display:inline-block; font-size:9px; font-weight:700;
+      background:#059669; color:white; border-radius:3px;
+      padding:1px 4px; margin-left:4px; vertical-align:middle;
+    }
+    .col-badge {
+      display:block; font-size:9px; font-weight:700;
+      background:#059669; color:white; border-radius:3px;
+      padding:1px 3px; margin-top:1px; text-align:center;
+    }
+
+    /* ── Ayarlar kutusu ── */
+    .settings-box { background:rgba(255,255,255,.07); border-radius:6px; padding:8px; }
+    .settings-box label { font-size:11px; color:#cbd5e1; margin-bottom:3px; display:block; }
+    .settings-box input, .settings-box select {
+      width:100%; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2);
+      border-radius:4px; padding:4px 6px; color:white; font-size:11px;
+    }
+    .settings-box input::placeholder { color:#94a3b8; }
+
+    .mode-hint {
+      font-size:11px; background:#f59e0b; color:#1a1a1a;
+      padding:4px 10px; border-radius:20px; font-weight:600; display:none;
+    }
+    .mode-hint.visible { display:inline-block; }
+
+    #saveToast {
+      position:fixed; bottom:20px; right:20px; z-index:9999;
+      background:#059669; color:white; padding:10px 18px; border-radius:8px;
+      font-weight:600; box-shadow:0 4px 12px rgba(0,0,0,.2); display:none;
+    }
+
+    /* Küçük input yardımcıları */
+    .inp-sm {
+      background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2);
+      border-radius:4px; padding:3px 5px; color:white; font-size:11px;
+    }
+    .inp-sm::placeholder { color:#94a3b8; }
+  </style>
+</head>
+<body>
+
+<div class="editor-root">
+
+  {# ── Topbar ── #}
+  <div class="topbar">
+    <a href="/customers/{{ customer.id }}/edit" class="btn btn-sm btn-outline-light py-1" style="font-size:12px;">
+      <i class="bi bi-arrow-left"></i>
+    </a>
+    <span class="brand">E-dem</span>
+    <span style="opacity:.6; font-size:12px;">|</span>
+    <span style="font-weight:600;">{{ customer.name }}</span>
+    <span style="opacity:.5; font-size:11px;">— Şablon Eşleştirme</span>
+    <div class="ms-auto d-flex align-items:center gap-2">
+      <span class="mode-hint" id="modeHint"></span>
+      <button class="btn btn-sm btn-warning fw-bold" onclick="saveConfig()" style="font-size:12px;">
+        <i class="bi bi-check2-circle me-1"></i>Kaydet
+      </button>
+    </div>
+  </div>
+
+  <div class="editor-body">
+
+    {# ── Sol panel ── #}
+    <div class="left-panel">
+
+      {# ── ANA ŞABLON modu ── #}
+      <div id="leftMain">
+
+        {# Header alanları #}
+        <div>
+          <div class="panel-section-title"><i class="bi bi-hash me-1"></i>Header Alanları</div>
+          <div style="font-size:10px; color:#94a3b8; margin-bottom:6px;">Seç → hücreye tıkla</div>
+          <div id="headerChips"></div>
+        </div>
+
+        {# Satır alanları #}
+        <div>
+          <div class="panel-section-title"><i class="bi bi-layout-three-columns me-1"></i>Satır Alanları</div>
+          <div style="font-size:10px; color:#94a3b8; margin-bottom:6px;">Seç → sütun harfine tıkla</div>
+          <div id="rowChips"></div>
+        </div>
+
+        {# Ayarlar #}
+        <div class="settings-box">
+          <div class="panel-section-title"><i class="bi bi-gear me-1"></i>Ayarlar</div>
+          <label>KDV Modu</label>
+          <select id="vatMode">
+            <option value="exclusive">KDV Hariç</option>
+            <option value="inclusive">KDV Dahil</option>
+          </select>
+          <label style="margin-top:8px;">Veri Başlangıç Satırı</label>
+          <div style="display:flex; gap:4px; align-items:center;">
+            <input id="startRowInput" type="number" min="1" placeholder="Satır no" style="width:80px;">
+            <span style="font-size:10px; color:#94a3b8;">veya satır no'ya tıkla</span>
+          </div>
+          <label style="margin-top:8px;">Bitiş Anchor Metni</label>
+          <input id="endAnchorInput" type="text" placeholder="örn: ARA TOPLAM">
+          <label style="margin-top:8px;">Bölüm Başlık Sütunu</label>
+          <div style="display:flex; gap:4px; align-items:center;">
+            <input id="sectionColInput" type="text" placeholder="örn: B" style="width:50px; text-transform:uppercase;">
+            <span style="font-size:10px; color:#94a3b8;">veya boş bırak</span>
+          </div>
+        </div>
+
+        {# Formül sütunları #}
+        <div>
+          <div class="panel-section-title"><i class="bi bi-calculator me-1"></i>Formül Sütunları</div>
+          <div style="font-size:10px; color:#94a3b8; margin-bottom:4px;">
+            <code style="color:#fbbf24;">{row}</code> = satır no &nbsp;·&nbsp; örn: <code style="color:#94a3b8;">=F{row}*G{row}</code>
+          </div>
+          {% if detected_formulas != '{}' %}
+          <button onclick="loadDetectedFormulas()" class="btn btn-sm w-100 mb-1"
+                  style="background:#0369a1; color:white; font-size:10px; padding:2px 6px;">
+            <i class="bi bi-magic me-1"></i>Şablondaki Formülleri Al
+          </button>
+          {% endif %}
+          <div id="formulaList" style="margin-bottom:6px;"></div>
+          <div style="display:flex; gap:4px; align-items:center;">
+            <input id="fColInput" type="text" placeholder="Sütun" maxlength="3" class="inp-sm" style="width:44px; text-transform:uppercase;">
+            <input id="fFmlInput" type="text" placeholder="=A{row}*B{row}" class="inp-sm" style="flex:1; font-family:monospace;">
+            <button class="btn btn-sm py-0" onclick="addFormula()" style="background:#0ea5e9; color:white; font-size:11px; padding:3px 7px;">+</button>
+          </div>
+        </div>
+
+        {# Teklif Özeti config #}
+        <div class="settings-box">
+          <div class="panel-section-title" style="cursor:pointer; user-select:none;" onclick="toggleSummarySection()">
+            <i class="bi bi-file-earmark-spreadsheet me-1"></i>Teklif Özeti
+            <span id="summaryToggleIcon" style="float:right; font-size:10px;">▼</span>
+          </div>
+          <div id="summaryDetails">
+            <label style="margin-top:6px; display:flex; align-items:center; gap:6px; cursor:pointer;">
+              <input type="checkbox" id="summaryEnabled">
+              <span style="font-size:11px; color:#cbd5e1;">Teklif Özeti sayfası ekle</span>
+            </label>
+            <div id="summaryOptions" style="display:none; margin-top:8px;">
+              <label>Sayfa Adı</label>
+              <input id="summarySheetName" type="text" value="Teklif Özeti" placeholder="Teklif Özeti">
+              <label style="margin-top:8px;">Oluşturma Modu</label>
+              <select id="summaryMode" onchange="updateSummaryModeUI()">
+                <option value="auto">Otomatik (Programatik)</option>
+                <option value="template">Şablondan</option>
+              </select>
+              <div id="summaryAutoNote" style="margin-top:6px; font-size:10px; color:#94a3b8; background:rgba(255,255,255,.05); border-radius:4px; padding:5px 7px;">
+                <i class="bi bi-info-circle me-1"></i>Etkinlik bilgileri ve bütçe karşılaştırma tablosu otomatik oluşturulur.
+              </div>
+              <div id="summaryTemplateOpts" style="display:none; margin-top:8px;">
+                <label>Kaynak Sayfa Adı</label>
+                <input id="summarySourceSheet" type="text" placeholder="Teklif Özeti">
+                <div style="font-size:10px; color:#94a3b8; margin-top:3px;">Excel dosyasındaki özet sayfasının adı</div>
+                <div id="summaryMappingStats" style="margin-top:6px; font-size:10px; color:#94a3b8;"></div>
+                <button id="summaryEditBtn" onclick="switchSheet('summary')" style="display:none; margin-top:6px;"
+                        class="btn btn-sm w-100" style="background:#0369a1; color:white; font-size:10px;">
+                  <i class="bi bi-pencil-square me-1"></i>Teklif Özeti'ni Düzenle →
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-sm btn-outline-danger w-100" onclick="clearAll()" style="font-size:11px;">
+          <i class="bi bi-x-circle me-1"></i>Tümünü Temizle
+        </button>
+
+      </div>{# /leftMain #}
+
+      {# ── TEKLİF ÖZETİ modu ── #}
+      <div id="leftSummary" style="display:none;">
+
+        <button class="btn btn-sm btn-outline-secondary w-100" onclick="switchSheet('main')" style="font-size:11px;">
+          <i class="bi bi-arrow-left me-1"></i>Ana Şablona Dön
+        </button>
+
+        <div>
+          <div class="panel-section-title"><i class="bi bi-hash me-1"></i>Özet Header Alanları</div>
+          <div style="font-size:10px; color:#94a3b8; margin-bottom:6px;">Seç → hücreye tıkla</div>
+          <div id="sumHeaderChips"></div>
+        </div>
+
+        <div>
+          <div class="panel-section-title"><i class="bi bi-layout-three-columns me-1"></i>Özet Satır Alanları</div>
+          <div style="font-size:10px; color:#94a3b8; margin-bottom:6px;">Seç → sütun harfine tıkla</div>
+          <div id="sumRowChips"></div>
+        </div>
+
+        <div class="settings-box">
+          <div class="panel-section-title"><i class="bi bi-gear me-1"></i>Veri Satırı Ayarı</div>
+          <label>Başlangıç Satırı</label>
+          <div style="display:flex; gap:4px; align-items:center;">
+            <input id="sumStartRow" type="number" min="1" placeholder="Satır no" style="width:80px;">
+            <span style="font-size:10px; color:#94a3b8;">veya satıra tıkla</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="panel-section-title"><i class="bi bi-calculator me-1"></i>Formül Sütunları</div>
+          <div style="font-size:10px; color:#94a3b8; margin-bottom:4px;">
+            <code style="color:#fbbf24;">{row}</code> = satır no
+          </div>
+          <button id="loadSumDetectedFmlsBtn" onclick="loadDetectedSummaryFormulas()" style="display:none;"
+                  class="btn btn-sm w-100 mb-1" style="background:#0369a1; color:white; font-size:10px; padding:2px 6px;">
+            <i class="bi bi-magic me-1"></i>Şablondaki Formülleri Al
+          </button>
+          <div id="sumFormulaList" style="margin-bottom:6px;"></div>
+          <div style="display:flex; gap:4px; align-items:center;">
+            <input id="sfColInput" type="text" placeholder="Sütun" maxlength="3" class="inp-sm" style="width:44px; text-transform:uppercase;">
+            <input id="sfFmlInput" type="text" placeholder="=A{row}*B{row}" class="inp-sm" style="flex:1; font-family:monospace;">
+            <button class="btn btn-sm py-0" onclick="addSumFormula()" style="background:#0ea5e9; color:white; font-size:11px; padding:3px 7px;">+</button>
+          </div>
+        </div>
+
+        <button class="btn btn-sm btn-outline-danger w-100" onclick="clearSummary()" style="font-size:11px;">
+          <i class="bi bi-x-circle me-1"></i>Özeti Temizle
+        </button>
+
+      </div>{# /leftSummary #}
+
+    </div>{# /left-panel #}
+
+    {# ── Sağ panel ── #}
+    <div class="right-panel">
+
+      {# Sheet tabs #}
+      <div class="sheet-tab-bar" id="sheetTabBar" style="display:none;">
+        <button class="sheet-tab active" id="tabMain" onclick="switchSheet('main')">
+          <i class="bi bi-file-earmark-excel me-1"></i>Ana Şablon
+        </button>
+        <button class="sheet-tab" id="tabSummary" onclick="switchSheet('summary')">
+          <i class="bi bi-file-earmark-spreadsheet me-1"></i>Teklif Özeti
+        </button>
+        <span class="sheet-tab-loading" id="sheetLoading" style="display:none;">
+          <i class="bi bi-hourglass-split"></i> Yükleniyor…
+        </span>
+      </div>
+
+      {# Excel tablo #}
+      <div class="excel-wrap">
+        <table class="xl" id="xlTable">
+          <thead>
+            <tr>
+              <th class="rh" style="cursor:default; position:sticky; top:0; z-index:4;"></th>
+              {% for col in excel_data.col_letters %}
+              <th class="ch" id="ch-{{ col }}" onclick="clickColHeader('{{ col }}')">{{ col }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row_cells in excel_data.rows %}
+            {% set row_num = loop.index %}
+            <tr id="tr-{{ row_num }}">
+              <th class="rh" id="rh-{{ row_num }}" onclick="clickRowHeader({{ row_num }})">{{ row_num }}</th>
+              {% for cell in row_cells %}
+              <td id="td-{{ cell.coord }}"
+                  data-coord="{{ cell.coord }}"
+                  data-col="{{ cell.col }}"
+                  data-row="{{ cell.row }}"
+                  {% if cell.rowspan > 1 %}rowspan="{{ cell.rowspan }}"{% endif %}
+                  {% if cell.colspan > 1 %}colspan="{{ cell.colspan }}"{% endif %}
+                  onclick="clickCell('{{ cell.coord }}', '{{ cell.col }}', {{ cell.row }})">
+                <span class="cell-val">{{ cell.value }}</span>
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+    </div>{# /right-panel #}
+
+  </div>
+</div>
+
+<div id="saveToast"><i class="bi bi-check-circle me-1"></i>Kaydedildi!</div>
+
+<script>
+// ── Alan tanımları ──────────────────────────────────────────────────────────
+const HEADER_FIELDS = {
+  event_name:      "Etkinlik Adı",
+  ref_no:          "Referans No",
+  check_in:        "Giriş Tarihi",
+  check_out:       "Çıkış Tarihi",
+  venue_name:      "Mekan Adı",
+  customer_name:   "Müşteri Adı",
+  creator_name:    "Hazırlayan",
+  eur_rate:        "EUR Kuru",
+  usd_rate:        "USD Kuru",
+  attendee_count:  "Katılımcı Sayısı",
+  city:            "Şehir",
+  sf_pct:          "Servis Bedeli %",
+  sf_sale:         "Servis Bedeli (KDV Hariç)",
+  sf_vat:          "Servis Bedeli KDV",
+  sf_total:        "Servis Bedeli Toplam",
+  contact_name:    "Yetkili Kişi",
+  quote_deadline:  "Teklif Son Tarihi",
+};
+
+// Özet sayfası için header alanları (main'in üstüne toplamlar eklendi)
+const SUMMARY_HEADER_FIELDS = {
+  ...HEADER_FIELDS,
+  total_sale_excl: "KDV Hariç Toplam",
+  total_sale_incl: "KDV Dahil Toplam",
+  total_cost_excl: "Maliyet (KDV Hariç)",
+  total_cost_incl: "Maliyet (KDV Dahil)",
+};
+
+const ROW_FIELDS = {
+  service_name:          "Hizmet Adı",
+  notes:                 "Açıklama",
+  unit:                  "Birim",
+  qty:                   "Kişi / Adet",
+  nights:                "Gün / Gece",
+  vat_rate:              "KDV %",
+  vat_pct:               "KDV Oranı",
+  sale_price:            "Birim Fiyat (Teklif Para Birimi, KDV Hariç)",
+  sale_price_inc:        "Birim Fiyat (Teklif, KDV Dahil)",
+  total_excl:            "Toplam (Teklif, KDV Hariç)",
+  total_incl:            "Toplam (Teklif, KDV Dahil)",
+  kur:                   "Kur (TRY karşılığı)",
+  sale_price_try:        "Birim Fiyat TL (SB Hariç)",
+  total_excl_try:        "Toplam TL (SB Hariç, KDV Hariç)",
+  total_incl_try:        "Toplam TL (SB Hariç, KDV Dahil)",
+  sale_price_sf:         "Birim Fiyat (SB Dahil, Teklif Birimi)",
+  sale_price_sf_try:     "Birim Fiyat TL (SB Dahil)",
+  total_incl_sf_try:     "Toplam TL (SB Dahil, KDV Hariç)",
+  total_incl_sf_vat_try: "Toplam TL (SB Dahil, KDV Dahil)",
+  sale_price_eur:        "EUR Birim Fiyat",
+  total_eur:             "EUR Toplam",
+  sale_price_usd:        "USD Birim Fiyat",
+  total_usd:             "USD Toplam",
+  sf_pct:                "Hizmet Bedeli %",
+};
+
+const SUMMARY_ROW_FIELDS = {
+  venue_name:      "Mekan Adı",
+  currency:        "Para Birimi",
+  total_sale_excl: "Toplam Satış (KDV Hariç)",
+  total_sale_incl: "Toplam Satış (KDV Dahil)",
+  total_cost_excl: "Toplam Maliyet (KDV Hariç)",
+  total_cost_incl: "Toplam Maliyet (KDV Dahil)",
+  margin_pct:      "Kar Marjı %",
+  budget_index:    "Sıra No",
+};
+
+// ── Durum ───────────────────────────────────────────────────────────────────
+let activeField  = null;
+let headerMap    = {};
+let columnMap    = {};
+let formulaCols  = {};
+let startRow     = null;
+let vatMode      = "exclusive";
+
+// Sheet geçiş durumu
+let activeSheet         = "main";
+let mainTableHTML       = null;
+let summaryExcelData    = null;
+
+// Özet sheet eşleştirmeleri
+let summaryHeaderMap    = {};
+let summaryColMap       = {};
+let summaryFormulaCols  = {};
+let summaryStartRow     = null;
+let summaryDetectedFormulas = {};
+
+const DETECTED_FORMULAS = {{ detected_formulas | safe }};
+const SHEET_NAMES       = {{ sheet_names | safe }};
+
+// ── Mevcut config yükle ──────────────────────────────────────────────────────
+(function loadExisting() {
+  const raw = {{ existing_config | safe }};
+  vatMode = raw.vat_mode || "exclusive";
+  document.getElementById("vatMode").value = vatMode;
+
+  const cm = raw.cell_map || raw;
+  if (cm.header)      headerMap = Object.assign({}, cm.header);
+  if (cm.data_block) {
+    const db = cm.data_block;
+    if (db.columns)             columnMap   = Object.assign({}, db.columns);
+    if (db.formula_columns)     formulaCols = Object.assign({}, db.formula_columns);
+    if (db.start_row)           startRow    = db.start_row;
+    if (db.end_anchor_text)     document.getElementById("endAnchorInput").value = db.end_anchor_text || "";
+    if (db.section_header_col)  document.getElementById("sectionColInput").value = db.section_header_col || "";
+    if (startRow)               document.getElementById("startRowInput").value = startRow;
+  }
+  if (cm.summary) {
+    const s = cm.summary;
+    document.getElementById("summaryEnabled").checked = !!s.enabled;
+    if (s.sheet_name)   document.getElementById("summarySheetName").value = s.sheet_name;
+    if (s.mode)         document.getElementById("summaryMode").value = s.mode;
+    if (s.source_sheet) document.getElementById("summarySourceSheet").value = s.source_sheet;
+    if (s.header)       summaryHeaderMap = Object.assign({}, s.header);
+    if (s.data_block) {
+      const db = s.data_block;
+      if (db.start_row) {
+        summaryStartRow = db.start_row;
+        document.getElementById("sumStartRow").value = summaryStartRow;
+      }
+      if (db.columns)          summaryColMap        = Object.assign({}, db.columns);
+      if (db.formula_columns)  summaryFormulaCols   = Object.assign({}, db.formula_columns);
+    }
+    updateSummaryUI();
+  }
+})();
+
+// ── Sayfa yüklendikten sonra ana tablo HTML'ini sakla ─────────────────────
+window.addEventListener("DOMContentLoaded", function() {
+  mainTableHTML = document.getElementById("xlTable").innerHTML;
+});
+
+// ── Chip render (ana şablon) ─────────────────────────────────────────────────
+function renderChips() {
+  const hc = document.getElementById("headerChips");
+  const rc = document.getElementById("rowChips");
+
+  hc.innerHTML = Object.entries(HEADER_FIELDS).map(([key, label]) => {
+    const coord = Object.entries(headerMap).find(([,v]) => v === key)?.[0] || null;
+    const isAssigned = !!coord;
+    const isActive   = activeField?.key === key;
+    return `<span class="field-chip${isAssigned?' assigned':''}${isActive?' active':''}"
+                  onclick="selectField('${key}','header')" title="${key}">
+      ${label}${isAssigned ? `<span class="chip-x" onclick="unassignHeader('${coord}');event.stopPropagation()">×</span>` : ""}
+    </span>`;
+  }).join("");
+
+  rc.innerHTML = Object.entries(ROW_FIELDS).map(([key, label]) => {
+    const col = Object.entries(columnMap).find(([,v]) => v === key)?.[0] || null;
+    const isAssigned = !!col;
+    const isActive   = activeField?.key === key;
+    return `<span class="field-chip${isAssigned?' assigned':''}${isActive?' active':''}"
+                  onclick="selectField('${key}','row')" title="${key}">
+      ${label}${isAssigned ? `<span class="chip-x" onclick="unassignCol('${col}');event.stopPropagation()">×</span>` : ""}
+    </span>`;
+  }).join("");
+}
+
+// ── Chip render (özet şablon) ────────────────────────────────────────────────
+function renderSumChips() {
+  const shc = document.getElementById("sumHeaderChips");
+  const src = document.getElementById("sumRowChips");
+
+  shc.innerHTML = Object.entries(SUMMARY_HEADER_FIELDS).map(([key, label]) => {
+    const coord = Object.entries(summaryHeaderMap).find(([,v]) => v === key)?.[0] || null;
+    const isAssigned = !!coord;
+    const isActive   = activeField?.key === key;
+    return `<span class="field-chip${isAssigned?' assigned':''}${isActive?' active':''}"
+                  onclick="selectField('${key}','header')" title="${key}">
+      ${label}${isAssigned ? `<span class="chip-x" onclick="unassignSumHeader('${coord}');event.stopPropagation()">×</span>` : ""}
+    </span>`;
+  }).join("");
+
+  src.innerHTML = Object.entries(SUMMARY_ROW_FIELDS).map(([key, label]) => {
+    const col = Object.entries(summaryColMap).find(([,v]) => v === key)?.[0] || null;
+    const isAssigned = !!col;
+    const isActive   = activeField?.key === key;
+    return `<span class="field-chip${isAssigned?' assigned':''}${isActive?' active':''}"
+                  onclick="selectField('${key}','row')" title="${key}">
+      ${label}${isAssigned ? `<span class="chip-x" onclick="unassignSumCol('${col}');event.stopPropagation()">×</span>` : ""}
+    </span>`;
+  }).join("");
+
+  updateSummaryMappingStats();
+}
+
+// ── Tablo render (aktif sheet'e göre) ────────────────────────────────────────
+function renderTable() {
+  const isSummary   = activeSheet === "summary";
+  const curHdrMap   = isSummary ? summaryHeaderMap  : headerMap;
+  const curColMap   = isSummary ? summaryColMap      : columnMap;
+  const curHdrFlds  = isSummary ? SUMMARY_HEADER_FIELDS : HEADER_FIELDS;
+  const curRowFlds  = isSummary ? SUMMARY_ROW_FIELDS : ROW_FIELDS;
+  const curStartRow = isSummary ? summaryStartRow    : startRow;
+
+  document.querySelectorAll("th.ch").forEach(th => {
+    const col   = th.id.replace("ch-", "");
+    const field = curColMap[col];
+    const badge = field ? `<span class="col-badge">${curRowFlds[field] || field}</span>` : "";
+    th.innerHTML = col + badge;
+    th.classList.toggle("col-assigned", !!field);
+  });
+
+  document.querySelectorAll("td[data-coord]").forEach(td => {
+    const coord = td.dataset.coord;
+    const field = curHdrMap[coord];
+    const valEl = td.querySelector(".cell-val");
+    const val   = valEl ? valEl.textContent : "";
+    td.innerHTML = `<span class="cell-val">${val}</span>` +
+      (field ? `<span class="cell-badge">${curHdrFlds[field] || field}</span>` : "");
+    td.classList.toggle("hdr-assigned", !!field);
+  });
+
+  document.querySelectorAll("tr[id^='tr-']").forEach(tr => {
+    const rn = parseInt(tr.id.replace("tr-", ""));
+    tr.classList.toggle("start-row-tr", rn === curStartRow);
+  });
+  document.querySelectorAll("th.rh[id^='rh-']").forEach(th => {
+    const rn = parseInt(th.id.replace("rh-", ""));
+    th.classList.toggle("start-row", rn === curStartRow);
+  });
+}
+
+// ── Excel tablo HTML'ini JS verisiyle yeniden oluştur ────────────────────────
+function renderExcelTable(data) {
+  const table = document.getElementById("xlTable");
+
+  let headHtml = `<tr><th class="rh" style="cursor:default; position:sticky; top:0; z-index:4;"></th>`;
+  for (const col of (data.col_letters || [])) {
+    headHtml += `<th class="ch" id="ch-${col}" onclick="clickColHeader('${col}')">${col}</th>`;
+  }
+  headHtml += "</tr>";
+  table.querySelector("thead").innerHTML = headHtml;
+
+  let bodyHtml = "";
+  (data.rows || []).forEach((rowCells, idx) => {
+    const rowNum = idx + 1;
+    bodyHtml += `<tr id="tr-${rowNum}">`;
+    bodyHtml += `<th class="rh" id="rh-${rowNum}" onclick="clickRowHeader(${rowNum})">${rowNum}</th>`;
+    for (const cell of rowCells) {
+      const rs  = cell.rowspan > 1 ? ` rowspan="${cell.rowspan}"` : "";
+      const cs  = cell.colspan > 1 ? ` colspan="${cell.colspan}"` : "";
+      const val = (cell.value || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      bodyHtml += `<td id="td-${cell.coord}" data-coord="${cell.coord}" data-col="${cell.col}" data-row="${cell.row}"${rs}${cs} onclick="clickCell('${cell.coord}','${cell.col}',${cell.row})"><span class="cell-val">${val}</span></td>`;
+    }
+    bodyHtml += "</tr>";
+  });
+  table.querySelector("tbody").innerHTML = bodyHtml;
+}
+
+// ── Etkileşim ────────────────────────────────────────────────────────────────
+function selectField(key, type) {
+  if (activeField?.key === key) {
+    activeField = null;
+    document.getElementById("modeHint").classList.remove("visible");
+  } else {
+    activeField = { key, type };
+    const isSummary = activeSheet === "summary";
+    const label = type === "header"
+      ? ((isSummary ? SUMMARY_HEADER_FIELDS : HEADER_FIELDS)[key] || key)
+      : ((isSummary ? SUMMARY_ROW_FIELDS    : ROW_FIELDS)[key]    || key);
+    const hint = type === "header" ? `"${label}" için hücre seç` : `"${label}" için sütun seç`;
+    const h = document.getElementById("modeHint");
+    h.textContent = hint;
+    h.classList.add("visible");
+  }
+  if (activeSheet === "summary") renderSumChips(); else renderChips();
+}
+
+function clickCell(coord, col, row) {
+  if (!activeField) return;
+  const isSummary = activeSheet === "summary";
+  if (activeField.type === "header") {
+    const map = isSummary ? summaryHeaderMap : headerMap;
+    const oldCoord = Object.entries(map).find(([,v]) => v === activeField.key)?.[0];
+    if (oldCoord) delete map[oldCoord];
+    map[coord] = activeField.key;
+  } else {
+    const map = isSummary ? summaryColMap : columnMap;
+    const oldCol = Object.entries(map).find(([,v]) => v === activeField.key)?.[0];
+    if (oldCol) delete map[oldCol];
+    map[col] = activeField.key;
+  }
+  activeField = null;
+  document.getElementById("modeHint").classList.remove("visible");
+  if (isSummary) renderSumChips(); else renderChips();
+  renderTable();
+}
+
+function clickColHeader(col) {
+  if (!activeField || activeField.type !== "row") return;
+  const isSummary = activeSheet === "summary";
+  const map = isSummary ? summaryColMap : columnMap;
+  const oldCol = Object.entries(map).find(([,v]) => v === activeField.key)?.[0];
+  if (oldCol) delete map[oldCol];
+  map[col] = activeField.key;
+  activeField = null;
+  document.getElementById("modeHint").classList.remove("visible");
+  if (isSummary) renderSumChips(); else renderChips();
+  renderTable();
+}
+
+function clickRowHeader(rowNum) {
+  if (activeSheet === "summary") {
+    summaryStartRow = (summaryStartRow === rowNum) ? null : rowNum;
+    document.getElementById("sumStartRow").value = summaryStartRow || "";
+  } else {
+    startRow = (startRow === rowNum) ? null : rowNum;
+    document.getElementById("startRowInput").value = startRow || "";
+  }
+  renderTable();
+}
+
+function unassignHeader(coord) { delete headerMap[coord]; renderChips(); renderTable(); }
+function unassignCol(col)       { delete columnMap[col];  renderChips(); renderTable(); }
+function unassignSumHeader(coord) { delete summaryHeaderMap[coord]; renderSumChips(); renderTable(); }
+function unassignSumCol(col)      { delete summaryColMap[col];      renderSumChips(); renderTable(); }
+
+// ── Sheet geçişi ─────────────────────────────────────────────────────────────
+async function switchSheet(sheet) {
+  if (sheet === activeSheet) return;
+  activeField = null;
+  document.getElementById("modeHint").classList.remove("visible");
+
+  if (sheet === "main") {
+    activeSheet = "main";
+    document.getElementById("tabMain").classList.add("active");
+    document.getElementById("tabSummary").classList.remove("active");
+    document.getElementById("leftMain").style.display    = "";
+    document.getElementById("leftSummary").style.display = "none";
+    // Ana tablo HTML'ini geri yükle
+    document.getElementById("xlTable").innerHTML = mainTableHTML;
+    renderChips();
+    renderTable();
+    renderFormulaList();
+  } else {
+    const sourceSheet = document.getElementById("summarySourceSheet").value.trim();
+    if (!sourceSheet) {
+      alert("Önce Teklif Özeti panelinden kaynak sayfa adını girin.");
+      return;
+    }
+    activeSheet = "summary";
+    document.getElementById("tabMain").classList.remove("active");
+    document.getElementById("tabSummary").classList.add("active");
+    document.getElementById("leftMain").style.display    = "none";
+    document.getElementById("leftSummary").style.display = "";
+
+    if (!summaryExcelData) {
+      await loadSummarySheet(sourceSheet);
+    } else {
+      renderExcelTable(summaryExcelData);
+    }
+    renderSumChips();
+    renderTable();
+    renderSumFormulaList();
+  }
+}
+
+async function loadSummarySheet(sheetName) {
+  document.getElementById("sheetLoading").style.display = "";
+  try {
+    const res  = await fetch(`/customers/{{ customer.id }}/template-editor/sheet-data?sheet=${encodeURIComponent(sheetName)}`);
+    const data = await res.json();
+    if (data.error) { alert("Sayfa yüklenemedi: " + data.error); return; }
+    summaryExcelData = data;
+    if (data.detected_formulas) {
+      summaryDetectedFormulas = data.detected_formulas;
+      const btn = document.getElementById("loadSumDetectedFmlsBtn");
+      if (btn) btn.style.display = Object.keys(summaryDetectedFormulas).length ? "" : "none";
+    }
+    renderExcelTable(data);
+  } catch(e) {
+    alert("Sayfa yüklenemedi: " + e);
+  } finally {
+    document.getElementById("sheetLoading").style.display = "none";
+  }
+}
+
+// Kaynak sayfa değişince summary cache'i sıfırla
+document.getElementById("summarySourceSheet").addEventListener("input", function() {
+  summaryExcelData = null;  // bir sonraki switchSheet'te yeniden yüklensin
+  updateSheetTabVisibility();
+});
+
+// ── Formül yönetimi (ana şablon) ─────────────────────────────────────────────
+function loadDetectedFormulas() {
+  if (!Object.keys(DETECTED_FORMULAS).length) return;
+  let added = 0;
+  for (const [col, fml] of Object.entries(DETECTED_FORMULAS)) {
+    if (!formulaCols[col.toUpperCase()]) { formulaCols[col.toUpperCase()] = fml; added++; }
+  }
+  renderFormulaList();
+  if (added) alert(`${added} formül eklendi. Kaydetmeyi unutmayın.`);
+}
+
+function addFormula() {
+  const col = document.getElementById("fColInput").value.trim().toUpperCase();
+  const fml = document.getElementById("fFmlInput").value.trim();
+  if (!col || !fml) return;
+  formulaCols[col] = fml;
+  document.getElementById("fColInput").value = "";
+  document.getElementById("fFmlInput").value = "";
+  renderFormulaList();
+}
+
+function removeFormula(col) { delete formulaCols[col]; renderFormulaList(); }
+
+function renderFormulaList() {
+  const el = document.getElementById("formulaList");
+  if (!Object.keys(formulaCols).length) { el.innerHTML = ""; return; }
+  el.innerHTML = Object.entries(formulaCols).map(([col, fml]) =>
+    `<div style="display:flex; align-items:center; gap:4px; margin-bottom:3px;">
+       <span style="background:#0ea5e9; color:white; border-radius:3px; padding:1px 5px; font-size:11px; font-weight:700; min-width:22px; text-align:center;">${col}</span>
+       <code style="flex:1; font-size:10px; color:#fbbf24; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${fml}">${fml}</code>
+       <span style="cursor:pointer; color:#f87171; font-size:12px;" onclick="removeFormula('${col}')">×</span>
+     </div>`
+  ).join("");
+}
+
+// ── Formül yönetimi (özet şablon) ────────────────────────────────────────────
+function loadDetectedSummaryFormulas() {
+  if (!Object.keys(summaryDetectedFormulas).length) return;
+  let added = 0;
+  for (const [col, fml] of Object.entries(summaryDetectedFormulas)) {
+    if (!summaryFormulaCols[col.toUpperCase()]) { summaryFormulaCols[col.toUpperCase()] = fml; added++; }
+  }
+  renderSumFormulaList();
+  if (added) alert(`${added} formül eklendi. Kaydetmeyi unutmayın.`);
+}
+
+function addSumFormula() {
+  const col = document.getElementById("sfColInput").value.trim().toUpperCase();
+  const fml = document.getElementById("sfFmlInput").value.trim();
+  if (!col || !fml) return;
+  summaryFormulaCols[col] = fml;
+  document.getElementById("sfColInput").value = "";
+  document.getElementById("sfFmlInput").value = "";
+  renderSumFormulaList();
+}
+
+function removeSumFormula(col) { delete summaryFormulaCols[col]; renderSumFormulaList(); }
+
+function renderSumFormulaList() {
+  const el = document.getElementById("sumFormulaList");
+  if (!el) return;
+  if (!Object.keys(summaryFormulaCols).length) { el.innerHTML = ""; return; }
+  el.innerHTML = Object.entries(summaryFormulaCols).map(([col, fml]) =>
+    `<div style="display:flex; align-items:center; gap:4px; margin-bottom:3px;">
+       <span style="background:#0ea5e9; color:white; border-radius:3px; padding:1px 5px; font-size:11px; font-weight:700; min-width:22px; text-align:center;">${col}</span>
+       <code style="flex:1; font-size:10px; color:#fbbf24; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${fml}">${fml}</code>
+       <span style="cursor:pointer; color:#f87171; font-size:12px;" onclick="removeSumFormula('${col}')">×</span>
+     </div>`
+  ).join("");
+}
+
+// ── Temizle ──────────────────────────────────────────────────────────────────
+function clearAll() {
+  if (!confirm("Ana şablon eşleştirmelerini temizle?")) return;
+  headerMap = {}; columnMap = {}; formulaCols = {}; startRow = null;
+  document.getElementById("startRowInput").value = "";
+  document.getElementById("endAnchorInput").value = "";
+  document.getElementById("sectionColInput").value = "";
+  activeField = null;
+  document.getElementById("modeHint").classList.remove("visible");
+  renderChips(); renderTable(); renderFormulaList();
+}
+
+function clearSummary() {
+  if (!confirm("Özet sayfası eşleştirmelerini temizle?")) return;
+  summaryHeaderMap = {}; summaryColMap = {}; summaryFormulaCols = {}; summaryStartRow = null;
+  document.getElementById("sumStartRow").value = "";
+  activeField = null;
+  document.getElementById("modeHint").classList.remove("visible");
+  renderSumChips(); renderTable(); renderSumFormulaList();
+}
+
+// ── Teklif Özeti config yönetimi ─────────────────────────────────────────────
+function toggleSummarySection() {
+  const d    = document.getElementById("summaryDetails");
+  const icon = document.getElementById("summaryToggleIcon");
+  const collapsed = d.style.display === "none";
+  d.style.display  = collapsed ? "" : "none";
+  icon.textContent = collapsed ? "▼" : "▶";
+}
+
+function updateSummaryUI() {
+  const enabled = document.getElementById("summaryEnabled").checked;
+  document.getElementById("summaryOptions").style.display = enabled ? "" : "none";
+  if (enabled) updateSummaryModeUI();
+  updateSheetTabVisibility();
+}
+
+function updateSummaryModeUI() {
+  const mode = document.getElementById("summaryMode").value;
+  document.getElementById("summaryAutoNote").style.display     = mode === "auto"     ? "" : "none";
+  document.getElementById("summaryTemplateOpts").style.display = mode === "template" ? "" : "none";
+  updateSheetTabVisibility();
+}
+
+function updateSheetTabVisibility() {
+  const enabled = document.getElementById("summaryEnabled").checked;
+  const mode    = document.getElementById("summaryMode").value;
+  const src     = document.getElementById("summarySourceSheet").value.trim();
+  const show    = enabled && mode === "template" && src;
+  document.getElementById("sheetTabBar").style.display     = show ? ""       : "none";
+  document.getElementById("summaryEditBtn").style.display  = show ? ""       : "none";
+  updateSummaryMappingStats();
+}
+
+function updateSummaryMappingStats() {
+  const el = document.getElementById("summaryMappingStats");
+  if (!el) return;
+  const hCount = Object.keys(summaryHeaderMap).length;
+  const cCount = Object.keys(summaryColMap).length;
+  const fCount = Object.keys(summaryFormulaCols).length;
+  const parts = [];
+  if (hCount) parts.push(`${hCount} hücre`);
+  if (cCount) parts.push(`${cCount} sütun`);
+  if (fCount) parts.push(`${fCount} formül`);
+  el.textContent = parts.length ? `Eşleştirildi: ${parts.join(", ")}` : "";
+}
+
+document.getElementById("summaryEnabled").addEventListener("change", updateSummaryUI);
+
+// ── Event listenerlar ────────────────────────────────────────────────────────
+document.getElementById("startRowInput").addEventListener("input", function() {
+  const v = parseInt(this.value);
+  startRow = isNaN(v) ? null : v;
+  renderTable();
+});
+document.getElementById("sumStartRow").addEventListener("input", function() {
+  const v = parseInt(this.value);
+  summaryStartRow = isNaN(v) ? null : v;
+  renderTable();
+});
+document.getElementById("vatMode").addEventListener("change", function() {
+  vatMode = this.value;
+});
+
+// ── Config build + save ───────────────────────────────────────────────────────
+function buildSummaryConfig() {
+  const enabled = document.getElementById("summaryEnabled").checked;
+  if (!enabled) return { enabled: false };
+  const mode      = document.getElementById("summaryMode").value;
+  const sheetName = document.getElementById("summarySheetName").value.trim() || "Teklif Özeti";
+  const cfg = { enabled: true, mode, sheet_name: sheetName };
+  if (mode === "template") {
+    cfg.source_sheet = document.getElementById("summarySourceSheet").value.trim() || null;
+    if (Object.keys(summaryHeaderMap).length)   cfg.header = summaryHeaderMap;
+    const sr      = parseInt(document.getElementById("sumStartRow").value);
+    const hasCols = Object.keys(summaryColMap).length;
+    const hasFmls = Object.keys(summaryFormulaCols).length;
+    if (!isNaN(sr) || hasCols || hasFmls) {
+      cfg.data_block = {};
+      if (!isNaN(sr)) cfg.data_block.start_row = sr;
+      if (hasCols)    cfg.data_block.columns          = summaryColMap;
+      if (hasFmls)    cfg.data_block.formula_columns  = summaryFormulaCols;
+    }
+  }
+  return cfg;
+}
+
+function buildConfig() {
+  const endAnchor = document.getElementById("endAnchorInput").value.trim() || null;
+  const secCol    = (document.getElementById("sectionColInput").value.trim().toUpperCase()) || null;
+  return {
+    vat_mode: vatMode,
+    cell_map: {
+      vat_mode: vatMode,
+      header:   headerMap,
+      data_block: {
+        start_row:          startRow,
+        end_anchor_text:    endAnchor,
+        sheet:              null,
+        columns:            columnMap,
+        formula_columns:    Object.keys(formulaCols).length ? formulaCols : undefined,
+        section_header_col: secCol,
+      },
+      summary: buildSummaryConfig(),
+    },
+  };
+}
+
+async function saveConfig() {
+  const cfg = buildConfig();
+  try {
+    const resp = await fetch("/customers/{{ customer.id }}/template-editor", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "config_json=" + encodeURIComponent(JSON.stringify(cfg)),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      updateSummaryMappingStats();
+      const t = document.getElementById("saveToast");
+      t.style.display = "block";
+      setTimeout(() => { t.style.display = "none"; }, 2500);
+    } else {
+      alert("Hata: " + (data.error || "Bilinmeyen hata"));
+    }
+  } catch(e) {
+    alert("Kayıt hatası: " + e);
+  }
+}
+
+// ── İlk render ───────────────────────────────────────────────────────────────
+renderChips();
+renderTable();
+renderFormulaList();
+updateSummaryUI();
+// Ana tablo HTML'ini sakla (DOMContentLoaded yerine, tablo zaten render edilmiş)
+mainTableHTML = document.getElementById("xlTable").innerHTML;
+</script>
+</body>
+</html>

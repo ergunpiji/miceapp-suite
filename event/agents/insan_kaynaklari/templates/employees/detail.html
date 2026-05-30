@@ -1,0 +1,328 @@
+{% extends "base.html" %}
+{% block title %}{{ employee.full_name }} — HR Ajanı{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">{{ employee.full_name }}</div>
+    <div class="page-subtitle">{{ employee.employee_no }} — {{ employee.title or employee.department or '' }}</div>
+  </div>
+  <div style="display:flex;gap:8px">
+    {% if user.role == 'hr_admin' %}
+    <a href="/employees/{{ employee.id }}/edit" class="btn btn-outline">Düzenle</a>
+    {% endif %}
+    <a href="/employees" class="btn btn-secondary">Listeye Dön</a>
+  </div>
+</div>
+
+<!-- Sekmeler -->
+<div class="tabs" style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px">
+  {% for tab_id, tab_label in [('overview','Genel Bilgi'),('documents','Özlük Dosyası'),('assets','Zimmet'),('leaves','İzinler'),('payroll','Bordro')] %}
+  <a href="?tab={{ tab_id }}" class="tab-link {% if tab == tab_id %}tab-active{% endif %}"
+     style="padding:10px 18px;font-size:13px;font-weight:{% if tab == tab_id %}600{% else %}400{% endif %};color:{% if tab == tab_id %}var(--accent){% else %}var(--text-muted){% endif %};border-bottom:{% if tab == tab_id %}2px solid var(--accent){% else %}2px solid transparent{% endif %};text-decoration:none;margin-bottom:-2px">
+    {{ tab_label }}
+  </a>
+  {% endfor %}
+</div>
+
+<!-- Genel Bilgi Sekmesi -->
+{% if tab == 'overview' %}
+<div class="grid-2">
+  <div class="card">
+    <div class="card-header"><span class="card-title">Kişisel Bilgiler</span></div>
+    <div class="card-body">
+      <table style="width:100%">
+        {% macro row(label, value) %}<tr><td style="color:var(--text-muted);font-size:12px;padding:6px 0;width:40%">{{ label }}</td><td style="font-size:13px">{{ value or '—' }}</td></tr>{% endmacro %}
+        {{ row('E-posta', employee.email) }}
+        {{ row('Telefon', employee.phone) }}
+        {{ row('T.C. Kimlik', '***' + employee.tc_no[-4:] if employee.tc_no else None) }}
+        {{ row('Doğum Tarihi', employee.birth_date | fmtdate) }}
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">İş Bilgileri</span></div>
+    <div class="card-body">
+      <table style="width:100%">
+        {% macro row(label, value) %}<tr><td style="color:var(--text-muted);font-size:12px;padding:6px 0;width:40%">{{ label }}</td><td style="font-size:13px">{{ value or '—' }}</td></tr>{% endmacro %}
+        {{ row('Departman', employee.department) }}
+        {{ row('Ünvan', employee.title) }}
+        {{ row('Çalışma Tipi', employee.employment_type_label) }}
+        {{ row('İşe Giriş', employee.hire_date | fmtdate) }}
+        {{ row('Yöneticisi', employee.manager.full_name if employee.manager else None) }}
+        {{ row('Durum', employee.status_label) }}
+      </table>
+    </div>
+  </div>
+</div>
+{% if leave_balance %}
+<div class="card mt-4">
+  <div class="card-header"><span class="card-title">Bu Yıl İzin Bakiyesi</span></div>
+  <div class="card-body">
+    <div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
+      <div class="stat-card">
+        <div class="stat-label">Toplam Hak</div>
+        <div class="stat-value">{{ leave_balance.total_days }}</div>
+        <div class="stat-sub">gün</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Kullanılan</div>
+        <div class="stat-value">{{ leave_balance.used_days }}</div>
+        <div class="stat-sub">gün</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Bekleyen</div>
+        <div class="stat-value warning">{{ leave_balance.pending_days }}</div>
+        <div class="stat-sub">gün</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Kalan</div>
+        <div class="stat-value positive">{{ leave_balance.remaining_days }}</div>
+        <div class="stat-sub">gün</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Özlük Belgesi Sekmesi -->
+{% elif tab == 'documents' %}
+{% if user.role == 'hr_admin' %}
+<div class="card mb-4">
+  <div class="card-header"><span class="card-title">Belge Yükle</span></div>
+  <div class="card-body">
+    <form method="post" action="/employees/{{ employee.id }}/documents/upload" enctype="multipart/form-data">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Belge Türü</label>
+          <select name="doc_type">
+            {% for d in doc_types %}
+            <option value="{{ d.value }}">{{ d.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Başlık *</label>
+          <input type="text" name="title" required placeholder="Ör: 2024 Yılı İş Sözleşmesi">
+        </div>
+        <div class="form-group">
+          <label>Dosya *</label>
+          <input type="file" name="file" required>
+        </div>
+        <div class="form-group">
+          <label>Notlar</label>
+          <input type="text" name="notes">
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary" style="margin-top:8px">Yükle</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+<div class="card">
+  <div class="card-body" style="padding:0">
+    {% if employee.documents %}
+    <table>
+      <thead>
+        <tr><th>Tür</th><th>Başlık</th><th>Yüklenme</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for doc in employee.documents | sort(attribute='uploaded_at', reverse=True) %}
+        <tr>
+          <td><span class="badge badge-neutral">{{ doc.doc_type_label }}</span></td>
+          <td>{{ doc.title }}</td>
+          <td class="nowrap">{{ doc.uploaded_at | fmtdate }}</td>
+          <td>
+            {% if doc.file_path %}
+            <a href="/employees/{{ employee.id }}/documents/{{ doc.id }}/download" class="btn btn-xs btn-outline">İndir</a>
+            {% endif %}
+            {% if user.role == 'hr_admin' %}
+            <form method="post" action="/employees/{{ employee.id }}/documents/{{ doc.id }}/delete" style="display:inline" onsubmit="return confirm('Belge silinsin mi?')">
+              <button type="submit" class="btn btn-xs btn-danger">Sil</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">📄</div>
+      <div class="empty-state-text">Henüz belge yüklenmemiş</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Zimmet Sekmesi -->
+{% elif tab == 'assets' %}
+{% if user.role == 'hr_admin' %}
+<div style="margin-bottom:12px">
+  <a href="/assets/new?employee_id={{ employee.id }}" class="btn btn-primary">+ Zimmet Ekle</a>
+</div>
+{% endif %}
+<div class="card">
+  <div class="card-body" style="padding:0">
+    {% if employee.assets %}
+    <table>
+      <thead>
+        <tr><th>Tür</th><th>Cihaz</th><th>Seri No</th><th>Teslim</th><th>İade</th><th>Durum</th><th>İmza</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for asset in employee.assets | sort(attribute='assigned_date', reverse=True) %}
+        <tr>
+          <td><span class="badge badge-neutral">{{ asset.asset_type_label }}</span></td>
+          <td>{{ asset.description }}</td>
+          <td class="font-mono">{{ asset.serial_no or '—' }}</td>
+          <td class="nowrap">{{ asset.assigned_date | fmtdate }}</td>
+          <td class="nowrap">{{ asset.returned_date | fmtdate if asset.returned_date else '—' }}</td>
+          <td>
+            <span class="badge badge-{% if asset.is_active %}success{% else %}neutral{% endif %}">
+              {% if asset.is_active %}Aktif{% else %}İade Edildi{% endif %}
+            </span>
+          </td>
+          <td>
+            {% if asset.signed %}
+            <span class="badge badge-success">✓ İmzalandı</span>
+            {% elif user.role == 'hr_admin' %}
+            <form method="post" action="/assets/{{ asset.id }}/sign" style="display:inline">
+              <button type="submit" class="btn btn-xs btn-outline">İmzala</button>
+            </form>
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            {% if asset.is_active and user.role == 'hr_admin' %}
+            <button onclick="showReturnModal('{{ asset.id }}')" class="btn btn-xs btn-warning">İade Al</button>
+            {% endif %}
+            {% if user.role == 'hr_admin' %}
+            <form method="post" action="/assets/{{ asset.id }}/delete" style="display:inline" onsubmit="return confirm('Zimmet silinsin mi?')">
+              <button type="submit" class="btn btn-xs btn-danger">Sil</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">💼</div>
+      <div class="empty-state-text">Zimmet kaydı yok</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- İzin Sekmesi -->
+{% elif tab == 'leaves' %}
+<div class="card">
+  <div class="card-body" style="padding:0">
+    {% set emp_leaves = employee.leave_requests | sort(attribute='created_at', reverse=True) %}
+    {% if emp_leaves %}
+    <table>
+      <thead>
+        <tr><th>Tür</th><th>Başlangıç</th><th>Bitiş</th><th>Gün</th><th>Durum</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for lr in emp_leaves %}
+        <tr>
+          <td>{{ lr.leave_type_label }}</td>
+          <td class="nowrap">{{ lr.start_date | fmtdate }}</td>
+          <td class="nowrap">{{ lr.end_date | fmtdate }}</td>
+          <td>{{ lr.days }}</td>
+          <td>
+            <span class="badge badge-{% if lr.status == 'onaylandi' %}success{% elif lr.status == 'reddedildi' %}danger{% elif lr.status == 'beklemede' %}warning{% else %}neutral{% endif %}">
+              {{ lr.status_label }}
+            </span>
+          </td>
+          <td><a href="/leaves/{{ lr.id }}" class="btn btn-xs btn-outline">Detay</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">🏖️</div>
+      <div class="empty-state-text">İzin kaydı yok</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Bordro Sekmesi -->
+{% elif tab == 'payroll' %}
+<div class="card">
+  <div class="card-body" style="padding:0">
+    {% if recent_payrolls %}
+    <table>
+      <thead>
+        <tr><th>Dönem</th><th class="text-right">Brüt</th><th class="text-right">Net</th><th>Ödeme Tarihi</th><th>Durum</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for pr in recent_payrolls %}
+        <tr>
+          <td>{{ pr.period_label }}</td>
+          <td class="text-right font-mono">{{ pr.gross_salary | currency }}</td>
+          <td class="text-right font-mono positive">{{ pr.net_salary | currency }}</td>
+          <td class="nowrap">{{ pr.payment_date | fmtdate if pr.payment_date else '—' }}</td>
+          <td>
+            <span class="badge badge-{% if pr.status == 'odendi' %}success{% elif pr.status == 'onaylandi' %}info{% else %}neutral{% endif %}">
+              {{ pr.status_label }}
+            </span>
+          </td>
+          <td><a href="/payroll/{{ pr.id }}" class="btn btn-xs btn-outline">Slip</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">💰</div>
+      <div class="empty-state-text">Bordro kaydı yok</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- İade Modal -->
+<div id="returnModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title">Zimmet İadesi</div>
+    <form method="post" id="returnForm">
+      <div class="form-group" style="margin-bottom:12px">
+        <label>İade Tarihi</label>
+        <input type="date" name="returned_date" id="returnDate" required>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Durum</label>
+        <select name="condition">
+          <option value="iyi">İyi</option>
+          <option value="hasarli">Hasarlı</option>
+          <option value="kayip">Kayıp</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label>Not</label>
+        <input type="text" name="notes">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button type="submit" class="btn btn-warning">İade Al</button>
+        <button type="button" onclick="document.getElementById('returnModal').classList.remove('open')" class="btn btn-secondary">İptal</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showReturnModal(assetId) {
+  document.getElementById('returnForm').action = '/assets/' + assetId + '/return';
+  document.getElementById('returnDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('returnModal').classList.add('open');
+}
+</script>
+{% endblock %}

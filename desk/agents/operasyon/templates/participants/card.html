@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block title %}{{ participant.full_name }} — {{ event.name }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <a href="{{ base_url }}/events/{{ event.id }}/participants" style="color:#64748b; font-size:13px; text-decoration:none;">← Katılımcı Listesi</a>
+  </div>
+  <div class="btn-group">
+    <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}/edit" class="btn btn-secondary">Düzenle</a>
+    <form method="post" action="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}/delete"
+          data-confirm="{{ participant.full_name }} kişisini silmek istediğinize emin misiniz?">
+      <button type="submit" class="btn btn-danger btn-sm">Sil</button>
+    </form>
+  </div>
+</div>
+
+<div class="participant-card">
+  <!-- Başlık -->
+  <div class="pcard-header">
+    <div style="display:flex; align-items:flex-start; justify-content:space-between;">
+      <div>
+        <div class="pcard-name">{{ participant.full_name }}</div>
+        <div class="pcard-meta">
+          {% if participant.title %}{{ participant.title }}{% endif %}
+          {% if participant.title and participant.company %} — {% endif %}
+          {% if participant.company %}{{ participant.company }}{% endif %}
+        </div>
+        <div class="pcard-contact">
+          {% if participant.email %}
+          <span class="pcard-contact-item">📧 {{ participant.email }}</span>
+          {% endif %}
+          {% if participant.phone %}
+          <span class="pcard-contact-item">📞 {{ participant.phone }}</span>
+          {% endif %}
+        </div>
+      </div>
+      <span class="badge badge-{{ participant.status }}" style="font-size:12px;">
+        {% if participant.status == 'complete' %}✅ Tam
+        {% elif participant.status == 'warning' %}⚠️ Eksik
+        {% else %}— Boş{% endif %}
+      </span>
+    </div>
+  </div>
+
+  <div class="pcard-body">
+
+    <!-- UÇUŞLAR -->
+    <div class="pcard-section">
+      <div class="pcard-section-label">✈️ Uçuşlar</div>
+      <div class="pcard-section-content">
+        {% if flight_in %}
+        <div style="margin-bottom:6px; font-size:11px; font-weight:600; color:#1d4ed8; text-transform:uppercase; letter-spacing:.06em;">Geliş</div>
+        <div class="pcard-flight-row">
+          <div class="pcard-flight-num">{{ flight_in.flight_number or '—' }}</div>
+          <div class="pcard-flight-route">
+            <span>{{ flight_in.departure_airport or '?' }}</span>
+            <span class="pcard-flight-arrow">→</span>
+            <span>{{ flight_in.arrival_airport or '?' }}</span>
+          </div>
+          {% if flight_in.flight_date %}
+          <div class="pcard-flight-time">
+            {{ flight_in.flight_date.strftime('%d.%m.%Y') }}
+            {% if flight_in.departure_time %}{{ flight_in.departure_time }}{% endif %}
+            {% if flight_in.arrival_time %} → {{ flight_in.arrival_time }}{% endif %}
+          </div>
+          {% endif %}
+          <div class="btn-group">
+            <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}/flights/new?direction=in" class="btn btn-secondary btn-sm">Düzenle</a>
+            <form method="post" action="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}/flights/{{ flight_in.id }}/delete">
+              <button class="btn btn-danger btn-sm">Sil</button>
+            </form>
+          </div>
+        </div>
+        {% else %}
+        <div style="margin-bottom:10px;">
+          <span class="pcard-empty">Geliş uçuşu girilmemiş</span>
+          <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}/flights/new?direction=in" class="btn btn-secondary btn-sm" style="margin-left:10px;">+ Ekle</a>
+        </div>
+        {% endif %}
+
+        {% if flight_out %}
+        <div style="margin-bottom:6px; font-size:11px; font-weight:600; color:#6d28d9; text-transform:uppercase; letter-spacing:.06em;">Dönüş</div>
+        <div class="pcard-flight-row">
+          <div class="pcard-flight-num">{{ flight_out.flight_number or '—' }}</div>
+          <div class="pcard-flight-route">
+            <span>{{ flight_out.departure_airport or '?' }}</span>
+            <span class="pcard-flight-arrow">→</span>
+            <span>{{ flight_out.arrival_airport or '?' }}</span>
+          </div>
+          {% if flight_out.flight_date %}
+          <div class="pcard-flight-time">
+            {{ flight_out.flight_date.strftime('%d.%m.%Y') }}
+            {% if flight_out.departure_time %}{{ flight_out.departure_time }}{% endif %}
+            {% if flight_out.arrival_time %} → {{ flight_out.arrival_time }}{% endif %}
+          </div>
+          {% endif %}
+          <div class="btn-group">
+            <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}/flights/new?direction=out" class="btn btn-secondary btn-sm">Düzenle</a>
+            <form method="post" action="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}/flights/{{ flight_out.id }}/delete">
+              <button class="btn btn-danger btn-sm">Sil</button>
+            </form>
+          </div>
+        </div>
+        {% else %}
+        <div>
+          <span class="pcard-empty">Dönüş uçuşu girilmemiş</span>
+          <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}/flights/new?direction=out" class="btn btn-secondary btn-sm" style="margin-left:10px;">+ Ekle</a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- KONAKLAMA -->
+    <div class="pcard-section">
+      <div class="pcard-section-label">🏨 Konaklama</div>
+      <div class="pcard-section-content">
+        {% if accommodation %}
+        <div class="pcard-row">
+          {% if accommodation.hotel %}
+          <div class="pcard-field">
+            <div class="pcard-field-label">Otel</div>
+            <div class="pcard-field-value">{{ accommodation.hotel }}</div>
+          </div>
+          {% endif %}
+          {% if accommodation.room_number %}
+          <div class="pcard-field">
+            <div class="pcard-field-label">Oda No</div>
+            <div class="pcard-field-value">{{ accommodation.room_number }}</div>
+          </div>
+          {% endif %}
+          {% if accommodation.room_type %}
+          <div class="pcard-field">
+            <div class="pcard-field-label">Oda Tipi</div>
+            <div class="pcard-field-value">{{ accommodation.room_type }}</div>
+          </div>
+          {% endif %}
+          {% if accommodation.nights %}
+          <div class="pcard-field">
+            <div class="pcard-field-label">Süre</div>
+            <div class="pcard-field-value">{{ accommodation.nights }} gece</div>
+          </div>
+          {% endif %}
+        </div>
+        {% if accommodation.check_in or accommodation.check_out %}
+        <div class="pcard-row">
+          <div class="pcard-field">
+            <div class="pcard-field-label">Giriş — Çıkış</div>
+            <div class="pcard-field-value">
+              {{ accommodation.check_in.strftime('%d.%m.%Y') if accommodation.check_in else '?' }}
+              —
+              {{ accommodation.check_out.strftime('%d.%m.%Y') if accommodation.check_out else '?' }}
+            </div>
+          </div>
+        </div>
+        {% endif %}
+        {% if roommate %}
+        <div class="pcard-row">
+          <div class="pcard-field">
+            <div class="pcard-field-label">Oda Arkadaşı</div>
+            <div class="pcard-field-value">
+              <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ roommate.id }}" class="table-link">{{ roommate.full_name }}</a>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+        <div class="btn-group" style="margin-top:10px;">
+          <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}/accommodation/new" class="btn btn-secondary btn-sm">Düzenle</a>
+          <form method="post" action="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}/accommodation/delete">
+            <button class="btn btn-danger btn-sm">Sil</button>
+          </form>
+        </div>
+        {% else %}
+        <span class="pcard-empty">Konaklama bilgisi yok</span>
+        <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}/accommodation/new" class="btn btn-secondary btn-sm" style="margin-left:10px;">+ Ekle</a>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- TRANSFER -->
+    <div class="pcard-section">
+      <div class="pcard-section-label">🚌 Transfer</div>
+      <div class="pcard-section-content">
+        {% if transfer_in %}
+        <div class="pcard-row">
+          <div class="pcard-field">
+            <div class="pcard-field-label">Varış Transferi</div>
+            <div class="pcard-field-value">
+              {{ transfer_in.from_location or '?' }} → {{ transfer_in.to_location or '?' }}
+              {% if transfer_in.pickup_time %} · {{ transfer_in.pickup_time }}{% endif %}
+              {% if transfer_in.vehicle_group %} · <span style="color:#64748b;">{{ transfer_in.vehicle_group }}</span>{% endif %}
+            </div>
+          </div>
+          <div>
+            <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}/transfers/new?direction=in" class="btn btn-secondary btn-sm">Düzenle</a>
+            <form method="post" action="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}/transfers/{{ transfer_in.id }}/delete" style="display:inline;">
+              <button class="btn btn-danger btn-sm">Sil</button>
+            </form>
+          </div>
+        </div>
+        {% else %}
+        <div style="margin-bottom:8px;">
+          <span class="pcard-empty">Varış transferi yok</span>
+          <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}/transfers/new?direction=in" class="btn btn-secondary btn-sm" style="margin-left:10px;">+ Ekle</a>
+        </div>
+        {% endif %}
+
+        {% if transfer_out %}
+        <div class="pcard-row">
+          <div class="pcard-field">
+            <div class="pcard-field-label">Dönüş Transferi</div>
+            <div class="pcard-field-value">
+              {{ transfer_out.from_location or '?' }} → {{ transfer_out.to_location or '?' }}
+              {% if transfer_out.pickup_time %} · {{ transfer_out.pickup_time }}{% endif %}
+              {% if transfer_out.vehicle_group %} · <span style="color:#64748b;">{{ transfer_out.vehicle_group }}</span>{% endif %}
+            </div>
+          </div>
+          <div>
+            <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}/transfers/new?direction=out" class="btn btn-secondary btn-sm">Düzenle</a>
+            <form method="post" action="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}/transfers/{{ transfer_out.id }}/delete" style="display:inline;">
+              <button class="btn btn-danger btn-sm">Sil</button>
+            </form>
+          </div>
+        </div>
+        {% else %}
+        <div>
+          <span class="pcard-empty">Dönüş transferi yok</span>
+          <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ participant.id }}/transfers/new?direction=out" class="btn btn-secondary btn-sm" style="margin-left:10px;">+ Ekle</a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- KAYIT BİLGİLERİ -->
+    <div class="pcard-section">
+      <div class="pcard-section-label">📋 Kayıt</div>
+      <div class="pcard-section-content">
+        <div class="pcard-row">
+          <div class="pcard-field">
+            <div class="pcard-field-label">Yaka Kartı</div>
+            <div class="pcard-field-value">{{ participant.display_badge }}</div>
+          </div>
+          {% if participant.dietary %}
+          <div class="pcard-field">
+            <div class="pcard-field-label">Diyet</div>
+            <div class="pcard-field-value">{{ participant.dietary }}</div>
+          </div>
+          {% endif %}
+        </div>
+        {% if participant.special_needs %}
+        <div class="pcard-row">
+          <div class="pcard-field">
+            <div class="pcard-field-label">Özel İhtiyaç</div>
+            <div class="pcard-field-value">{{ participant.special_needs }}</div>
+          </div>
+        </div>
+        {% endif %}
+        {% if participant.notes %}
+        <div class="pcard-row">
+          <div class="pcard-field">
+            <div class="pcard-field-label">Notlar</div>
+            <div class="pcard-field-value">{{ participant.notes }}</div>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div><!-- /pcard-body -->
+</div><!-- /participant-card -->
+
+{% endblock %}

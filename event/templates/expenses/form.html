@@ -1,0 +1,786 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── HBF Formu ─────────────────────────────────────────────── */
+.hbf-header {
+  background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+  color: white;
+  border-radius: 12px 12px 0 0;
+  padding: 24px 28px;
+}
+.hbf-ref-badge {
+  background: rgba(255,255,255,0.15);
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .5px;
+}
+.hbf-status-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 14px 28px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+.status-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+.status-step.active { color: #1e293b; font-weight: 700; }
+.status-step.done { color: #16a34a; }
+.status-dot {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+  background: #e2e8f0;
+  color: #94a3b8;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.status-dot.active { background: #2563eb; color: white; }
+.status-dot.done   { background: #16a34a; color: white; }
+.status-dot.rejected { background: #dc2626; color: white; }
+.status-arrow { color: #cbd5e1; font-size: 10px; }
+
+/* Tablo */
+.hbf-table { font-size: 13px; }
+.hbf-table th {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .4px;
+  color: #64748b; background: #f8fafc; white-space: nowrap;
+  padding: 8px 10px;
+}
+.hbf-table td { padding: 6px 8px; vertical-align: middle; }
+.hbf-table input, .hbf-table select {
+  font-size: 12px; padding: 4px 8px; border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+.hbf-table input:focus, .hbf-table select:focus {
+  outline: none; border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59,130,246,.15);
+}
+.pay-badge {
+  font-size: 10px; padding: 2px 8px; border-radius: 99px;
+  font-weight: 700; white-space: nowrap;
+}
+.pay-kredi_karti { background: #dbeafe; color: #1d4ed8; }
+.pay-nakit       { background: #dcfce7; color: #166534; }
+.doc-fatura  { background: #fef3c7; color: #92400e; }
+.doc-fis     { background: #e0f2fe; color: #0369a1; }
+.doc-belgesiz{ background: #f1f5f9; color: #475569; }
+
+/* Özet kutusu */
+.hbf-summary {
+  background: #1e3a5f;
+  color: white;
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+.hbf-summary-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 0;
+  font-size: 13px;
+}
+.hbf-summary-row.total {
+  border-top: 1px solid rgba(255,255,255,.2);
+  margin-top: 6px;
+  padding-top: 10px;
+  font-size: 18px;
+  font-weight: 800;
+}
+/* Add row button */
+.btn-add-row {
+  border: 2px dashed #cbd5e1;
+  background: #f8fafc;
+  color: #64748b;
+  border-radius: 8px;
+  font-size: 12px;
+  padding: 6px 16px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.btn-add-row:hover { border-color: #3b82f6; color: #2563eb; background: #eff6ff; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="mb-3">
+  <a href="{{ '/requests/' + req.id if req else '/requests' }}"
+     class="text-muted text-decoration-none" style="font-size:13px;">
+    <i class="bi bi-arrow-left me-1"></i>
+    {% if req %}{{ req.request_no }} — {{ req.event_name }}{% else %}Geri{% endif %}
+  </a>
+</div>
+
+{# ── Kart ── #}
+<div class="card mb-4 shadow-sm" style="border-radius:12px; overflow:hidden;">
+
+  {# Başlık #}
+  <div class="hbf-header">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+      <div>
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:.8px; opacity:.7;">
+          Harcama Bildirim Formu
+        </div>
+        {% if report %}
+        <h4 class="mb-0 fw-bold mt-1">{{ report.title or 'HBF' }}</h4>
+        {% else %}
+        <h4 class="mb-0 fw-bold mt-1">Yeni Harcama Bildirimi</h4>
+        {% endif %}
+      </div>
+      <div class="d-flex gap-2 align-items-center flex-wrap" id="headerRefBadges">
+        {# JS ile doldurulur (edit/new); readonly için fallback #}
+        {% if req %}
+        <span class="hbf-ref-badge">{{ req.request_no }}</span>
+        {% endif %}
+      </div>
+    </div>
+    {% if req %}
+    <div class="mt-2" style="font-size:13px; opacity:.8;">
+      {{ req.event_name }}
+      {% if req.client_name %} &mdash; {{ req.client_name }}{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  {# Durum çubuğu #}
+  {% if report %}
+  {% set s = report.status %}
+  <div class="hbf-status-bar">
+    <div class="status-step {{ 'done' if s in ('submitted','approved','rejected') else 'active' if s == 'draft' else '' }}">
+      <div class="status-dot {{ 'done' if s in ('submitted','approved','rejected') else 'active' if s == 'draft' else '' }}">
+        {% if s in ('submitted','approved','rejected') %}<i class="bi bi-check"></i>{% else %}1{% endif %}
+      </div>
+      Taslak
+    </div>
+    <div class="status-arrow"><i class="bi bi-chevron-right"></i></div>
+    <div class="status-step {{ 'done' if s in ('approved','rejected') else 'active' if s == 'submitted' else '' }}">
+      <div class="status-dot {{ 'done' if s == 'approved' else 'rejected' if s == 'rejected' else 'active' if s == 'submitted' else '' }}">
+        {% if s == 'approved' %}<i class="bi bi-check"></i>
+        {% elif s == 'rejected' %}<i class="bi bi-x"></i>
+        {% else %}2{% endif %}
+      </div>
+      Onay Bekliyor
+    </div>
+    <div class="status-arrow"><i class="bi bi-chevron-right"></i></div>
+    <div class="status-step {{ 'done' if s == 'approved' else '' }}">
+      <div class="status-dot {{ 'done' if s == 'approved' else '' }}">
+        {% if s == 'approved' %}<i class="bi bi-check"></i>{% else %}3{% endif %}
+      </div>
+      Onaylandı
+    </div>
+    {% if report.approved_at %}
+    <span class="ms-auto text-muted" style="font-size:11px;">
+      {{ report.approver.full_name if report.approver else '—' }}
+      &bull; {{ report.approved_at.strftime('%d.%m.%Y') if report.approved_at else '' }}
+    </span>
+    {% endif %}
+  </div>
+  {% if s == 'rejected' and report.rejection_note %}
+  <div class="px-4 py-2" style="background:#fff5f5; border-bottom:1px solid #fecaca;">
+    <i class="bi bi-x-circle text-danger me-2"></i>
+    <strong class="text-danger">Red Notu:</strong>
+    <span class="text-danger ms-1">{{ report.rejection_note }}</span>
+  </div>
+  {% endif %}
+  {% endif %}
+
+  {# Form body #}
+  {% if not readonly %}
+  <form method="post"
+        action="{{ '/expenses/' + report.id + '/edit' if report else '/expenses/new' }}"
+        id="hbfForm">
+    <input type="hidden" name="items_json" id="itemsJson" value="[]">
+    <input type="hidden" name="request_ids_json" id="requestIdsJson" value="[]">
+    <input type="hidden" name="next_action" id="nextAction" value="">
+  {% else %}
+  <div>
+  {% endif %}
+
+    <div class="p-4">
+
+      {# ── Referans Seçici ── #}
+      {% if not readonly %}
+      <div class="mb-4">
+        <label class="form-label fw-semibold" style="font-size:13px;">
+          Referans Numaraları <span class="text-danger">*</span>
+          <span class="text-muted fw-normal ms-1" style="font-size:12px;">(Birden fazla ekleyebilirsiniz)</span>
+        </label>
+        <div id="refTagsWrap" class="d-flex flex-wrap gap-2 align-items-center mb-2">
+          {# Mevcut referanslar (edit modunda) — JS tarafından doldurulur #}
+        </div>
+        <div class="d-flex gap-2" style="max-width:520px;">
+          <input type="text" id="refSearchInput" class="form-control form-control-sm"
+                 placeholder="Referans no veya etkinlik adı ara..." autocomplete="off"
+                 oninput="filterRefDropdown(this.value)" onfocus="showRefDropdown()"
+                 onblur="setTimeout(hideRefDropdown, 200)">
+          <div style="position:relative; flex:1;">
+            <div id="refDropdown" class="border rounded shadow-sm bg-white"
+                 style="display:none; position:absolute; top:0; left:-100%; width:450px; max-height:200px;
+                        overflow-y:auto; z-index:1000; font-size:13px;">
+              {% for r in all_requests %}
+              <div class="refDropItem px-3 py-2 border-bottom"
+                   style="cursor:pointer;"
+                   data-id="{{ r.id }}"
+                   data-no="{{ r.request_no }}"
+                   data-name="{{ r.event_name | e }}"
+                   data-client="{{ r.client_name | e }}"
+                   onmousedown="addRef(this)">
+                <span class="fw-bold text-primary">{{ r.request_no }}</span>
+                <span class="text-muted ms-2">{{ r.event_name }}</span>
+                {% if r.client_name %}<span class="text-muted"> — {{ r.client_name }}</span>{% endif %}
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      {# Readonly: referans listeleri #}
+      {% endif %}
+
+      {# title alanı gizli — otomatik doldurulur #}
+      {% if not readonly %}
+      <input type="hidden" name="title" value="{{ report.title if report else '' }}">
+      {% endif %}
+
+      {# ── Harcama tablosu ── #}
+      <div class="table-responsive mb-3">
+        <table class="table hbf-table mb-0" id="hbfTable">
+          <thead>
+            <tr>
+              <th style="width:110px;">Tarih</th>
+              <th style="min-width:180px;">Açıklama</th>
+              <th style="width:110px;">Ödeme</th>
+              <th style="width:110px;">Belge</th>
+              <th class="text-end" style="width:110px;">Tutar (KDV dahil)</th>
+              <th class="text-end" style="width:100px;">KDV Tutarı ₺</th>
+              <th class="text-end" style="width:100px;">KDV Hariç</th>
+              {% if not readonly %}
+              <th id="thRef" style="min-width:170px; display:none;">Referans</th>
+              <th style="width:80px;">Belge</th>
+              <th style="width:36px;"></th>
+              {% else %}
+              <th id="thRef" style="display:none;">Referans</th>
+              <th style="width:100px;">Belge</th>
+              {% endif %}
+            </tr>
+          </thead>
+          <tbody id="hbfTbody">
+            {% if readonly and report %}
+              {% for item in report.items %}
+              <tr>
+                <td class="text-muted" style="font-size:12px;">{{ item.item_date or '—' }}</td>
+                <td>{{ item.description or '—' }}</td>
+                <td>
+                  <span class="pay-badge pay-{{ item.payment_method }}">
+                    {{ item.payment_label }}
+                  </span>
+                </td>
+                <td>
+                  <span class="pay-badge doc-{{ item.document_type }}">
+                    {{ item.doc_label }}
+                  </span>
+                </td>
+                <td class="text-end fw-bold">₺{{ '{:,.2f}'.format(item.total_amount).replace(',', '.') }}</td>
+                <td class="text-end text-muted">
+                  {% if item.document_type == 'belgesiz' %}—{% else %}₺{{ '{:,.2f}'.format(item.vat_amount).replace(',', '.') }}{% endif %}
+                </td>
+                <td class="text-end fw-semibold text-secondary">₺{{ '{:,.2f}'.format(item.amount).replace(',', '.') }}</td>
+                <td style="display:none;">
+                  {% if item.assigned_request_id %}
+                    <span class="badge bg-primary bg-opacity-10 text-primary" style="font-size:10px;">
+                      {{ item.assigned_request_id[:8] }}
+                    </span>
+                  {% else %}—{% endif %}
+                </td>
+                <td>
+                  {% if item.document_path %}
+                  <a href="/expenses/doc/{{ item.id }}" target="_blank"
+                     class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:11px;">
+                    <i class="bi bi-file-earmark me-1"></i>{{ item.document_name or 'Belge' }}
+                  </a>
+                  {% else %}
+                  <span class="text-muted" style="font-size:11px;">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if not readonly %}
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        <button type="button" class="btn-add-row" onclick="addRow()">
+          <i class="bi bi-plus-lg me-1"></i>Satır Ekle
+        </button>
+        <button type="button" id="autoDistBtn" class="btn btn-sm btn-outline-secondary"
+                onclick="autoDistribute()" style="display:none; font-size:12px;">
+          <i class="bi bi-distribute-vertical me-1"></i>Otomatik Dağıt
+        </button>
+      </div>
+      {% endif %}
+
+    </div>
+
+    {# ── Alt özet + butonlar ── #}
+    <div class="px-4 pb-4 d-flex gap-4 align-items-start flex-wrap">
+
+      {# Özet kutu #}
+      <div class="hbf-summary flex-shrink-0" style="min-width:260px;">
+        <div class="hbf-summary-row">
+          <span style="opacity:.75;">KDV Hariç Toplam</span>
+          <span id="summaryExcl">₺0,00</span>
+        </div>
+        <div class="hbf-summary-row">
+          <span style="opacity:.75;">KDV</span>
+          <span id="summaryVat">₺0,00</span>
+        </div>
+        <div class="hbf-summary-row total">
+          <span>GENEL TOPLAM</span>
+          <span id="summaryTotal">₺0,00</span>
+        </div>
+      </div>
+
+      {% if not readonly %}
+      {# Butonlar #}
+      <div class="d-flex flex-column gap-2 mt-auto">
+        <button type="button" class="btn btn-primary px-4"
+                onclick="submitForm('submit')">
+          <i class="bi bi-send me-2"></i>Onaya Gönder
+        </button>
+        <button type="button" class="btn btn-outline-secondary"
+                onclick="submitForm('')">
+          <i class="bi bi-floppy me-2"></i>Taslak Kaydet
+        </button>
+        <a href="{{ '/requests/' + req.id if req else '/expenses' }}"
+           class="btn btn-link text-muted p-0" style="font-size:13px;">İptal</a>
+      </div>
+      {% else %}
+        {# Onay/Red butonları — sadece yetkili kişiye göster #}
+        {% if can_approve and report and report.status == 'submitted' %}
+        <div class="d-flex flex-column gap-2 mt-auto">
+          <form method="post" action="/expenses/{{ report.id }}/approve" style="margin:0;">
+            <button type="submit" class="btn btn-success px-4 w-100"
+                    onclick="return confirm('HBF onaylanacak. Emin misiniz?')">
+              <i class="bi bi-check-circle me-2"></i>Onayla
+            </button>
+          </form>
+          <button type="button" class="btn btn-outline-danger w-100"
+                  onclick="document.getElementById('rejectPanel').style.display=''">
+            <i class="bi bi-x-circle me-2"></i>Reddet
+          </button>
+          <div id="rejectPanel" style="display:none;" class="mt-2">
+            <form method="post" action="/expenses/{{ report.id }}/reject">
+              <textarea name="rejection_note" class="form-control mb-2" rows="2"
+                        style="font-size:13px;" placeholder="Red nedeni..."></textarea>
+              <button type="submit" class="btn btn-danger btn-sm w-100">Reddi Onayla</button>
+            </form>
+          </div>
+        </div>
+        {% elif report and report.status == 'draft' and report.submitted_by == current_user.id %}
+        <div class="mt-auto">
+          <a href="/expenses/{{ report.id }}/edit" class="btn btn-outline-primary px-4">
+            <i class="bi bi-pencil me-2"></i>Düzenle
+          </a>
+        </div>
+        {% endif %}
+      {% endif %}
+
+    </div>
+
+  {% if not readonly %}
+  </form>
+  {% else %}
+  </div>
+  {% endif %}
+
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let REPORT_ID = '{{ report.id if report else "" }}';
+const READONLY  = {{ 'true' if readonly else 'false' }};
+
+// ─── Referans listesi ───────────────────────────────────────────
+let selectedRefs = [];   // [{id, request_no, event_name, client_name}]
+
+// Mevcut referansları yükle (edit modunda DB'den)
+{% if report and report.request_ids_json %}
+try {
+  const _stored = {{ report.request_ids_json | safe }};
+  if (Array.isArray(_stored) && _stored.length) {
+    selectedRefs = _stored;
+  } else {
+    // Eski kayıtlarda sadece request_id var
+    selectedRefs = [{ id: '{{ report.request_id }}',
+                      request_no: '{{ report.request.request_no if report.request else "" }}',
+                      event_name: {{ (report.request.event_name if report.request else '') | tojson }},
+                      client_name: {{ (report.request.client_name if report.request else '') | tojson }} }];
+  }
+} catch(e) {
+  selectedRefs = [];
+}
+{% elif req %}
+// Yeni form — URL'den gelen request_id
+selectedRefs = [{ id: '{{ req.id }}',
+                  request_no: '{{ req.request_no }}',
+                  event_name: {{ req.event_name | tojson }},
+                  client_name: {{ (req.client_name or '') | tojson }} }];
+{% endif %}
+
+function renderRefTags() {
+  const wrap = document.getElementById('refTagsWrap');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  // Header badges güncelle
+  const hdr = document.getElementById('headerRefBadges');
+  if (hdr) {
+    hdr.innerHTML = selectedRefs.map(r =>
+      `<span class="hbf-ref-badge">${r.request_no}</span>`
+    ).join('');
+  }
+  selectedRefs.forEach((r, i) => {
+    const span = document.createElement('span');
+    span.className = 'badge d-flex align-items-center gap-1 py-1 px-2';
+    span.style.cssText = 'background:#dbeafe; color:#1d4ed8; font-size:12px; font-weight:600; border-radius:6px;';
+    span.innerHTML = `${r.request_no}
+      <span style="font-weight:400; opacity:.7; font-size:11px; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+            title="${(r.event_name||'').replace(/"/g,'&quot;')}">${r.event_name||''}</span>
+      <button type="button" onclick="removeRef(${i})"
+              style="background:none;border:none;color:#1d4ed8;padding:0 2px;font-size:13px;line-height:1;cursor:pointer;"
+              title="Kaldır">&times;</button>`;
+    wrap.appendChild(span);
+  });
+  syncRefHidden();
+  updateRefColVisibility();
+}
+
+function addRef(el) {
+  const id = el.dataset.id;
+  if (selectedRefs.find(r => r.id === id)) return; // zaten var
+  selectedRefs.push({ id, request_no: el.dataset.no, event_name: el.dataset.name, client_name: el.dataset.client });
+  document.getElementById('refSearchInput').value = '';
+  hideRefDropdown();
+  renderRefTags();
+  renderTable();
+}
+
+function removeRef(i) {
+  selectedRefs.splice(i, 1);
+  renderRefTags();
+  renderTable();
+}
+
+function syncRefHidden() {
+  const el = document.getElementById('requestIdsJson');
+  if (el) el.value = JSON.stringify(selectedRefs);
+}
+
+function filterRefDropdown(q) {
+  const items = document.querySelectorAll('.refDropItem');
+  q = q.toLowerCase();
+  items.forEach(el => {
+    const match = (el.dataset.no + ' ' + el.dataset.name + ' ' + el.dataset.client).toLowerCase().includes(q);
+    el.style.display = match ? '' : 'none';
+  });
+  showRefDropdown();
+}
+
+function showRefDropdown() {
+  const dd = document.getElementById('refDropdown');
+  if (dd) dd.style.display = '';
+}
+function hideRefDropdown() {
+  const dd = document.getElementById('refDropdown');
+  if (dd) dd.style.display = 'none';
+}
+
+function updateRefColVisibility() {
+  const multi = selectedRefs.length > 1;
+  document.querySelectorAll('#thRef, .tdRef').forEach(el => {
+    el.style.display = multi ? '' : 'none';
+  });
+  const autoBtn = document.getElementById('autoDistBtn');
+  if (autoBtn) autoBtn.style.display = multi ? '' : 'none';
+}
+
+function autoDistribute() {
+  if (selectedRefs.length < 2) return;
+  rows.forEach((row, i) => {
+    row.assigned_request_id = selectedRefs[i % selectedRefs.length].id;
+  });
+  renderTable();
+}
+
+// ─── Kalemler ──────────────────────────────────────────────────
+// Mevcut kalemler (edit modunda DB'den geliyor)
+let rows = [
+  {% if report and not readonly %}
+  {% for item in report.items %}
+  {
+    id:                   '{{ item.id }}',
+    item_date:            '{{ item.item_date or '' }}',
+    description:          {{ item.description | tojson }},
+    payment_method:       '{{ item.payment_method }}',
+    document_type:        '{{ item.document_type }}',
+    total_amount:         {{ item.total_amount }},
+    vat_amount:           {{ item.vat_amount }},
+    document_path:        '{{ item.document_path or '' }}',
+    document_name:        {{ (item.document_name or '') | tojson }},
+    assigned_request_id:  '{{ item.assigned_request_id or '' }}',
+  },
+  {% endfor %}
+  {% endif %}
+];
+
+const PAYMENT_METHODS = {{ PAYMENT_METHODS | tojson }};
+const DOC_TYPES       = {{ DOC_TYPES | tojson }};
+
+function fmt(n) {
+  return '₺' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.').replace(/\.(\d{2})$/, ',$1');
+}
+
+function renderTable() {
+  if (READONLY) return;
+  const tbody = document.getElementById('hbfTbody');
+  tbody.innerHTML = '';
+  const multi = selectedRefs.length > 1;
+  rows.forEach((row, i) => {
+    const payOpts = PAYMENT_METHODS.map(p =>
+      `<option value="${p.value}" ${row.payment_method === p.value ? 'selected' : ''}>${p.label}</option>`
+    ).join('');
+    const docOpts = DOC_TYPES.map(d =>
+      `<option value="${d.value}" ${row.document_type === d.value ? 'selected' : ''}>${d.label}</option>`
+    ).join('');
+    const isBelgesiz = row.document_type === 'belgesiz';
+    const vatAmtVal = isBelgesiz ? 0 : (row.vat_amount || 0);
+    const totalVal  = row.total_amount || 0;
+    const exclVal   = round2(totalVal - vatAmtVal);
+
+    const docBtnHtml = row.document_path
+      ? `<a href="/expenses/doc/${row.id || ''}" target="_blank"
+            class="btn btn-xs btn-outline-secondary py-0 px-1" style="font-size:11px;"
+            title="${row.document_name || 'Belge'}">
+           <i class="bi bi-file-earmark"></i>
+         </a>`
+      : `<label class="btn btn-xs btn-outline-secondary py-0 px-1" style="font-size:11px; cursor:pointer;" title="Belge yükle">
+           <i class="bi bi-upload"></i>
+           <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none;"
+                  onchange="uploadDoc(${i}, this)">
+         </label>`;
+
+    // Referans dropdown (çok referans varsa)
+    const refOpts = `<option value="">Tümü</option>` + selectedRefs.map(r =>
+      `<option value="${r.id}" ${row.assigned_request_id === r.id ? 'selected' : ''}>${r.request_no} — ${(r.event_name||'').substring(0,20)}</option>`
+    ).join('');
+    const refCell = `<td class="tdRef" style="${multi ? '' : 'display:none;'}">
+      <select style="min-width:160px; max-width:200px; font-size:11px;"
+              onchange="rows[${i}].assigned_request_id=this.value;">
+        ${refOpts}
+      </select>
+    </td>`;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="date" value="${row.item_date || ''}" style="width:108px;"
+                 onchange="rows[${i}].item_date=this.value; updateTotals();"></td>
+      <td><input type="text" value="${(row.description||'').replace(/"/g,'&quot;')}"
+                 placeholder="Açıklama" style="width:100%; min-width:160px;"
+                 oninput="rows[${i}].description=this.value;"></td>
+      <td>
+        <select onchange="rows[${i}].payment_method=this.value; updateTotals();"
+                style="width:100px;">${payOpts}</select>
+      </td>
+      <td>
+        <select onchange="onDocTypeChange(${i}, this.value);" style="width:100px;">${docOpts}</select>
+      </td>
+      <td>
+        <input type="number" min="0" step="0.01" value="${totalVal}"
+               style="width:110px; text-align:right;"
+               oninput="rows[${i}].total_amount=parseFloat(this.value)||0; updateTotals();">
+      </td>
+      <td>
+        <input type="number" min="0" step="0.01" value="${vatAmtVal}"
+               style="width:100px; text-align:right;"
+               ${isBelgesiz ? 'disabled style="background:#f1f5f9; width:100px; text-align:right;"' : ''}
+               oninput="rows[${i}].vat_amount=parseFloat(this.value)||0; updateTotals();">
+      </td>
+      <td class="text-end fw-semibold text-secondary" id="rowExcl_${i}">${fmt(exclVal)}</td>
+      ${refCell}
+      <td>${docBtnHtml}</td>
+      <td>
+        <button type="button" class="btn btn-xs btn-outline-danger py-0 px-1"
+                onclick="removeRow(${i})" title="Sil">
+          <i class="bi bi-trash3" style="font-size:11px;"></i>
+        </button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+  updateTotals();
+}
+
+function onDocTypeChange(i, val) {
+  rows[i].document_type = val;
+  if (val === 'belgesiz') {
+    rows[i].vat_amount = 0;
+  }
+  renderTable();
+}
+
+function round2(n) { return Math.round(n * 100) / 100; }
+
+function updateTotals() {
+  let excl = 0, vat = 0, total = 0;
+  rows.forEach((row, i) => {
+    const isBelgesiz = row.document_type === 'belgesiz';
+    const t = row.total_amount || 0;
+    const v = isBelgesiz ? 0 : (row.vat_amount || 0);
+    const a = round2(t - v);
+    total += t; vat += v; excl += a;
+    const el = document.getElementById('rowExcl_' + i);
+    if (el) el.textContent = fmt(round2(a));
+  });
+  setEl('summaryExcl', fmt(round2(excl)));
+  setEl('summaryVat',  fmt(round2(vat)));
+  setEl('summaryTotal', fmt(round2(total)));
+}
+
+function setEl(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+function addRow() {
+  rows.push({
+    id: '', item_date: '', description: '', payment_method: 'nakit',
+    document_type: 'fis', total_amount: 0, vat_amount: 0, document_path: '', document_name: ''
+  });
+  renderTable();
+  // Yeni satırın açıklama input'una odaklan
+  const inputs = document.querySelectorAll('#hbfTbody tr:last-child input[type=text]');
+  if (inputs.length) inputs[0].focus();
+}
+
+function removeRow(i) {
+  rows.splice(i, 1);
+  renderTable();
+}
+
+function saveItems() {
+  document.getElementById('itemsJson').value = JSON.stringify(rows);
+}
+
+function submitForm(action) {
+  if (selectedRefs.length === 0) {
+    alert('En az bir referans numarası seçmelisiniz.');
+    return;
+  }
+  saveItems();
+  syncRefHidden();
+  document.getElementById('nextAction').value = action;
+  document.getElementById('hbfForm').submit();
+}
+
+async function uploadDoc(rowIdx, input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  // REPORT_ID yoksa → taslak olarak otomatik kaydet
+  if (!REPORT_ID) {
+    if (selectedRefs.length === 0) {
+      alert('Belge yüklemeden önce en az bir referans numarası seçmelisiniz.');
+      input.value = '';
+      return;
+    }
+    saveItems();
+    syncRefHidden();
+    const draftFd = new FormData();
+    draftFd.append('request_ids_json', document.getElementById('requestIdsJson').value);
+    draftFd.append('title', document.getElementById('reportTitle')?.value || '');
+    draftFd.append('items_json', JSON.stringify(rows));
+    const draftRes = await fetch('/expenses/new-draft', { method: 'POST', body: draftFd });
+    const draftData = await draftRes.json();
+    if (!draftData.ok) { alert(draftData.error || 'Taslak kaydedilemedi.'); return; }
+    // REPORT_ID ve form action'ı güncelle
+    window.REPORT_ID = draftData.report_id;
+    document.getElementById('hbfForm').action = `/expenses/${draftData.report_id}/edit`;
+    history.replaceState(null, '', `/expenses/${draftData.report_id}/edit`);
+  }
+
+  const rid = REPORT_ID;
+
+  // Satır henüz kaydedilmemişse önce sync-rows ile kaydet
+  if (!rows[rowIdx].id) {
+    saveItems();
+    const syncFd = new FormData();
+    syncFd.append('items_json', JSON.stringify(rows));
+    const syncRes = await fetch(`/expenses/${rid}/sync-rows`, { method: 'POST', body: syncFd });
+    const syncData = await syncRes.json();
+    if (!syncData.ok) { alert('Satırlar kaydedilemedi.'); return; }
+    syncData.items.forEach(({ idx, id }) => { if (rows[idx]) rows[idx].id = id; });
+  }
+
+  const itemId = rows[rowIdx].id;
+  if (!itemId) { alert('Satır ID alınamadı.'); return; }
+
+  const fd = new FormData();
+  fd.append('file', file);
+  let data;
+  try {
+    const res = await fetch(`/expenses/${rid}/upload/${itemId}`, { method: 'POST', body: fd });
+    data = await res.json();
+  } catch (e) {
+    alert('Yükleme hatası — sunucu yanıt vermedi. Lütfen tekrar deneyin.');
+    return;
+  }
+  if (data.ok) {
+    rows[rowIdx].document_path = data.path;
+    rows[rowIdx].document_name = data.name;
+    renderTable();
+  } else {
+    alert(data.error || 'Yükleme hatası');
+  }
+}
+
+// İlk render
+if (!READONLY) {
+  renderRefTags();
+  renderTable();
+}
+
+// Readonly: özet hesapla
+{% if readonly and report %}
+(function() {
+  let excl = 0, vat = 0, total = 0;
+  {% for item in report.items %}
+  excl  += {{ item.amount }};
+  vat   += {{ item.vat_amount }};
+  total += {{ item.total_amount }};
+  {% endfor %}
+  function fmt(n) {
+    return '₺' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.').replace(/\.(\d{2})$/, ',$1');
+  }
+  function setEl(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+  setEl('summaryExcl',  fmt(Math.round(excl*100)/100));
+  setEl('summaryVat',   fmt(Math.round(vat*100)/100));
+  setEl('summaryTotal', fmt(Math.round(total*100)/100));
+})();
+{% endif %}
+</script>
+{% endblock %}

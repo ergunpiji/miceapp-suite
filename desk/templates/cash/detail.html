@@ -1,0 +1,593 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .nav-tabs-custom { border-bottom:2px solid #e2e8f0; margin-bottom:0; }
+  .nav-tabs-custom .nav-link { color:#64748b; font-size:13.5px; font-weight:600; padding:8px 18px; border:none; border-bottom:2px solid transparent; margin-bottom:-2px; border-radius:0; }
+  .nav-tabs-custom .nav-link.active { color:#1e40af; border-bottom-color:#1e40af; background:none; }
+  .nav-tabs-custom .nav-link:hover { color:#1e293b; }
+
+  .filter-bar { background:#fff; border-bottom:1px solid #e2e8f0; padding:12px 16px; }
+
+  .entries-card table { margin:0; }
+  .entries-card thead th { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#64748b; padding:10px 14px; border-bottom:2px solid #e2e8f0; white-space:nowrap; background:#fafafa; }
+  .entries-card tbody td { padding:10px 14px; border-bottom:1px solid #f1f5f9; font-size:13.5px; vertical-align:middle; }
+  .entries-card tbody tr:last-child td { border-bottom:none; }
+  .entries-card tbody tr:hover { background:#f8fafc; }
+  .entries-card tbody tr.closed-row td { background:#fafafa; color:#94a3b8; }
+
+  .pill { display:inline-block; width:28px; height:16px; border-radius:4px; }
+  .pill.giris { background:#16a34a; }
+  .pill.cikis { background:#dc2626; }
+  .amt-giris { color:#16a34a; font-weight:700; }
+  .amt-cikis { color:#dc2626; font-weight:700; }
+
+  .action-btn { background:none; border:1px solid #e2e8f0; border-radius:6px; padding:3px 7px; cursor:pointer; color:#64748b; font-size:13px; transition:all .12s; }
+  .action-btn:hover { border-color:#94a3b8; color:#1e293b; }
+  .action-btn.del:hover { border-color:#fca5a5; color:#dc2626; background:#fef2f2; }
+
+  .daily-table table { margin:0; }
+  .daily-table thead th { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#64748b; padding:10px 14px; border-bottom:2px solid #e2e8f0; white-space:nowrap; background:#fafafa; }
+  .daily-table tbody td { padding:10px 14px; border-bottom:1px solid #f1f5f9; font-size:13.5px; vertical-align:middle; }
+  .daily-table tbody tr:last-child td { border-bottom:none; }
+  .daily-table tbody tr.day-open:hover { background:#fefce8; }
+  .daily-table tbody tr.day-closed { background:#f0fdf4; }
+
+  .diff-ok { color:#16a34a; font-weight:600; font-size:12px; }
+  .diff-err { color:#dc2626; font-weight:600; font-size:12px; }
+  .close-info { font-size:11px; color:#64748b; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <!-- Sol: Özet -->
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body text-center py-4">
+        <div class="text-muted small mb-1">Mevcut Bakiye</div>
+        <div class="fs-1 fw-bold {% if balance >= 0 %}text-success{% else %}text-danger{% endif %}">
+          {{ balance | money }}
+        </div>
+        <div class="text-muted small mt-1">{{ book.currency }}</div>
+        {% if today_closed %}
+        <span class="badge bg-success mt-2 py-1 px-2"><i class="bi bi-lock-fill me-1"></i>Bugün Kapalı</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body">
+        <div class="text-muted small fw-semibold mb-2">Filtreli Dönem</div>
+        <div class="d-flex gap-3">
+          <div>
+            <div class="text-muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Toplam Giriş</div>
+            <div class="fw-bold text-success fs-6">{{ toplam_giris | money }}</div>
+          </div>
+          <div class="vr"></div>
+          <div>
+            <div class="text-muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Toplam Çıkış</div>
+            <div class="fw-bold text-danger fs-6">{{ toplam_cikis | money }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {% if not today_closed %}
+    <button class="btn btn-success w-100 mb-2" data-bs-toggle="modal" data-bs-target="#addEntryModal">
+      <i class="bi bi-plus-lg me-1"></i>Hareket Ekle
+    </button>
+    {% endif %}
+    {% if can_edit(request, 'cash') %}
+    <button class="btn btn-outline-info w-100 mb-2" id="leftOzetBtn">
+      <i class="bi bi-calendar-day me-1"></i>Bugünkü Özet
+    </button>
+    {% if not today_closed %}
+    <button class="btn btn-outline-warning w-100" data-bs-toggle="modal" data-bs-target="#closeModal">
+      <i class="bi bi-lock me-1"></i>Gün Sonu Kapat
+    </button>
+    {% endif %}
+    {% endif %}
+  </div>
+
+  <!-- Sağ: Hareketler / Günlük Özet -->
+  <div class="col-md-8">
+    <div class="card border-0 shadow-sm entries-card">
+      <div class="card-header bg-transparent border-0 pb-0 pt-3 px-3">
+        <ul class="nav nav-tabs-custom mb-0">
+          <li class="nav-item">
+            <a class="nav-link {% if tab != 'gunluk' %}active{% endif %}"
+               href="/cash/{{ book.id }}?tab=hareketler">
+              <i class="bi bi-list-ul me-1"></i>Hareketler
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if tab == 'gunluk' %}active{% endif %}"
+               href="/cash/{{ book.id }}?tab=gunluk">
+              <i class="bi bi-calendar-check me-1"></i>Günlük Özet
+            </a>
+          </li>
+        </ul>
+      </div>
+
+      {% if tab != 'gunluk' %}
+      <!-- Filtre -->
+      <div class="filter-bar">
+        <form method="get" class="d-flex align-items-center gap-2 flex-wrap">
+          <input type="hidden" name="tab" value="hareketler">
+          <select name="type_filter" class="form-select form-select-sm" style="width:140px">
+            <option value="" {% if not type_filter %}selected{% endif %}>Tür: Hepsi</option>
+            <option value="giris"  {% if type_filter=='giris' %}selected{% endif %}>Giriş</option>
+            <option value="cikis"  {% if type_filter=='cikis' %}selected{% endif %}>Çıkış</option>
+          </select>
+          <select name="category_filter" class="form-select form-select-sm" style="width:160px">
+            <option value="" {% if not category_filter %}selected{% endif %}>Kategori: Hepsi</option>
+            {% for cat in all_categories %}
+            <option value="{{ cat }}" {% if category_filter==cat %}selected{% endif %}>{{ cat }}</option>
+            {% endfor %}
+          </select>
+          <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm" style="width:135px">
+          <input type="date" name="date_to"   value="{{ date_to }}"   class="form-control form-control-sm" style="width:135px">
+          <button type="submit" class="btn btn-primary btn-sm px-3">Filtrele</button>
+          <a href="/cash/{{ book.id }}" class="btn btn-outline-secondary btn-sm">Temizle</a>
+        </form>
+      </div>
+
+      <!-- Hareket Tablosu -->
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>Tarih</th>
+              <th>Tür</th>
+              <th>Kategori</th>
+              <th>Açıklama</th>
+              <th>İlgili Taraf</th>
+              <th class="text-end">Tutar</th>
+              <th style="width:80px"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in entries %}
+            {% set is_closed = e.entry_date in closed_dates %}
+            <tr {% if is_closed %}class="closed-row"{% endif %}>
+              <td>
+                {{ e.entry_date | date_tr }}
+                {% if is_closed %}<i class="bi bi-lock-fill ms-1" style="font-size:11px;color:#94a3b8" title="Kapalı gün"></i>{% endif %}
+              </td>
+              <td><span class="pill {{ e.entry_type }}"></span></td>
+              <td>
+                {% if e.category %}
+                <span style="font-size:12px;color:#374151">{{ e.category }}</span>
+                {% else %}—{% endif %}
+              </td>
+              <td>{{ e.description or '—' }}</td>
+              <td style="font-size:13px;color:#374151">{{ e.related_party or '—' }}</td>
+              <td class="text-end {% if e.entry_type=='giris' %}amt-giris{% else %}amt-cikis{% endif %}">
+                {% if e.entry_type=='giris' %}+{% else %}-{% endif %}{{ e.amount | money }}
+              </td>
+              <td class="text-end">
+                {% if can_edit(request, 'cash') and not is_closed %}
+                <button class="action-btn me-1" title="Düzenle"
+                        onclick="openEdit({{ e.id }}, '{{ e.entry_date }}', '{{ e.entry_type }}', {{ e.amount }}, '{{ (e.description or '') | replace("'","") }}', '{{ (e.category or '') | replace("'","") }}', '{{ (e.related_party or '') | replace("'","") }}')">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                <form method="post" action="/cash/{{ book.id }}/entry/{{ e.id }}/delete" class="d-inline">
+                  <button type="button" class="action-btn del" title="Sil"
+                          onclick="if(confirm('Bu hareket silinsin mi?')) this.closest('form').submit()">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+                {% elif is_closed %}
+                <span style="font-size:11px;color:#94a3b8"><i class="bi bi-lock"></i></span>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="text-center text-muted py-5">Hareket bulunamadı.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% else %}
+      <!-- Günlük Özet -->
+      <div class="card-body p-0 daily-table">
+        {% if not daily_rows %}
+        <div class="text-center text-muted py-5">Henüz hiç hareket kaydedilmemiş.</div>
+        {% else %}
+        <table class="table mb-0">
+          <thead>
+            <tr>
+              <th>Tarih</th>
+              <th class="text-end">Açılış</th>
+              <th class="text-end text-success">Giriş</th>
+              <th class="text-end text-danger">Çıkış</th>
+              <th class="text-end">Kapanış</th>
+              <th class="text-end">Sayım</th>
+              <th class="text-end">Fark</th>
+              <th class="text-center">Durum</th>
+              {% if can_edit(request, 'cash') %}<th style="width:100px"></th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in daily_rows | reverse %}
+            <tr class="{% if row.close_rec %}day-closed{% else %}day-open{% endif %}">
+              <td class="fw-semibold">{{ row.date | date_tr }}</td>
+              <td class="text-end text-muted" style="font-size:13px">{{ row.opening | money }}</td>
+              <td class="text-end amt-giris">+{{ row.giris | money }}</td>
+              <td class="text-end amt-cikis">-{{ row.cikis | money }}</td>
+              <td class="text-end fw-bold">{{ row.closing | money }}</td>
+              <td class="text-end">
+                {% if row.close_rec %}
+                {{ row.close_rec.physical_count | money }}
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                {% if row.close_rec %}
+                {% set diff = row.close_rec.difference %}
+                <span class="{% if diff == 0 %}diff-ok{% else %}diff-err{% endif %}">
+                  {% if diff > 0 %}+{% endif %}{{ diff | money }}
+                </span>
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                {% if row.close_rec %}
+                <span class="badge bg-success"><i class="bi bi-lock-fill me-1"></i>Kapalı</span>
+                {% else %}
+                <span class="badge bg-warning text-dark"><i class="bi bi-unlock me-1"></i>Açık</span>
+                {% endif %}
+              </td>
+              {% if can_edit(request, 'cash') %}
+              {% set phys = row.close_rec.physical_count if row.close_rec else 'null' %}
+              {% set fdiff = row.close_rec.difference if row.close_rec else 'null' %}
+              <td class="text-end">
+                <div class="d-flex gap-1 justify-content-end align-items-center">
+                  <button class="btn btn-outline-info btn-sm py-0"
+                          onclick="openDailySummary('{{ row.date }}', {{ row.opening }}, {{ row.closing }}, {{ row.giris }}, {{ row.cikis }}, {{ phys }}, {{ fdiff }})">
+                    <i class="bi bi-eye"></i>
+                  </button>
+                  {% if not row.close_rec %}
+                  <button class="btn btn-outline-warning btn-sm py-0"
+                          onclick="openCloseModal('{{ row.date }}', {{ row.closing }})">
+                    <i class="bi bi-lock me-1"></i>Kapat
+                  </button>
+                  {% else %}
+                  <span class="close-info" title="{{ row.close_rec.closed_at.strftime('%d.%m.%Y %H:%M') if row.close_rec.closed_at else '' }}">
+                    <i class="bi bi-person me-1"></i>{{ row.close_rec.closer.name if row.close_rec.closer else '—' }}
+                  </span>
+                  {% endif %}
+                </div>
+              </td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: Hareket Ekle ══ -->
+<div class="modal fade" id="addEntryModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Hareket Ekle</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/cash/{{ book.id }}/entry">
+        <div class="modal-body">
+          {% if today_closed %}
+          <div class="alert alert-warning py-2" style="font-size:13px">
+            <i class="bi bi-lock me-1"></i>Bugün kapalı — geçmiş açık bir güne işlem girebilirsiniz.
+          </div>
+          {% endif %}
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label small">Tarih <span class="text-danger">*</span></label>
+              <input type="date" name="entry_date" id="add_date" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label small">Tür <span class="text-danger">*</span></label>
+              <select name="entry_type" class="form-select form-select-sm">
+                <option value="giris">Giriş (+)</option>
+                <option value="cikis">Çıkış (-)</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label small">Tutar <span class="text-danger">*</span></label>
+              <input type="number" name="amount" step="0.01" min="0.01"
+                     class="form-control form-control-sm" placeholder="0,00" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label small">Kategori</label>
+              <input type="text" name="category" class="form-control form-control-sm"
+                     placeholder="avans, tahsilat…" list="cat-list">
+              <datalist id="cat-list">
+                {% for cat in all_categories %}<option value="{{ cat }}">{% endfor %}
+              </datalist>
+            </div>
+            <div class="col-12">
+              <label class="form-label small">İlgili Taraf</label>
+              <input type="text" name="related_party" class="form-control form-control-sm" placeholder="Kişi veya firma adı">
+            </div>
+            <div class="col-12">
+              <label class="form-label small">Açıklama</label>
+              <input type="text" name="description" class="form-control form-control-sm" placeholder="Açıklama">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-success btn-sm px-4">Kaydet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: Hareketi Düzenle ══ -->
+<div class="modal fade" id="editEntryModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title"><i class="bi bi-pencil me-2"></i>Hareketi Düzenle</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="editForm">
+        <div class="modal-body">
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label small">Tarih</label>
+              <input type="date" name="entry_date" id="edit_date" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label small">Tür</label>
+              <select name="entry_type" id="edit_type" class="form-select form-select-sm">
+                <option value="giris">Giriş (+)</option>
+                <option value="cikis">Çıkış (-)</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label small">Tutar</label>
+              <input type="number" name="amount" id="edit_amount" step="0.01" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label small">Kategori</label>
+              <input type="text" name="category" id="edit_category" class="form-control form-control-sm" list="cat-list">
+            </div>
+            <div class="col-12">
+              <label class="form-label small">İlgili Taraf</label>
+              <input type="text" name="related_party" id="edit_party" class="form-control form-control-sm">
+            </div>
+            <div class="col-12">
+              <label class="form-label small">Açıklama</label>
+              <input type="text" name="description" id="edit_desc" class="form-control form-control-sm">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-primary btn-sm px-4">Güncelle</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: Günlük Özet ══ -->
+<div class="modal fade" id="dailySummaryModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header" style="background:linear-gradient(135deg,#1a3a5c,#1e5f8c);color:#fff;border-radius:8px 8px 0 0">
+        <h6 class="modal-title" id="summaryModalTitle"><i class="bi bi-calendar-day me-2"></i>Günlük Özet</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <div class="d-flex gap-0" style="border-bottom:1px solid #e2e8f0">
+          <div class="text-center py-3 flex-fill" style="border-right:1px solid #e2e8f0">
+            <div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Açılış</div>
+            <div id="s_opening" style="font-size:18px;font-weight:800;margin-top:2px">—</div>
+          </div>
+          <div class="text-center py-3 flex-fill" style="border-right:1px solid #e2e8f0">
+            <div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Giriş</div>
+            <div id="s_giris" style="font-size:18px;font-weight:800;margin-top:2px;color:#16a34a">—</div>
+          </div>
+          <div class="text-center py-3 flex-fill" style="border-right:1px solid #e2e8f0">
+            <div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Çıkış</div>
+            <div id="s_cikis" style="font-size:18px;font-weight:800;margin-top:2px;color:#dc2626">—</div>
+          </div>
+          <div class="text-center py-3 flex-fill">
+            <div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Kapanış</div>
+            <div id="s_closing" style="font-size:18px;font-weight:800;margin-top:2px">—</div>
+          </div>
+        </div>
+        <div id="s_countRow" class="d-none d-flex gap-0" style="border-bottom:1px solid #e2e8f0;background:#f0fdf4">
+          <div class="text-center py-2 flex-fill" style="border-right:1px solid #e2e8f0">
+            <div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase">Fiziksel Sayım</div>
+            <div id="s_physical" style="font-size:15px;font-weight:700;margin-top:1px">—</div>
+          </div>
+          <div class="text-center py-2 flex-fill">
+            <div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase">Fark</div>
+            <div id="s_diff" style="font-size:15px;font-weight:700;margin-top:1px">—</div>
+          </div>
+        </div>
+        <div style="padding:0">
+          <table class="table table-sm mb-0">
+            <thead style="background:#fafafa;position:sticky;top:0">
+              <tr>
+                <th style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;padding:8px 14px">Tür</th>
+                <th style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;padding:8px 14px">Kategori</th>
+                <th style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;padding:8px 14px">Açıklama</th>
+                <th style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;padding:8px 14px">İlgili Taraf</th>
+                <th style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;padding:8px 14px;text-align:right">Tutar</th>
+              </tr>
+            </thead>
+            <tbody id="summaryTableBody">
+              <tr><td colspan="5" class="text-center text-muted py-4">Hareket yok.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <a id="excelExportBtn" href="#" class="btn btn-success btn-sm px-3">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel İndir
+        </a>
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Kapat</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: Gün Sonu Kapat ══ -->
+<div class="modal fade" id="closeModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header" style="background:linear-gradient(135deg,#1a3a5c,#1e5f8c);color:#fff;border-radius:8px 8px 0 0">
+        <h6 class="modal-title"><i class="bi bi-lock me-2"></i>Gün Sonu Kapatma</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/cash/{{ book.id }}/close">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Kapatılacak Gün</label>
+            <input type="date" name="close_date" id="close_date" class="form-control"
+                   value="{{ today_str }}" required>
+          </div>
+          <div class="alert alert-info py-2 mb-3" style="font-size:13px" id="balanceInfo">
+            <i class="bi bi-info-circle me-1"></i>
+            Sistem bakiyesi: <strong>{{ balance | money }}</strong> ₺
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Fiziksel Sayım (₺) <span class="text-danger">*</span></label>
+            <input type="number" name="physical_count" step="0.01" class="form-control"
+                   placeholder="Kasadaki gerçek nakit miktarı" required>
+            <div class="form-text">Kasada saydığınız gerçek nakit tutarını girin.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Not</label>
+            <textarea name="notes" class="form-control form-control-sm" rows="2" placeholder="İsteğe bağlı not…"></textarea>
+          </div>
+          <div class="alert alert-warning py-2" style="font-size:12px">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            Gün kapatıldıktan sonra o güne ait hareket eklenemez, düzenlenemez veya silinemez.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-warning btn-sm px-4 fw-bold"
+                  onclick="return confirm('Bu günü kapatmak istediğinizden emin misiniz?')">
+            <i class="bi bi-lock me-1"></i>Günü Kapat
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+const ENTRIES_BY_DATE = {{ entries_json | safe }};
+const BOOK_ID = {{ book.id }};
+
+function _money(v) {
+  return new Intl.NumberFormat('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}).format(v || 0) + ' ₺';
+}
+
+function openDailySummary(dateStr, opening, closing, giris, cikis, physical, diff) {
+  const [y,m,d] = dateStr.split('-');
+  document.getElementById('summaryModalTitle').innerHTML =
+    `<i class="bi bi-calendar-day me-2"></i>Günlük Özet — ${d}.${m}.${y}`;
+  document.getElementById('s_opening').textContent = _money(opening);
+  document.getElementById('s_giris').textContent   = '+' + _money(giris);
+  document.getElementById('s_cikis').textContent   = '-' + _money(cikis);
+  const closingEl = document.getElementById('s_closing');
+  closingEl.textContent = _money(closing);
+  closingEl.style.color = closing >= 0 ? '#16a34a' : '#dc2626';
+  const countRow = document.getElementById('s_countRow');
+  if (physical !== null) {
+    countRow.classList.remove('d-none');
+    document.getElementById('s_physical').textContent = _money(physical);
+    const diffEl = document.getElementById('s_diff');
+    diffEl.textContent = (diff >= 0 ? '+' : '') + _money(diff);
+    diffEl.style.color = diff === 0 ? '#16a34a' : '#dc2626';
+  } else {
+    countRow.classList.add('d-none');
+  }
+  const tbody = document.getElementById('summaryTableBody');
+  const dayEntries = ENTRIES_BY_DATE[dateStr] || [];
+  if (!dayEntries.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">Bu güne ait hareket yok.</td></tr>';
+  } else {
+    tbody.innerHTML = dayEntries.map(e => `
+      <tr>
+        <td style="padding:8px 14px">
+          <span class="badge ${e.type==='giris' ? 'bg-success' : 'bg-danger'}" style="font-size:11px">
+            ${e.type==='giris' ? 'Giriş' : 'Çıkış'}
+          </span>
+        </td>
+        <td style="padding:8px 14px;font-size:13px">${e.cat || '—'}</td>
+        <td style="padding:8px 14px;font-size:13px">${e.desc || '—'}</td>
+        <td style="padding:8px 14px;font-size:13px">${e.party || '—'}</td>
+        <td style="padding:8px 14px;font-size:13px;text-align:right;font-weight:700;color:${e.type==='giris'?'#16a34a':'#dc2626'}">
+          ${e.type==='giris' ? '+' : '-'}${_money(e.amount)}
+        </td>
+      </tr>`).join('');
+  }
+  document.getElementById('excelExportBtn').href = `/cash/${BOOK_ID}/daily-export?export_date=${dateStr}`;
+  new bootstrap.Modal(document.getElementById('dailySummaryModal')).show();
+}
+
+// Sol panel Bugünkü Özet butonu
+(function() {
+  const btn = document.getElementById('leftOzetBtn');
+  if (!btn) return;
+  {% if today_row %}
+  btn.onclick = () => openDailySummary(
+    '{{ today_str }}',
+    {{ today_row.opening }},
+    {{ today_row.closing }},
+    {{ today_row.giris }},
+    {{ today_row.cikis }},
+    {{ today_row.close_rec.physical_count if today_row.close_rec else 'null' }},
+    {{ today_row.close_rec.difference if today_row.close_rec else 'null' }}
+  );
+  {% else %}
+  btn.onclick = () => openDailySummary('{{ today_str }}', 0, 0, 0, 0, null, null);
+  {% endif %}
+})();
+
+document.getElementById('add_date').value = '{{ today_str }}';
+
+function openEdit(id, dt, typ, amt, desc, cat, party) {
+  document.getElementById('editForm').action = `/cash/{{ book.id }}/entry/${id}/edit`;
+  var editDateEl = document.getElementById('edit_date');
+  editDateEl.value = dt;
+  if (editDateEl._flatpickr) editDateEl._flatpickr.setDate(dt, false);
+  document.getElementById('edit_type').value     = typ;
+  document.getElementById('edit_amount').value   = amt;
+  document.getElementById('edit_desc').value     = desc;
+  document.getElementById('edit_category').value = cat;
+  document.getElementById('edit_party').value    = party;
+  new bootstrap.Modal(document.getElementById('editEntryModal')).show();
+}
+
+function openCloseModal(dateStr, systemBalance) {
+  var closeDateEl = document.getElementById('close_date');
+  closeDateEl.value = dateStr;
+  if (closeDateEl._flatpickr) closeDateEl._flatpickr.setDate(dateStr, false);
+  const fmt = new Intl.NumberFormat('tr-TR', {minimumFractionDigits:2}).format(systemBalance);
+  document.getElementById('balanceInfo').innerHTML =
+    `<i class="bi bi-info-circle me-1"></i>Sistem bakiyesi: <strong>${fmt} ₺</strong>`;
+  new bootstrap.Modal(document.getElementById('closeModal')).show();
+}
+</script>
+{% endblock %}

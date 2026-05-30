@@ -1,0 +1,171 @@
+{# Fatura Bölme modalı — list.html, unlinked.html, detail.html'den include edilir.
+   Açılış: openSplitModal(invoiceJson) çağrısıyla. #}
+<div class="modal fade" id="invoiceSplitModal" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <form method="post" id="splitForm" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-scissors me-2"></i>Faturayı Böl</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info d-flex align-items-center gap-3" style="font-size:13px;">
+          <i class="bi bi-info-circle" style="font-size:20px;"></i>
+          <div>
+            <strong id="splitInvVendor"></strong>
+            · Fatura No: <span id="splitInvNo"></span>
+            · Tutar (KDV dahil): <strong id="splitInvTotal"></strong>
+            <div class="text-muted mt-1" style="font-size:11px;">
+              Atama toplamı fatura tutarına eşit olmalı. Kalan tutar için "Tedarikçi Fonu"
+              hedefini seçin — tedarikçi adına ait yıllık havuza otomatik eklenir.
+            </div>
+          </div>
+        </div>
+
+        <input type="hidden" name="allocations_json" id="allocationsJson">
+
+        <table class="table table-sm align-middle">
+          <thead class="table-light">
+            <tr>
+              <th style="width:55%;">Hedef Referans</th>
+              <th class="text-end" style="width:18%;">Tutar (KDV dahil)</th>
+              <th class="text-end" style="width:12%;">KDV %</th>
+              <th class="text-end" style="width:12%;">KDV Hariç</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="splitRowsBody"></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="5">
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addSplitRow()">
+                  <i class="bi bi-plus-lg me-1"></i>Satır Ekle
+                </button>
+              </td>
+            </tr>
+            <tr style="background:#f1f5f9;">
+              <td class="fw-bold text-end">TOPLAM ATANAN:</td>
+              <td class="text-end fw-bold" id="splitTotalAlloc">₺0,00</td>
+              <td></td>
+              <td></td>
+              <td>
+                <span id="splitDiff" class="badge"></span>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">İptal</button>
+        <button type="submit" class="btn btn-primary" id="splitSubmitBtn" disabled>
+          <i class="bi bi-check-lg me-1"></i>Böl
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function(){
+  let SPLIT_REFS = null;          // cache: aktif referans listesi
+  let SPLIT_INV  = null;          // current invoice being split
+
+  async function fetchRefs() {
+    if (SPLIT_REFS) return SPLIT_REFS;
+    const r = await fetch('/invoices/api/active-requests');
+    if (!r.ok) { SPLIT_REFS = []; return SPLIT_REFS; }
+    SPLIT_REFS = await r.json();
+    return SPLIT_REFS;
+  }
+
+  function fmt(n){
+    return '₺' + new Intl.NumberFormat('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}).format(n || 0);
+  }
+
+  function buildRefOptions(){
+    let html = '<option value="">— Referans seçin —</option>';
+    html += '<option value="__vendor_fund__" style="font-weight:bold; color:#7c3aed;">🏦 Tedarikçi Fonu (kalan tutarı buraya at)</option>';
+    if (SPLIT_REFS && SPLIT_REFS.length){
+      for (const r of SPLIT_REFS){
+        html += `<option value="${r.id}">${r.request_no} — ${r.event_name} (${r.client_name})</option>`;
+      }
+    }
+    return html;
+  }
+
+  window.addSplitRow = function(prefillAmount){
+    const tbody = document.getElementById('splitRowsBody');
+    const idx = tbody.children.length;
+    const defaultVat = SPLIT_INV ? (SPLIT_INV.vat_rate || 20) : 20;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><select class="form-select form-select-sm split-ref">${buildRefOptions()}</select></td>
+      <td><input type="number" step="0.01" min="0" class="form-control form-control-sm text-end split-incl"
+                 value="${prefillAmount || ''}" oninput="recalcSplit()"></td>
+      <td><input type="number" step="0.1" min="0" class="form-control form-control-sm text-end split-vat"
+                 value="${defaultVat}" oninput="recalcSplit()"></td>
+      <td class="text-end split-excl text-muted" style="font-size:12px;">—</td>
+      <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove(); recalcSplit();">
+        <i class="bi bi-trash"></i>
+      </button></td>
+    `;
+    tbody.appendChild(tr);
+  };
+
+  window.recalcSplit = function(){
+    if (!SPLIT_INV) return;
+    let totalAlloc = 0;
+    document.querySelectorAll('#splitRowsBody tr').forEach(tr => {
+      const incl = parseFloat(tr.querySelector('.split-incl').value || 0);
+      const vat  = parseFloat(tr.querySelector('.split-vat').value || 0);
+      const excl = vat ? incl / (1 + vat / 100) : incl;
+      tr.querySelector('.split-excl').textContent = fmt(excl);
+      totalAlloc += incl;
+    });
+    document.getElementById('splitTotalAlloc').textContent = fmt(totalAlloc);
+    const target = SPLIT_INV.total_amount || 0;
+    const diff = +(target - totalAlloc).toFixed(2);
+    const badge = document.getElementById('splitDiff');
+    if (Math.abs(diff) < 0.01){
+      badge.textContent = '✓ Eşit';
+      badge.className = 'badge bg-success';
+      document.getElementById('splitSubmitBtn').disabled = false;
+    } else {
+      badge.textContent = (diff > 0 ? `Eksik ${fmt(diff)}` : `Fazla ${fmt(-diff)}`);
+      badge.className = 'badge bg-warning text-dark';
+      document.getElementById('splitSubmitBtn').disabled = true;
+    }
+  };
+
+  window.openSplitModal = async function(invoice){
+    SPLIT_INV = invoice;
+    document.getElementById('splitInvVendor').textContent = invoice.vendor_name || '—';
+    document.getElementById('splitInvNo').textContent = invoice.invoice_no || '—';
+    document.getElementById('splitInvTotal').textContent = fmt(invoice.total_amount);
+    document.getElementById('splitForm').action = `/invoices/${invoice.id}/split`;
+    document.getElementById('splitRowsBody').innerHTML = '';
+
+    await fetchRefs();
+    addSplitRow(invoice.total_amount);   // ilk satır = full tutar
+    recalcSplit();
+    new bootstrap.Modal(document.getElementById('invoiceSplitModal')).show();
+  };
+
+  // Form submit'te allocations_json'ı doldur
+  document.getElementById('splitForm').addEventListener('submit', function(e){
+    const allocs = [];
+    document.querySelectorAll('#splitRowsBody tr').forEach(tr => {
+      const rid  = tr.querySelector('.split-ref').value;
+      const incl = parseFloat(tr.querySelector('.split-incl').value || 0);
+      const vat  = parseFloat(tr.querySelector('.split-vat').value || 0);
+      if (!rid || incl <= 0) return;
+      allocs.push({ request_id: rid, amount_incl: incl, vat_rate: vat });
+    });
+    if (!allocs.length){
+      e.preventDefault();
+      alert('En az bir geçerli satır gerekli.');
+      return;
+    }
+    document.getElementById('allocationsJson').value = JSON.stringify(allocs);
+  });
+})();
+</script>

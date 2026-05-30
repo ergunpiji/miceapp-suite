@@ -1,0 +1,411 @@
+{% extends "base.html" %}
+{% block page_title %}Faturalar{% endblock %}
+{% block page_title_block %}Faturalar{% endblock %}
+
+{% block topbar_actions %}
+{% if current_user.role in ('admin','muhasebe_muduru','muhasebe') %}
+<a href="/invoices/new" class="btn btn-primary btn-sm">
+  <i class="bi bi-plus-lg me-1"></i> Yeni Fatura
+</a>
+{% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .inv-table th { font-size:11px; text-transform:uppercase; letter-spacing:.4px;
+                  color:#64748b; background:#f8fafc; white-space:nowrap; }
+  .inv-table td { font-size:13px; vertical-align:middle; }
+  .filter-chip { display:inline-flex; align-items:center; gap:4px; padding:2px 8px;
+                 border-radius:12px; font-size:11px; background:#e2e8f0; color:#475569; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+
+
+  {# ── Filtre Formu ── #}
+  <form method="get" action="/invoices" id="invoiceFilterForm">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body py-3 px-3">
+        <div class="row g-2 align-items-end">
+
+          {# Arama #}
+          <div class="col-12 col-md-4">
+            <label class="form-label mb-1" style="font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase;">
+              Ara
+            </label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text"><i class="bi bi-search"></i></span>
+              <input type="text" name="q" class="form-control" value="{{ q }}"
+                     placeholder="Fatura no, tedarikçi, referans, etkinlik adı…">
+              {% if q %}<button type="button" class="btn btn-outline-secondary" onclick="clearField('q')"><i class="bi bi-x"></i></button>{% endif %}
+            </div>
+          </div>
+
+          {# Durum #}
+          <div class="col-6 col-md-2">
+            <label class="form-label mb-1" style="font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase;">Durum</label>
+            <select name="status_filter" class="form-select form-select-sm">
+              <option value="all" {% if status_filter == 'all' %}selected{% endif %}>Tümü</option>
+              <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>
+                Müdür Onayı Bekliyor{% if pending_count %} ({{ pending_count }}){% endif %}
+              </option>
+              <option value="mudur_approved" {% if status_filter == 'mudur_approved' %}selected{% endif %}>
+                GM Onayı Bekliyor{% if mudur_approved_count %} ({{ mudur_approved_count }}){% endif %}
+              </option>
+              <option value="approved" {% if status_filter == 'approved' %}selected{% endif %}>Onaylandı</option>
+              <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>Reddedildi</option>
+              <option value="cancelled" {% if status_filter == 'cancelled' %}selected{% endif %}>İptal</option>
+            </select>
+          </div>
+
+          {# Tür #}
+          <div class="col-6 col-md-2">
+            <label class="form-label mb-1" style="font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase;">Tür</label>
+            <select name="type_filter" class="form-select form-select-sm">
+              <option value="all" {% if type_filter == 'all' %}selected{% endif %}>Tüm Türler</option>
+              {% for t in invoice_types %}
+              <option value="{{ t.value }}" {% if type_filter == t.value %}selected{% endif %}>{{ t.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          {# Tarih Aralığı #}
+          <div class="col-6 col-md-2">
+            <label class="form-label mb-1" style="font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase;">Tarih (Başlangıç)</label>
+            <input type="date" name="date_from" class="form-control form-control-sm" value="{{ date_from }}">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label mb-1" style="font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase;">Tarih (Bitiş)</label>
+            <input type="date" name="date_to" class="form-control form-control-sm" value="{{ date_to }}">
+          </div>
+
+        </div>
+
+        {# Butonlar + aktif filtre chip'leri #}
+        <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-search me-1"></i>Filtrele
+          </button>
+          {% if q or status_filter != 'all' or type_filter != 'all' or date_from or date_to %}
+          <a href="/invoices" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-x-circle me-1"></i>Filtreleri Temizle
+          </a>
+          {# Aktif filtreler #}
+          {% if status_filter != 'all' %}
+          <span class="filter-chip">Durum: <strong>
+            {% if status_filter == 'pending' %}Müdür Onayı Bekliyor
+            {% elif status_filter == 'mudur_approved' %}GM Onayı Bekliyor
+            {% elif status_filter == 'approved' %}Onaylandı
+            {% elif status_filter == 'rejected' %}Reddedildi
+            {% else %}{{ status_filter }}{% endif %}
+          </strong></span>
+          {% endif %}
+          {% if type_filter != 'all' %}
+          <span class="filter-chip">Tür: <strong>{% for t in invoice_types %}{% if t.value == type_filter %}{{ t.label }}{% endif %}{% endfor %}</strong></span>
+          {% endif %}
+          {% if q %}<span class="filter-chip">Arama: <strong>{{ q }}</strong></span>{% endif %}
+          {% if date_from %}<span class="filter-chip">Başlangıç: <strong>{{ date_from[8:10] }}.{{ date_from[5:7] }}.{{ date_from[0:4] }}</strong></span>{% endif %}
+          {% if date_to %}<span class="filter-chip">Bitiş: <strong>{{ date_to[8:10] }}.{{ date_to[5:7] }}.{{ date_to[0:4] }}</strong></span>{% endif %}
+          {% endif %}
+          <span class="text-muted ms-auto" style="font-size:12px;">{{ invoices | length }} fatura</span>
+        </div>
+
+      </div>
+    </div>
+
+    {# Hızlı durum butonları — onay bekleyenler için #}
+    {% if pending_count > 0 or mudur_approved_count > 0 %}
+    <div class="d-flex gap-2 mb-3 flex-wrap">
+      {% if pending_count > 0 %}
+      <button type="button" class="btn btn-warning btn-sm"
+              onclick="setStatus('pending')">
+        <i class="bi bi-clock me-1"></i>Müdür Onayı Bekliyor
+        <span class="badge bg-white text-warning ms-1">{{ pending_count }}</span>
+      </button>
+      {% endif %}
+      {% if mudur_approved_count > 0 and can_gm_approve %}
+      <button type="button" class="btn btn-info btn-sm"
+              onclick="setStatus('mudur_approved')">
+        <i class="bi bi-clock me-1"></i>GM Onayı Bekliyor
+        <span class="badge bg-white text-info ms-1">{{ mudur_approved_count }}</span>
+      </button>
+      {% endif %}
+    </div>
+    {% endif %}
+
+  </form>
+
+  {# ── Tablo ── #}
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      {% if invoices %}
+      <div class="table-responsive">
+        <table class="table table-hover mb-0 inv-table">
+          <thead>
+            <tr>
+              <th class="ps-3">Referans</th>
+              <th>Fatura No</th>
+              <th>Tedarikçi / Müşteri</th>
+              <th>Tür</th>
+              <th>Tarih</th>
+              <th class="text-end">Tutar (KDV hariç)</th>
+              <th class="text-end">Tutar (KDV dahil)</th>
+              <th class="text-center">Durum</th>
+              <th class="text-center pe-3">İşlem</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for inv in invoices %}
+            {% set type_colors = {
+              'kesilen': 'success', 'gelen': 'primary',
+              'komisyon': 'info', 'iade_kesilen': 'warning', 'iade_gelen': 'secondary'
+            } %}
+            <tr>
+              <td class="ps-3">
+                <a href="/requests/{{ inv.request_id }}#tab-financial"
+                   class="text-decoration-none fw-semibold text-primary">
+                  {{ inv.request.request_no if inv.request else '—' }}
+                </a>
+                {% if inv.request %}
+                <div class="small text-muted">{{ inv.request.event_name }}</div>
+                {% endif %}
+              </td>
+              <td>
+                <a href="/invoices/{{ inv.id }}/detail" class="fw-semibold text-decoration-none text-dark">
+                  {{ inv.invoice_no or '—' }}
+                </a>
+                {% if inv.document_path %}
+                <a href="/invoices/{{ inv.id }}/document" target="_blank"
+                   class="ms-1 text-muted" title="Belgeyi Görüntüle">
+                  <i class="bi bi-file-earmark-pdf"></i>
+                </a>
+                {% endif %}
+              </td>
+              <td>{{ inv.vendor_name or '—' }}</td>
+              <td>
+                <span class="badge bg-{{ type_colors.get(inv.invoice_type, 'secondary') }}-subtle
+                             text-{{ type_colors.get(inv.invoice_type, 'secondary') }}"
+                      style="font-size:11px; border:1px solid currentColor; opacity:.85;">
+                  {{ INVOICE_TYPE_LABELS.get(inv.invoice_type, inv.invoice_type) }}
+                </span>
+              </td>
+              <td class="text-muted">
+                {% if inv.invoice_date %}
+                  {{ inv.invoice_date[8:10] }}.{{ inv.invoice_date[5:7] }}.{{ inv.invoice_date[0:4] }}
+                {% else %}—{% endif %}
+              </td>
+              <td class="text-end">
+                ₺{{ '{:,.2f}'.format(inv.amount).replace(',', '.') }}
+              </td>
+              <td class="text-end fw-semibold">
+                ₺{{ '{:,.2f}'.format(inv.total_amount).replace(',', '.') }}
+              </td>
+              <td class="text-center">
+                {% if inv.status == 'pending' %}
+                  <span class="badge bg-warning text-dark">Müdür Onayı Bekliyor</span>
+                {% elif inv.status == 'mudur_approved' %}
+                  <span class="badge bg-info text-dark">GM Onayı Bekliyor</span>
+                {% elif inv.status == 'gm_approved' %}
+                  <span class="badge bg-warning text-dark">Onay Bekliyor (Eski)</span>
+                {% elif inv.status == 'approved' %}
+                  <span class="badge bg-success">Onaylandı</span>
+                  {% if inv.approved_at %}
+                  <div class="small text-muted" style="font-size:10px;">
+                    {{ inv.approver.name if inv.approver else '' }}
+                  </div>
+                  {% endif %}
+                {% elif inv.status == 'rejected' %}
+                  <span class="badge bg-danger">Reddedildi</span>
+                  {% if inv.rejection_note %}
+                  <div class="small text-danger" style="font-size:10px;" title="{{ inv.rejection_note }}">
+                    {{ inv.rejection_note[:40] }}{% if inv.rejection_note|length > 40 %}…{% endif %}
+                  </div>
+                  {% endif %}
+                {% elif inv.status == 'cancelled' %}
+                  <span class="badge bg-secondary">İptal</span>
+                {% endif %}
+              </td>
+              <td class="text-center pe-3">
+                <div class="d-flex gap-1 justify-content-center">
+                  {# Referansa git #}
+                  <a href="/requests/{{ inv.request_id }}#tab-financial"
+                     class="btn btn-sm btn-outline-secondary py-0 px-2" title="Referansa Git">
+                    <i class="bi bi-box-arrow-up-right" style="font-size:11px;"></i>
+                  </a>
+
+                  {# Müdür: pending → mudur_approved veya gm_approved (limit'e göre) #}
+                  {% if inv.status == 'pending' and can_mudur_approve %}
+                  <form method="post" action="/invoices/{{ inv.id }}/approve" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-outline-warning py-0 px-2"
+                            title="Onayla"
+                            onclick="return confirm('Fatura talebini onaylıyor musunuz?')">
+                      <i class="bi bi-check2" style="font-size:11px;"></i>
+                    </button>
+                  </form>
+                  {% endif %}
+                  {# Admin (GM): mudur_approved → gm_approved #}
+                  {% if inv.status == 'mudur_approved' and can_gm_approve %}
+                  <form method="post" action="/invoices/{{ inv.id }}/approve" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-2"
+                            title="Admin Olarak Onayla"
+                            onclick="return confirm('Fatura talebini onaylıyor musunuz?')">
+                      <i class="bi bi-check2-all" style="font-size:11px;"></i>
+                    </button>
+                  </form>
+                  {% endif %}
+                  {# Red butonu: pending veya mudur_approved #}
+                  {% if inv.status in ('pending', 'mudur_approved') and can_approve %}
+                  <button class="btn btn-sm btn-outline-danger py-0 px-2" title="Reddet"
+                          onclick="openRejectModal('{{ inv.id }}')">
+                    <i class="bi bi-x" style="font-size:11px;"></i>
+                  </button>
+                  {% endif %}
+
+                  {# Muhasebe: onaylı faturaya belge/detay ekle #}
+                  {% if inv.status in ('approved', 'gm_approved') and can_cut %}
+                  <button class="btn btn-sm btn-outline-secondary py-0 px-2"
+                          title="Belge / Detay Ekle"
+                          onclick="openCutModal('{{ inv.id }}')">
+                    <i class="bi bi-paperclip" style="font-size:11px;"></i>
+                  </button>
+                  {% endif %}
+                  {# Bölme: yetkili roller, gelen fatura, onaylı, henüz bölünmemiş #}
+                  {% if can_split and inv.invoice_type == 'gelen' and inv.status in ('approved', 'active')
+                        and not inv.is_split_parent and not inv.parent_invoice_id %}
+                  <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                          title="Faturayı Böl"
+                          data-invoice='{{ inv.to_dict() | tojson }}'
+                          onclick="openSplitModal(JSON.parse(this.dataset.invoice))">
+                    <i class="bi bi-scissors" style="font-size:11px;"></i>
+                  </button>
+                  {% endif %}
+                  {% if inv.is_split_parent %}
+                  <span class="badge bg-primary bg-opacity-15 text-primary" title="Bölünmüş">
+                    <i class="bi bi-diagram-2"></i>
+                  </span>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-receipt fs-1 d-block mb-2 opacity-25"></i>
+        {% if q or date_from or date_to %}Arama kriterlerine uyan fatura bulunamadı.
+        {% elif status_filter == 'pending' %}Müdür onayı bekleyen fatura yok.
+        {% elif status_filter == 'mudur_approved' %}GM onayı bekleyen fatura yok.
+        {% elif status_filter != 'all' %}Bu filtreye uyan fatura bulunamadı.
+        {% else %}Henüz fatura girilmemiş.{% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+{# ── Red Modal ── #}
+<div class="modal fade" id="rejectModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title">Fatura Reddet</h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="rejectForm">
+        <div class="modal-body">
+          <textarea name="rejection_note" class="form-control form-control-sm"
+                    rows="3" placeholder="Red gerekçesi (opsiyonel)"></textarea>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-sm btn-danger">Reddet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# ── Fatura Bölme Modal ── #}
+{% if can_split %}
+{% include "invoices/_split_modal.html" %}
+{% endif %}
+
+{# ── Fatura Kes Modal (muhasebe) ── #}
+{% if can_cut %}
+<div class="modal fade" id="cutInvoiceModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title"><i class="bi bi-paperclip me-2 text-secondary"></i>Fatura Detayı / Belge Ekle</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="cutInvoiceForm" enctype="multipart/form-data">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:13px;">Fatura No</label>
+            <input type="text" name="invoice_no" class="form-control form-control-sm"
+                   placeholder="Fatura numarası">
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold" style="font-size:13px;">Fatura Tarihi</label>
+              <input type="date" name="invoice_date" class="form-control form-control-sm">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold" style="font-size:13px;">Vade Tarihi</label>
+              <input type="date" name="due_date" class="form-control form-control-sm">
+            </div>
+          </div>
+          <div class="mb-1">
+            <label class="form-label fw-semibold" style="font-size:13px;">
+              Fatura PDF / Belge
+              <span class="text-muted fw-normal ms-1">(isteğe bağlı)</span>
+            </label>
+            <input type="file" name="document" class="form-control form-control-sm"
+                   accept=".pdf,.jpg,.jpeg,.png,.gif,.webp">
+            <div class="form-text" style="font-size:11px;">PDF veya resim — maks. 10 MB</div>
+          </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-sm btn-primary">
+            <i class="bi bi-check-lg me-1"></i>Kaydet
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script>
+function setStatus(val) {
+  document.querySelector('select[name=status_filter]').value = val;
+  document.getElementById('invoiceFilterForm').submit();
+}
+function clearField(name) {
+  document.querySelector('[name=' + name + ']').value = '';
+  document.getElementById('invoiceFilterForm').submit();
+}
+function openRejectModal(invId) {
+  document.getElementById('rejectForm').action = '/invoices/' + invId + '/reject';
+  new bootstrap.Modal(document.getElementById('rejectModal')).show();
+}
+{% if can_cut %}
+function openCutModal(invoiceId) {
+  const form = document.getElementById('cutInvoiceForm');
+  form.action = '/invoices/' + invoiceId + '/cut';
+  // Tarihi bugüne ayarla
+  const today = new Date().toISOString().slice(0, 10);
+  const dateInput = form.querySelector('input[name=invoice_date]');
+  if (dateInput && !dateInput.value) dateInput.value = today;
+  new bootstrap.Modal(document.getElementById('cutInvoiceModal')).show();
+}
+{% endif %}
+</script>
+{% endblock %}

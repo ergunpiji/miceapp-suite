@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}HR Ajanı{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="app-layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">HR</div>
+      <div class="sidebar-title">İnsan<br>Kaynakları</div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="/dashboard" class="nav-item {% if active == 'dashboard' %}active{% endif %}">
+        <span class="nav-icon">📊</span> Dashboard
+      </a>
+
+      {% if user.role in ('hr_admin', 'hr_manager') %}
+      <div class="nav-section">Çalışanlar</div>
+
+      <a href="/employees" class="nav-item {% if active == 'employees' %}active{% endif %}">
+        <span class="nav-icon">👥</span> Çalışanlar
+      </a>
+      <a href="/assets" class="nav-item {% if active == 'assets' %}active{% endif %}">
+        <span class="nav-icon">💼</span> Zimmet Takibi
+      </a>
+
+      <div class="nav-section">İzin & Mesai</div>
+
+      <a href="/leaves" class="nav-item {% if active == 'leaves' %}active{% endif %}">
+        <span class="nav-icon">🏖️</span> İzin Yönetimi
+      </a>
+      <a href="/payroll/overtime/list" class="nav-item {% if active == 'overtime' %}active{% endif %}">
+        <span class="nav-icon">⏰</span> Fazla Mesai
+      </a>
+
+      <div class="nav-section">Finans</div>
+
+      <a href="/payroll" class="nav-item {% if active == 'payroll' %}active{% endif %}">
+        <span class="nav-icon">💰</span> Bordro
+      </a>
+      <a href="/benefits/meal-cards" class="nav-item {% if active == 'benefits' %}active{% endif %}">
+        <span class="nav-icon">🍽️</span> Yemek & Yan Haklar
+      </a>
+      <a href="/advances" class="nav-item {% if active == 'advances' %}active{% endif %}">
+        <span class="nav-icon">💸</span> Avans Yönetimi
+      </a>
+
+      {% else %}
+      <div class="nav-section">Bilgilerim</div>
+
+      {% if user.employee %}
+      <a href="/employees/{{ user.employee.id }}" class="nav-item {% if active == 'employees' %}active{% endif %}">
+        <span class="nav-icon">👤</span> Profilim & Belgelerim
+      </a>
+      <a href="/assets?status=active" class="nav-item {% if active == 'assets' %}active{% endif %}">
+        <span class="nav-icon">💼</span> Zimmetlerim
+      </a>
+      {% endif %}
+
+      <div class="nav-section">İzin & Mesai</div>
+
+      <a href="/leaves" class="nav-item {% if active == 'leaves' %}active{% endif %}">
+        <span class="nav-icon">🏖️</span> İzin Taleplerim
+      </a>
+      <a href="/payroll/overtime/list" class="nav-item {% if active == 'overtime' %}active{% endif %}">
+        <span class="nav-icon">⏰</span> Fazla Mesailerim
+      </a>
+
+      <div class="nav-section">Finans</div>
+
+      <a href="/payroll" class="nav-item {% if active == 'payroll' %}active{% endif %}">
+        <span class="nav-icon">💰</span> Maaş Slipim
+      </a>
+      <a href="/benefits/flexible" class="nav-item {% if active == 'benefits' %}active{% endif %}">
+        <span class="nav-icon">🎁</span> Yan Haklarım
+      </a>
+      <a href="/advances" class="nav-item {% if active == 'advances' %}active{% endif %}">
+        <span class="nav-icon">💸</span> Avans Taleplerim
+      </a>
+      {% endif %}
+
+      <div class="nav-section">Hesap</div>
+
+      <a href="/notifications" class="nav-item {% if active == 'notifications' %}active{% endif %}">
+        <span class="nav-icon">🔔</span> Bildirimler
+        {% if unread_count > 0 %}
+        <span class="notif-badge">{{ unread_count }}</span>
+        {% endif %}
+      </a>
+      <a href="/auth/logout" class="nav-item nav-item-danger">
+        <span class="nav-icon">🚪</span> Çıkış
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Ana içerik -->
+  <main class="main-content">
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+<script src="/static/js/app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

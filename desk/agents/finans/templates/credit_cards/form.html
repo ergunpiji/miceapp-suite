@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Kart Düzenle' if card else 'Yeni Kart' }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div><div class="page-title">{{ '✏️ Kart Düzenle' if card else '➕ Yeni Kredi Kartı' }}</div></div>
+  <a href="/credit-cards" class="btn btn-outline">← Geri</a>
+</div>
+
+<div class="card" style="max-width:560px">
+  <div class="card-body">
+    <form method="post" action="{{ ('/credit-cards/' + card.id + '/edit') if card else '/credit-cards/new' }}">
+      <div class="form-grid">
+        <div class="form-group form-grid-full">
+          <label>Kart Adı / Takma Ad *</label>
+          <input name="name" required value="{{ card.name if card else '' }}" placeholder="Yapı Kredi Kurumsal">
+        </div>
+        <div class="form-group">
+          <label>Banka</label>
+          <input name="bank" value="{{ card.bank or '' }}">
+        </div>
+        <div class="form-group">
+          <label>Son 4 Hane</label>
+          <input name="last_four" maxlength="4" value="{{ card.last_four or '' }}" placeholder="1234">
+        </div>
+        <div class="form-group">
+          <label>Kredi Limiti (₺)</label>
+          <input name="credit_limit" type="number" step="0.01" min="0" value="{{ card.credit_limit if card else 0 }}">
+        </div>
+        <div class="form-group">
+          <label>Ekstre Kesim Günü</label>
+          <input name="billing_day" type="number" min="1" max="31" value="{{ card.billing_day if card else 1 }}">
+        </div>
+        <div class="form-group">
+          <label>Son Ödeme (kesimden +gün)</label>
+          <input name="due_day_offset" type="number" min="1" max="30" value="{{ card.due_day_offset if card else 10 }}">
+        </div>
+        {% if card %}
+        <div class="form-group">
+          <label>Aktif</label>
+          <select name="is_active">
+            <option value="true"  {{ 'selected' if card.is_active }}>Evet</option>
+            <option value="false" {{ 'selected' if not card.is_active }}>Hayır</option>
+          </select>
+        </div>
+        {% endif %}
+        <div class="form-group form-grid-full">
+          <label>Notlar</label>
+          <textarea name="notes">{{ card.notes or '' }}</textarea>
+        </div>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary">💾 Kaydet</button>
+        <a href="/credit-cards" class="btn btn-secondary">İptal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

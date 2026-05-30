@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block page_title %}İzin Türleri{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#newTypeModal">
+  <i class="bi bi-plus-lg me-1"></i>Yeni Tür
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0" style="font-size:13px">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">İzin Türü</th>
+          <th>Ücretli</th>
+          <th>Bakiyeden Düşer</th>
+          <th>Rapor Zorunlu</th>
+          <th>Varsayılan Gün</th>
+          <th>Sıra</th>
+          <th>Durum</th>
+          <th class="pe-3"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in types %}
+        <tr>
+          <td class="ps-3 fw-semibold">
+            <span class="me-2" style="color:{{ t.color }}">&#9679;</span>
+            {{ t.name }}
+            <small class="text-muted">({{ t.code }})</small>
+          </td>
+          <td>{% if t.is_paid %}<span class="badge bg-success">Evet</span>{% else %}<span class="badge bg-warning text-dark">Ücretsiz</span>{% endif %}</td>
+          <td>{% if t.requires_balance %}<i class="bi bi-check-circle text-success"></i>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+          <td>{% if t.requires_report %}<i class="bi bi-check-circle text-danger"></i>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+          <td>{{ t.default_days if t.default_days else '—' }}</td>
+          <td>{{ t.sort_order }}</td>
+          <td><span class="badge {% if t.active %}bg-success{% else %}bg-secondary{% endif %}">{{ 'Aktif' if t.active else 'Pasif' }}</span></td>
+          <td class="pe-3 text-end">
+            <button class="btn btn-sm btn-outline-secondary py-0"
+              onclick="openEdit({{ t.id }}, '{{ t.name|e }}', {{ 'true' if t.is_paid else 'false' }},
+                {{ 'true' if t.requires_balance else 'false' }}, {{ 'true' if t.requires_report else 'false' }},
+                '{{ t.default_days or '' }}', '{{ t.color }}', {{ t.sort_order }}, {{ 'true' if t.active else 'false' }})">
+              Düzenle
+            </button>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="text-center text-muted py-4">Tür bulunamadı.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Yeni Tür Modal -->
+<div class="modal fade" id="newTypeModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background:linear-gradient(135deg,#1a3a5c,#1e5f8c);color:#fff">
+        <h6 class="modal-title">Yeni İzin Türü</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/admin/leaves/types/new">
+        <div class="modal-body">
+          {% include "admin/_leave_type_fields.html" %}
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-primary btn-sm px-4">Kaydet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Düzenle Modal -->
+<div class="modal fade" id="editTypeModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background:linear-gradient(135deg,#1a3a5c,#1e5f8c);color:#fff">
+        <h6 class="modal-title">İzin Türü Düzenle</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="editForm">
+        <div class="modal-body" id="editFields"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-primary btn-sm px-4">Kaydet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function openEdit(id, name, isPaid, reqBal, reqRep, defDays, color, sort, active) {
+  document.getElementById('editForm').action = '/admin/leaves/types/' + id + '/edit';
+  document.getElementById('editFields').innerHTML = `
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Ad</label>
+      <input type="text" name="name" class="form-control" value="${name}" required>
+    </div>
+    <div class="row g-2 mb-3">
+      <div class="col-4"><label class="form-label fw-semibold">Renk</label>
+        <input type="color" name="color" class="form-control form-control-color" value="${color}"></div>
+      <div class="col-4"><label class="form-label fw-semibold">Sıra</label>
+        <input type="number" name="sort_order" class="form-control" value="${sort}"></div>
+      <div class="col-4"><label class="form-label fw-semibold">Varsayılan Gün</label>
+        <input type="number" name="default_days" class="form-control" step="0.5" value="${defDays}"></div>
+    </div>
+    <div class="row g-2 mb-3">
+      <div class="col-6">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" name="is_paid" value="1" id="ep_paid" ${isPaid?'checked':''}>
+          <label class="form-check-label" for="ep_paid">Ücretli</label>
+        </div>
+      </div>
+      <div class="col-6">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" name="requires_balance" value="1" id="ep_bal" ${reqBal?'checked':''}>
+          <label class="form-check-label" for="ep_bal">Bakiyeden Düşer</label>
+        </div>
+      </div>
+      <div class="col-6">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" name="requires_report" value="1" id="ep_rep" ${reqRep?'checked':''}>
+          <label class="form-check-label" for="ep_rep">Rapor Zorunlu</label>
+        </div>
+      </div>
+      <div class="col-6">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" name="active" value="1" id="ep_active" ${active?'checked':''}>
+          <label class="form-check-label" for="ep_active">Aktif</label>
+        </div>
+      </div>
+    </div>`;
+  new bootstrap.Modal(document.getElementById('editTypeModal')).show();
+}
+</script>
+{% endblock %}

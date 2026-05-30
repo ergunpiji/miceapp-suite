@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Katılımcılar — {{ event.name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">👥 Katılımcılar</div>
+    <div class="page-subtitle">{{ participants | length }} katılımcı</div>
+  </div>
+  <div class="btn-group">
+    <a href="{{ base_url }}/events/{{ event.id }}/import" class="btn btn-secondary">📥 Excel Aktar</a>
+    <a href="{{ base_url }}/events/{{ event.id }}/participants/new" class="btn btn-primary">+ Ekle</a>
+  </div>
+</div>
+
+<!-- Filtre -->
+<form method="get" class="filter-bar">
+  <input type="text" name="search" value="{{ search }}" placeholder="İsim, şirket, e-posta..." class="search-input">
+  <select name="status" onchange="this.form.submit()">
+    <option value="">Tüm Durumlar</option>
+    <option value="complete" {% if status_filter == 'complete' %}selected{% endif %}>✅ Tam</option>
+    <option value="warning" {% if status_filter == 'warning' %}selected{% endif %}>⚠️ Eksik</option>
+    <option value="empty" {% if status_filter == 'empty' %}selected{% endif %}>— Boş</option>
+  </select>
+  <button type="submit" class="btn btn-secondary">Filtrele</button>
+  {% if search or status_filter %}
+  <a href="{{ base_url }}/events/{{ event.id }}/participants" class="btn btn-secondary">Temizle</a>
+  {% endif %}
+</form>
+
+{% if participants %}
+<div class="card" style="padding:0">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Ad Soyad</th>
+          <th>Şirket / Unvan</th>
+          <th>İletişim</th>
+          <th>Uçuş</th>
+          <th>Konaklama</th>
+          <th>Transfer</th>
+          <th>Durum</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in participants %}
+        <tr>
+          <td>
+            <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ p.id }}" class="table-link">
+              {{ p.full_name }}
+            </a>
+          </td>
+          <td>
+            {{ p.company or '—' }}
+            {% if p.title %}<br><span style="color:#94a3b8; font-size:11px;">{{ p.title }}</span>{% endif %}
+          </td>
+          <td>
+            {% if p.email %}<div>{{ p.email }}</div>{% endif %}
+            {% if p.phone %}<div style="color:#64748b;">{{ p.phone }}</div>{% endif %}
+            {% if not p.email and not p.phone %}—{% endif %}
+          </td>
+          <td>
+            {% if p.flight_in or p.flight_out %}
+              {% if p.flight_in %}<span class="badge badge-in">↓ {{ p.flight_in.flight_number or '?' }}</span> {% endif %}
+              {% if p.flight_out %}<span class="badge badge-out">↑ {{ p.flight_out.flight_number or '?' }}</span>{% endif %}
+            {% else %}
+              <span style="color:#94a3b8;">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if p.accommodation %}
+              <span style="font-size:12px;">{{ p.accommodation.hotel or '?' }}</span>
+              {% if p.accommodation.room_number %}
+                <span style="color:#94a3b8; font-size:11px;"> #{{ p.accommodation.room_number }}</span>
+              {% endif %}
+            {% else %}
+              <span style="color:#94a3b8;">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% set tr_count = p.transfers | length %}
+            {% if tr_count > 0 %}
+              <span class="badge badge-complete">{{ tr_count }} transfer</span>
+            {% else %}
+              <span style="color:#94a3b8;">—</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge badge-{{ p.status }}">
+              {% if p.status == 'complete' %}✅ Tam
+              {% elif p.status == 'warning' %}⚠️ Eksik
+              {% else %}— Boş{% endif %}
+            </span>
+          </td>
+          <td>
+            <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ p.id }}" class="btn btn-secondary btn-sm">Kart</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <div class="empty-state-icon">👥</div>
+    <div class="empty-state-title">
+      {% if search or status_filter %}Sonuç bulunamadı{% else %}Henüz katılımcı yok{% endif %}
+    </div>
+    <div class="empty-state-text">
+      {% if search or status_filter %}Arama kriterlerinizi değiştirmeyi deneyin.
+      {% else %}Excel'den aktarın veya manuel ekleyin.{% endif %}
+    </div>
+    {% if not search and not status_filter %}
+    <br>
+    <div class="btn-group" style="justify-content:center;">
+      <a href="{{ base_url }}/events/{{ event.id }}/import" class="btn btn-primary">📥 Excel Aktar</a>
+      <a href="{{ base_url }}/events/{{ event.id }}/participants/new" class="btn btn-secondary">+ Manuel Ekle</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

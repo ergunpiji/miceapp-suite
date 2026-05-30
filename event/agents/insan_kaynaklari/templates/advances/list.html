@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Avans Yönetimi — HR Ajanı{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">{% if user.role == 'employee' %}Avans Taleplerim{% else %}Avans Yönetimi{% endif %}</div>
+    <div class="page-subtitle">{{ advances | length }} kayıt</div>
+  </div>
+  <div style="display:flex;gap:8px">
+    <a href="/advances/new?advance_type=maas" class="btn btn-primary">+ Maaş Avansı</a>
+    <a href="/advances/new?advance_type=is" class="btn btn-outline">+ İş Avansı</a>
+  </div>
+</div>
+
+<!-- Çalışan için limit bilgisi -->
+{% if user.role == 'employee' and salary_limit is not none %}
+<div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+  <div class="stat-card" style="flex:1;min-width:160px">
+    <div class="stat-label">Maaş Avansı Limiti (%{{ (SALARY_ADVANCE_LIMIT_RATE * 100) | int }})</div>
+    <div class="stat-value">{{ salary_limit | currency }}</div>
+    <div class="stat-sub">Brüt maaşın %{{ (SALARY_ADVANCE_LIMIT_RATE * 100) | int }}'i</div>
+  </div>
+  <div class="stat-card" style="flex:1;min-width:160px">
+    <div class="stat-label">Kullanılan Avans</div>
+    <div class="stat-value {% if active_used > 0 %}warning{% endif %}">{{ active_used | currency }}</div>
+    <div class="stat-sub">Aktif / beklemede</div>
+  </div>
+  <div class="stat-card" style="flex:1;min-width:160px">
+    <div class="stat-label">Kullanılabilir Limit</div>
+    <div class="stat-value {% if available_limit > 0 %}positive{% else %}negative{% endif %}">{{ available_limit | currency }}</div>
+    <div class="stat-sub">Yeni talep açılabilir</div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Filtreler -->
+<div class="filters-bar">
+  <form method="get" style="display:contents">
+    <select name="advance_type">
+      <option value="">Tüm Türler</option>
+      {% for t in advance_types %}
+      <option value="{{ t.value }}" {% if advance_type_filter == t.value %}selected{% endif %}>{{ t.label }}</option>
+      {% endfor %}
+    </select>
+    <select name="status">
+      <option value="">Tüm Durumlar</option>
+      {% for s in advance_statuses %}
+      <option value="{{ s.value }}" {% if status_filter == s.value %}selected{% endif %}>{{ s.label }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-outline">Filtrele</button>
+    <a href="/advances" class="btn btn-secondary">Temizle</a>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-body" style="padding:0">
+    {% if advances %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            {% if user.role != 'employee' %}<th>Çalışan</th>{% endif %}
+            <th>Tür</th>
+            <th class="text-right">Tutar</th>
+            <th>Talep Tarihi</th>
+            <th>Gereksinim Tarihi</th>
+            <th>Durum</th>
+            <th>Ödeme / Kapatma</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for adv in advances %}
+          <tr>
+            {% if user.role != 'employee' %}
+            <td>
+              <a href="/employees/{{ adv.employee_id }}" style="color:var(--accent)">
+                {{ adv.employee.full_name if adv.employee else '—' }}
+              </a>
+            </td>
+            {% endif %}
+            <td>
+              <span class="badge badge-{% if adv.advance_type == 'maas' %}primary{% else %}info{% endif %}">
+                {{ adv.advance_type_label }}
+              </span>
+            </td>
+            <td class="text-right font-mono">{{ adv.amount | currency }}</td>
+            <td class="nowrap">{{ adv.request_date | fmtdate }}</td>
+            <td class="nowrap">{{ adv.needed_by | fmtdate if adv.needed_by else '—' }}</td>
+            <td>
+              <span class="badge badge-{% if adv.status == 'kapandi' %}success{% elif adv.status == 'odendi' %}info{% elif adv.status == 'onaylandi' %}primary{% elif adv.status == 'reddedildi' %}danger{% elif adv.status == 'iptal' %}neutral{% else %}warning{% endif %}">
+                {{ adv.status_label }}
+              </span>
+            </td>
+            <td class="nowrap">
+              {% if adv.status == 'odendi' and adv.advance_type == 'maas' %}
+                Geri ödenen: {{ adv.repaid_amount | currency }}<br>
+                <small style="color:var(--text-muted)">Kalan: {{ adv.remaining_repayment | currency }}</small>
+              {% elif adv.status in ('odendi', 'kapandi') %}
+                {{ adv.payment_date | fmtdate }}
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              <a href="/advances/{{ adv.id }}" class="btn btn-xs btn-outline">Detay</a>
+              {% if adv.status == 'beklemede' %}
+              <form method="post" action="/advances/{{ adv.id }}/cancel" style="display:inline"
+                    onsubmit="return confirm('Talep iptal edilsin mi?')">
+                <button type="submit" class="btn btn-xs btn-danger">İptal</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">💵</div>
+      <div class="empty-state-text">Avans talebi bulunamadı</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

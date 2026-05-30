@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Bildirimler — HR Ajanı{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Bildirimler</div>
+    <div class="page-subtitle">{{ unread_count }} okunmamış</div>
+  </div>
+  {% if unread_count > 0 %}
+  <form method="post" action="/notifications/read-all">
+    <button type="submit" class="btn btn-outline">Tümünü Okundu İşaretle</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-body" style="padding:0">
+    {% if notifications %}
+    {% for n in notifications %}
+    <div class="notif-item {% if not n.is_read %}notif-unread{% endif %}"
+         style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:flex-start">
+      <div style="font-size:22px;flex-shrink:0">
+        {% if n.notif_type == 'izin_talebi' %}🏖️
+        {% elif n.notif_type == 'izin_onay' %}✅
+        {% elif n.notif_type == 'overtime_talebi' %}⏰
+        {% elif n.notif_type == 'overtime_onay' %}⏱️
+        {% elif n.notif_type == 'zimmet' %}💼
+        {% elif n.notif_type == 'bordro' %}💰
+        {% else %}🔔{% endif %}
+      </div>
+      <div style="flex:1">
+        <div style="font-weight:{% if not n.is_read %}600{% else %}400{% endif %};font-size:13px">
+          {{ n.title }}
+        </div>
+        {% if n.body %}
+        <div style="font-size:12px;color:var(--text-muted);margin-top:3px">{{ n.body }}</div>
+        {% endif %}
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+          {{ n.created_at | fmtdate }}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        {% if n.ref_type and n.ref_id %}
+        <a href="/{% if n.ref_type == 'leave' %}leaves{% elif n.ref_type == 'overtime' %}payroll/overtime{% elif n.ref_type == 'payroll' %}payroll{% elif n.ref_type == 'asset' %}assets{% endif %}/{{ n.ref_id }}"
+           class="btn btn-xs btn-outline" onclick="fetch('/notifications/{{ n.id }}/read', {method:'POST'})">
+          İncele
+        </a>
+        {% endif %}
+        {% if not n.is_read %}
+        <span style="width:8px;height:8px;background:var(--accent);border-radius:50%;display:inline-block;flex-shrink:0"></span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">🔔</div>
+      <div class="empty-state-text">Bildirim yok</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

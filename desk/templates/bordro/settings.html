@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/bordro" class="btn btn-outline-secondary btn-sm">
+  <i class="bi bi-arrow-left me-1"></i>Bordro Listesi
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent fw-semibold">
+        {{ settings.year }} Yılı Bordro Sabitleri
+      </div>
+      <div class="card-body">
+        <form method="post" action="/bordro/settings/edit">
+          <input type="hidden" name="year" value="{{ settings.year }}">
+
+          <h6 class="text-primary mb-3 mt-1" style="font-size:13px">Normal Çalışan SGK</h6>
+          <div class="row g-3 mb-4">
+            <div class="col-6">
+              <label class="form-label small fw-semibold">SGK Çalışan Payı (%)</label>
+              <input type="number" step="0.001" name="sgk_employee_rate"
+                     class="form-control form-control-sm"
+                     value="{{ "%.4f" | format(settings.sgk_employee_rate) }}">
+              <div class="form-text">2026: 0.1400 (%14)</div>
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold">SGK İşveren Payı (%)</label>
+              <input type="number" step="0.001" name="sgk_employer_rate"
+                     class="form-control form-control-sm"
+                     value="{{ "%.4f" | format(settings.sgk_employer_rate) }}">
+              <div class="form-text">2026 teşvikli: 0.2175 (%21,75)</div>
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold">Çalışan İşsizlik Primi (%)</label>
+              <input type="number" step="0.001" name="unemployment_emp_rate"
+                     class="form-control form-control-sm"
+                     value="{{ "%.4f" | format(settings.unemployment_emp_rate) }}">
+              <div class="form-text">2026: 0.0100 (%1)</div>
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold">İşveren İşsizlik Primi (%)</label>
+              <input type="number" step="0.001" name="unemployment_empl_rate"
+                     class="form-control form-control-sm"
+                     value="{{ "%.4f" | format(settings.unemployment_empl_rate) }}">
+              <div class="form-text">2026: 0.0200 (%2)</div>
+            </div>
+          </div>
+
+          <h6 class="text-warning mb-3" style="font-size:13px">Emekli Çalışan — SGDP</h6>
+          <div class="row g-3 mb-4">
+            <div class="col-6">
+              <label class="form-label small fw-semibold">SGDP Çalışan Payı (%)</label>
+              <input type="number" step="0.001" name="sgdp_employee_rate"
+                     class="form-control form-control-sm"
+                     value="{{ "%.4f" | format(settings.sgdp_employee_rate) }}">
+              <div class="form-text">2026: 0.0750 (%7,5)</div>
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold">SGDP İşveren Payı (%)</label>
+              <input type="number" step="0.001" name="sgdp_employer_rate"
+                     class="form-control form-control-sm"
+                     value="{{ "%.4f" | format(settings.sgdp_employer_rate) }}">
+              <div class="form-text">2026: 0.2250 (%22,5)</div>
+            </div>
+          </div>
+
+          <h6 class="text-danger mb-3" style="font-size:13px">Vergi</h6>
+          <div class="row g-3 mb-4">
+            <div class="col-6">
+              <label class="form-label small fw-semibold">Damga Vergisi Oranı</label>
+              <input type="number" step="0.00001" name="stamp_tax_rate"
+                     class="form-control form-control-sm"
+                     value="{{ "%.5f" | format(settings.stamp_tax_rate) }}">
+              <div class="form-text">2026: 0.00759 (%0,759)</div>
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold">Aylık GV İstisnası (₺)</label>
+              <input type="number" step="0.01" name="gv_istisnasi"
+                     class="form-control form-control-sm"
+                     value="{{ settings.gv_istisnasi }}">
+              <div class="form-text">2026: 4.211,33 ₺</div>
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold">Aylık DV İstisnası (₺)</label>
+              <input type="number" step="0.01" name="dv_istisnasi"
+                     class="form-control form-control-sm"
+                     value="{{ settings.dv_istisnasi }}">
+              <div class="form-text">2026: 250,70 ₺</div>
+            </div>
+          </div>
+
+          <h6 class="text-secondary mb-3" style="font-size:13px">Diğer Sabitler</h6>
+          <div class="row g-3 mb-4">
+            <div class="col-6">
+              <label class="form-label small fw-semibold">Kıdem Tazminatı Tavanı (₺ / yıl)</label>
+              <input type="number" step="0.01" name="kidem_tavan"
+                     class="form-control form-control-sm"
+                     value="{{ settings.kidem_tavan }}">
+              <div class="form-text">Her 6 ayda değişir (2026/1: 49.329 ₺)</div>
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold">Asgari Ücret Brüt (₺)</label>
+              <input type="number" step="0.01" name="asgari_ucret_brut"
+                     class="form-control form-control-sm"
+                     value="{{ settings.asgari_ucret_brut }}">
+              <div class="form-text">2026: 26.005,50 ₺</div>
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold">Haftalık Normal Çalışma Saati</label>
+              <input type="number" step="1" name="weekly_hours"
+                     class="form-control form-control-sm"
+                     value="{{ settings.weekly_hours }}">
+              <div class="form-text">Kanuni: 45 saat</div>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary px-4">
+            <i class="bi bi-save me-1"></i>Kaydet
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

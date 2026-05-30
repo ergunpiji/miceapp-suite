@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}{{ card.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">💳 {{ card.name }}</div>
+    <div class="page-subtitle">
+      {% if card.bank %}{{ card.bank }}{% endif %}
+      {% if card.last_four %} &nbsp;·&nbsp; **** {{ card.last_four }}{% endif %}
+    </div>
+  </div>
+  <div class="flex gap-2">
+    <a href="/credit-cards/{{ card.id }}/edit" class="btn btn-outline">✏️ Düzenle</a>
+    <a href="/credit-cards" class="btn btn-secondary">← Geri</a>
+  </div>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Kredi Limiti</div>
+    <div class="stat-value">{{ card.credit_limit | currency }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Açık Harcamalar</div>
+    <div class="stat-value negative">{{ open_total | currency }}</div>
+    <div class="stat-sub">Ekstreye girmemiş</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Sonraki Ekstre</div>
+    <div class="stat-value" style="font-size:16px">{{ next_stmt_date | fmtdate }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Son Ödeme Tarihi</div>
+    <div class="stat-value" style="font-size:16px">{{ next_due_date | fmtdate }}</div>
+  </div>
+</div>
+
+<div class="grid-2">
+
+  <!-- Açık harcamalar -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">🛍 Mevcut Dönem Harcamaları</span>
+      <button class="btn btn-sm btn-primary" data-modal="modal-add-txn">+ Harcama</button>
+    </div>
+    <div class="card-body" style="padding:0">
+      {% if open_txns %}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Tarih</th><th>Açıklama</th><th>Kategori</th><th class="text-right">Tutar</th></tr></thead>
+          <tbody>
+            {% for t in open_txns %}
+            <tr>
+              <td class="nowrap">{{ t.txn_date | fmtdate }}</td>
+              <td>{{ t.description }}</td>
+              <td>{{ t.category or '—' }}</td>
+              <td class="text-right font-mono {% if t.is_refund %}amount-positive{% else %}amount-negative{% endif %}">
+                {% if t.is_refund %}+{% else %}−{% endif %}{{ t.amount | currency }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr class="totals-row">
+              <td colspan="3" class="text-right">Toplam:</td>
+              <td class="text-right font-mono amount-negative">{{ open_total | currency }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state"><div class="empty-state-icon">🛍</div><div class="empty-state-text">Bu dönemde harcama yok</div></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Ekstreler -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">📄 Ekstreler</span>
+      <button class="btn btn-sm btn-primary" data-modal="modal-create-stmt">Ekstre Oluştur</button>
+    </div>
+    <div class="card-body" style="padding:0">
+      {% if statements %}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Kesim</th><th>Son Ödeme</th><th class="text-right">Toplam</th><th class="text-right">Ödenen</th><th>Durum</th><th></th></tr></thead>
+          <tbody>
+            {% for s in statements %}
+            <tr>
+              <td class="nowrap">{{ s.statement_date | fmtdate }}</td>
+              <td class="nowrap {% if s.is_overdue %}amount-negative{% endif %}">{{ s.due_date | fmtdate }}</td>
+              <td class="text-right font-mono">{{ s.total_amount | currency }}</td>
+              <td class="text-right font-mono amount-positive">{{ s.paid_amount | currency }}</td>
+              <td>
+                {% if s.status == 'odendi' %}<span class="badge badge-success">Ödendi</span>
+                {% elif s.status == 'kismi' %}<span class="badge badge-warning">Kısmi</span>
+                {% elif s.is_overdue %}<span class="badge badge-danger">Gecikti</span>
+                {% else %}<span class="badge badge-info">Bekliyor</span>{% endif %}
+              </td>
+              <td>
+                {% if s.status != 'odendi' %}
+                <button class="btn btn-xs btn-success" data-modal="modal-pay-stmt-{{ s.id }}">Öde</button>
+                {% endif %}
+              </td>
+            </tr>
+            <!-- Ödeme modal -->
+            {% if s.status != 'odendi' %}
+            <tr style="display:none">
+              <td colspan="6">
+                <div class="modal-overlay" id="modal-pay-stmt-{{ s.id }}">
+                  <div class="modal-box">
+                    <div class="modal-title">💳 Ekstre Öde — {{ s.statement_date | fmtdate }}</div>
+                    <p style="margin-bottom:12px;font-size:13px">Kalan: <strong>{{ s.remaining | currency }}</strong></p>
+                    <form method="post" action="/credit-cards/{{ card.id }}/statements/{{ s.id }}/pay">
+                      <div class="form-grid">
+                        <div class="form-group">
+                          <label>Ödenen Tutar (₺)</label>
+                          <input name="paid_amount" type="number" step="0.01" value="{{ s.remaining }}">
+                        </div>
+                        <div class="form-group">
+                          <label>Ödeme Tarihi</label>
+                          <input name="payment_date" type="date" value="{{ today.isoformat() }}">
+                        </div>
+                      </div>
+                      <div class="flex gap-2 mt-4">
+                        <button type="submit" class="btn btn-success">Kaydet</button>
+                        <button type="button" class="btn btn-secondary" data-close-modal>İptal</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state"><div class="empty-state-icon">📄</div><div class="empty-state-text">Ekstre yok</div></div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal: Harcama ekle -->
+<div class="modal-overlay" id="modal-add-txn">
+  <div class="modal-box">
+    <div class="modal-title">🛍 Harcama Ekle</div>
+    <form method="post" action="/credit-cards/{{ card.id }}/txns/add">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Tarih *</label>
+          <input name="txn_date" type="date" required value="{{ today.isoformat() }}">
+        </div>
+        <div class="form-group">
+          <label>Tutar (₺)</label>
+          <input name="amount" type="number" step="0.01" min="0.01" required>
+        </div>
+        <div class="form-group form-grid-full">
+          <label>Açıklama *</label>
+          <input name="description" required>
+        </div>
+        <div class="form-group">
+          <label>Kategori</label>
+          <input name="category" placeholder="Yakıt, Ofis, Yemek...">
+        </div>
+        <div class="form-group">
+          <label>Taksit Sayısı</label>
+          <input name="installments" type="number" min="1" max="36" value="1">
+        </div>
+        <div class="form-group">
+          <label>İade mi?</label>
+          <select name="is_refund">
+            <option value="false">Hayır</option>
+            <option value="true">Evet (İade)</option>
+          </select>
+        </div>
+        <div class="form-group form-grid-full">
+          <label>Notlar</label>
+          <textarea name="notes" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary">Ekle</button>
+        <button type="button" class="btn btn-secondary" data-close-modal>İptal</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Ekstre oluştur -->
+<div class="modal-overlay" id="modal-create-stmt">
+  <div class="modal-box">
+    <div class="modal-title">📄 Ekstre Oluştur</div>
+    <form method="post" action="/credit-cards/{{ card.id }}/statements/create">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Ekstre Kesim Tarihi</label>
+          <input name="statement_date" type="date" value="{{ next_stmt_date.isoformat() }}">
+        </div>
+        <div class="form-group">
+          <label>Son Ödeme Tarihi</label>
+          <input name="due_date" type="date" value="{{ next_due_date.isoformat() }}">
+        </div>
+        <div class="form-group">
+          <label>Toplam Tutar (₺) — 0 = otomatik</label>
+          <input name="total_amount" type="number" step="0.01" min="0" value="0">
+        </div>
+        <div class="form-group">
+          <label>Asgari Ödeme (₺)</label>
+          <input name="minimum_payment" type="number" step="0.01" min="0" value="0">
+        </div>
+      </div>
+      <p style="font-size:12px;color:var(--text-muted);margin-top:8px">Mevcut açık harcamalar bu ekstreye bağlanacak.</p>
+      <div class="flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary">Oluştur</button>
+        <button type="button" class="btn btn-secondary" data-close-modal>İptal</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

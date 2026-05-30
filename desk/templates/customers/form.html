@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+        <form method="post">
+          <div class="row g-3">
+            <div class="col-md-9">
+              <label class="form-label fw-semibold">Müşteri Adı</label>
+              <input type="text" name="name" class="form-control" required value="{{ customer.name if customer else '' }}">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">Kod (3 harf)</label>
+              <input type="text" name="code" class="form-control text-uppercase" maxlength="3" required value="{{ customer.code if customer else '' }}">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Sektör</label>
+              <input type="text" name="sector" class="form-control" value="{{ customer.sector if customer else '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Vergi No</label>
+              <input type="text" name="tax_no" class="form-control" value="{{ customer.tax_no if customer else '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Vergi Dairesi</label>
+              <input type="text" name="tax_office" class="form-control" value="{{ customer.tax_office if customer else '' }}">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Adres</label>
+              <textarea name="address" class="form-control" rows="2">{{ customer.address if customer else '' }}</textarea>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">E-posta</label>
+              <input type="email" name="email" class="form-control" value="{{ customer.email if customer else '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Telefon</label>
+              <input type="text" name="phone" class="form-control" value="{{ customer.phone if customer else '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Tahsilat Vadesi (gün) <small class="text-muted fw-normal">fatura tarihinden itibaren</small></label>
+              <input type="number" name="payment_term" class="form-control" min="0" max="365"
+                     value="{{ customer.payment_term if customer and customer.payment_term is not none else '' }}"
+                     placeholder="örn. 30">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Tahsilat Günü <small class="text-muted fw-normal">vadeden sonraki ilk bu gün</small></label>
+              <select name="payment_dow" class="form-select">
+                <option value="">— Belirtilmemiş —</option>
+                {% set days = [('0','Pazartesi'),('1','Salı'),('2','Çarşamba'),('3','Perşembe'),('4','Cuma'),('5','Cumartesi'),('6','Pazar')] %}
+                {% for val, lbl in days %}
+                <option value="{{ val }}" {% if customer and customer.payment_dow is not none and customer.payment_dow|string == val %}selected{% endif %}>{{ lbl }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-primary">Kaydet</button>
+            <a href="/customers" class="btn btn-outline-secondary">İptal</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

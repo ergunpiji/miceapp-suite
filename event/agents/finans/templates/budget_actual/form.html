@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Proje Düzenle' if project else 'Yeni Proje' }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">{{ '✏️ Proje Düzenle' if project else '➕ Yeni Proje' }}</div>
+  </div>
+  <a href="/projects" class="btn btn-outline">← Geri</a>
+</div>
+
+<div class="card" style="max-width:640px">
+  <div class="card-body">
+    <form method="post" action="{{ ('/projects/' + project.id + '/edit') if project else '/projects/new' }}">
+      <div class="form-grid">
+        <div class="form-group form-grid-full">
+          <label>Proje Adı *</label>
+          <input name="name" required value="{{ project.name if project else '' }}" placeholder="Proje / Etkinlik adı">
+        </div>
+        <div class="form-group">
+          <label>E-dem Referans No</label>
+          <input name="edem_request_no" value="{{ project.edem_request_no or '' }}" placeholder="TOP-ABC-2504-001">
+        </div>
+        <div class="form-group">
+          <label>Müşteri / Firma</label>
+          <input name="customer_name" value="{{ project.customer_name or '' }}">
+        </div>
+        <div class="form-group">
+          <label>Etkinlik Başlangıç</label>
+          <input name="event_date" type="date" value="{{ project.event_date.isoformat() if project and project.event_date else '' }}">
+        </div>
+        <div class="form-group">
+          <label>Etkinlik Bitiş</label>
+          <input name="event_end_date" type="date" value="{{ project.event_end_date.isoformat() if project and project.event_end_date else '' }}">
+        </div>
+        <div class="form-group">
+          <label>Durum</label>
+          <select name="status">
+            {% for s in statuses %}
+            <option value="{{ s.value }}" {{ 'selected' if project and project.status == s.value else '' }}>{{ s.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group form-grid-full">
+          <label>Notlar</label>
+          <textarea name="notes">{{ project.notes or '' }}</textarea>
+        </div>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary">💾 Kaydet</button>
+        <a href="/projects" class="btn btn-secondary">İptal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

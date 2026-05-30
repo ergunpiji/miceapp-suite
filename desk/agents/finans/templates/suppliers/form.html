@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Tedarikçi Düzenle' if supplier else 'Yeni Tedarikçi' }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div><div class="page-title">{{ '✏️ Tedarikçi Düzenle' if supplier else '➕ Yeni Tedarikçi' }}</div></div>
+  <a href="/suppliers" class="btn btn-outline">← Geri</a>
+</div>
+
+<div class="card" style="max-width:640px">
+  <div class="card-body">
+    <form method="post" action="{{ ('/suppliers/' + supplier.id + '/edit') if supplier else '/suppliers/new' }}">
+      <div class="form-grid">
+        <div class="form-group form-grid-full">
+          <label>Firma Adı *</label>
+          <input name="name" required value="{{ supplier.name if supplier else '' }}">
+        </div>
+        <div class="form-group">
+          <label>Vergi Numarası</label>
+          <input name="tax_number" value="{{ supplier.tax_number or '' }}">
+        </div>
+        <div class="form-group">
+          <label>Vergi Dairesi</label>
+          <input name="tax_office" value="{{ supplier.tax_office or '' }}">
+        </div>
+        <div class="form-group">
+          <label>Yetkili Kişi</label>
+          <input name="contact_name" value="{{ supplier.contact_name or '' }}">
+        </div>
+        <div class="form-group">
+          <label>Telefon</label>
+          <input name="phone" value="{{ supplier.phone or '' }}">
+        </div>
+        <div class="form-group">
+          <label>E-posta</label>
+          <input name="email" type="email" value="{{ supplier.email or '' }}">
+        </div>
+        <div class="form-group">
+          <label>IBAN</label>
+          <input name="iban" value="{{ supplier.iban or '' }}" placeholder="TR00 0000 0000 0000 0000 0000 00">
+        </div>
+        <div class="form-group">
+          <label>Durum</label>
+          <select name="status">
+            {% for s in statuses %}
+            <option value="{{ s.value }}" {{ 'selected' if supplier and supplier.status == s.value else '' }}>{{ s.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group form-grid-full">
+          <label>Notlar</label>
+          <textarea name="notes">{{ supplier.notes or '' }}</textarea>
+        </div>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary">💾 Kaydet</button>
+        <a href="/suppliers" class="btn btn-secondary">İptal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

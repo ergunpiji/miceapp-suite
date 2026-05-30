@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block page_title %}Ön Ödeme Talepleri{% endblock %}
+{% block page_title_block %}Ön Ödeme Talepleri{% endblock %}
+
+{% block topbar_actions %}
+{% if can_request %}
+<a href="/prepayment-requests/new" class="btn btn-warning btn-sm text-dark fw-semibold">
+  <i class="bi bi-plus-lg me-1"></i>Yeni Talep
+</a>
+{% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .status-badge { font-size:11px; padding:3px 8px; border-radius:20px; }
+  .row-link:hover { background:#f8fafc; cursor:pointer; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+
+  {# Özet kartlar — GM ve muhasebe için #}
+  {% if pending_gm_count or approved_count %}
+  <div class="row g-3 mb-3">
+    {% if pending_gm_count %}
+    <div class="col-auto">
+      <a href="/prepayment-requests?status=pending_gm" class="text-decoration-none">
+        <div class="card border-0 shadow-sm px-4 py-3 d-flex flex-row align-items-center gap-3">
+          <i class="bi bi-hourglass-split fs-4 text-warning"></i>
+          <div>
+            <div style="font-size:11px;color:#64748b;text-transform:uppercase;">GM Onayı Bekliyor</div>
+            <div class="fw-bold fs-5">{{ pending_gm_count }}</div>
+          </div>
+        </div>
+      </a>
+    </div>
+    {% endif %}
+    {% if approved_count %}
+    <div class="col-auto">
+      <a href="/prepayment-requests?status=approved" class="text-decoration-none">
+        <div class="card border-0 shadow-sm px-4 py-3 d-flex flex-row align-items-center gap-3">
+          <i class="bi bi-bank fs-4 text-info"></i>
+          <div>
+            <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Ödeme Bekliyor</div>
+            <div class="fw-bold fs-5">{{ approved_count }}</div>
+          </div>
+        </div>
+      </a>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {# Filtre butonları #}
+  <div class="d-flex gap-2 flex-wrap mb-3">
+    {% set filters = [
+      ('all',        'Tümü',              'secondary'),
+      ('pending_gm', 'GM Onayı Bekliyor', 'warning'),
+      ('approved',   'Muhasebe Bekliyor', 'info'),
+      ('paid',       'Ödendi',            'success'),
+      ('rejected',   'Reddedildi',        'danger'),
+      ('cancelled',  'İptal',             'secondary'),
+    ] %}
+    {% for val, lbl, col in filters %}
+    <a href="/prepayment-requests{% if val != 'all' %}?status={{ val }}{% endif %}"
+       class="btn btn-sm btn-{% if status_filter == val %}{{ col }}{% else %}outline-{{ col }}{% endif %}">
+      {{ lbl }}
+    </a>
+    {% endfor %}
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      {% if prepayments %}
+      <div class="table-responsive">
+        <table class="table table-hover mb-0" style="font-size:13px;">
+          <thead style="background:#f8fafc;">
+            <tr>
+              <th class="ps-3" style="font-size:11px;color:#64748b;text-transform:uppercase;">Tarih</th>
+              <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Tedarikçi</th>
+              <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Referans</th>
+              <th class="text-end" style="font-size:11px;color:#64748b;text-transform:uppercase;">Tutar</th>
+              <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Talep Eden</th>
+              <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Durum</th>
+              <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Açıklama</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for pr in prepayments %}
+            {% set st = statuses.get(pr.status, ('—','secondary','bi-circle')) %}
+            <tr class="row-link" onclick="location.href='/prepayment-requests/{{ pr.id }}'">
+              <td class="ps-3 text-muted">{{ pr.requested_at | date_tr }}</td>
+              <td class="fw-semibold">{{ pr.vendor.name if pr.vendor else '—' }}</td>
+              <td>
+                {% if pr.request %}
+                <span style="font-size:12px;">{{ pr.request.request_no }}</span>
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="text-end fw-semibold">₺{{ '{:,.0f}'.format(pr.amount or 0) }}</td>
+              <td class="text-muted">
+                {% if pr.requester %}{{ pr.requester.name }} {{ pr.requester.surname }}{% else %}—{% endif %}
+              </td>
+              <td>
+                <span class="badge bg-{{ st[1] }} status-badge">
+                  <i class="bi {{ st[2] }} me-1"></i>{{ st[0] }}
+                </span>
+              </td>
+              <td class="text-muted" style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                {{ pr.description or '—' }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-arrow-up-circle fs-1 d-block mb-2 opacity-25"></i>
+        Henüz ön ödeme talebi yok.
+        {% if can_request %}
+        <div class="mt-2">
+          <a href="/prepayment-requests/new" class="btn btn-warning btn-sm text-dark">
+            <i class="bi bi-plus-lg me-1"></i>İlk Talebi Oluştur
+          </a>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

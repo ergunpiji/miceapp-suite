@@ -1,0 +1,1460 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+  {% if req and req.request_no %}
+  <span class="badge bg-primary fw-bold font-monospace" style="font-size:13px; letter-spacing:.5px; padding:6px 12px;">
+    {{ req.request_no }}
+  </span>
+  {% else %}
+  <span class="badge bg-secondary bg-opacity-25 text-secondary fw-semibold font-monospace" style="font-size:11px; padding:5px 10px;">
+    <i class="bi bi-hash me-1"></i>Ref No: Kaydedince oluşur
+  </span>
+  {% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ── Genel ── */
+  .tag-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #dbeafe; color: #1d4ed8;
+    border-radius: 20px; padding: 2px 10px;
+    font-size: 12px; margin: 2px;
+  }
+  .tag-badge button { background: none; border: none; padding: 0; color: #1d4ed8; cursor: pointer; font-size: 13px; line-height:1; }
+
+  /* ── Tedarikçi chip ── */
+  .venue-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: #f1f5f9; border: 1px solid #cbd5e1;
+    border-radius: 20px; padding: 3px 10px; font-size: 12px; margin: 2px;
+    cursor: pointer; transition: all .15s;
+  }
+  .venue-chip.selected { background: #1e40af; color: #fff; border-color: #1e40af; }
+  .venue-chip:hover:not(.selected) { background: #e2e8f0; }
+
+  /* ── Hizmet bölümü ── */
+  .sec-header {
+    background: #1e293b; color: #fff;
+    padding: 7px 14px; font-size: 12px; font-weight: 700; letter-spacing: .4px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .sec-header .btn-outline-light { font-size: 11px; padding: 2px 10px; }
+
+  .items-table { font-size: 13px; }
+  .items-table th { font-size: 11px; text-transform: uppercase; letter-spacing: .4px;
+    color: #64748b; background: #f8fafc; white-space: nowrap; padding: 5px 7px; }
+  .items-table td { vertical-align: middle; padding: 5px 7px; }
+  .items-table input, .items-table select { font-size: 12px; padding: 4px 6px; }
+
+  /* ── Konaklama tarih barı ── */
+  .accom-date-bar {
+    background: #eff6ff; border-left: 3px solid #3b82f6;
+    padding: 8px 14px; font-size: 12px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .accom-date-bar label { margin: 0; font-weight: 700; color: #1d4ed8; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+
+  /* ── Günlük Detay ── */
+  .daily-detail-row { background: #fafafa; }
+  .daily-detail-header {
+    background: #fee2e2; color: #991b1b;
+    font-size: 10px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+    padding: 4px 14px; display: flex; align-items: center; gap: 6px;
+  }
+  .daily-detail-table { font-size: 12px; margin: 0; }
+  .daily-detail-table th { font-size: 10px; text-transform: uppercase; letter-spacing: .4px; color: #64748b; background: #fff; padding: 3px 8px; }
+  .daily-detail-table td { padding: 3px 8px; vertical-align: middle; }
+  .daily-detail-table input, .daily-detail-table select { font-size: 11px; padding: 2px 5px; }
+
+  /* ── A4 Önizleme ── */
+  @media print {
+    body * { visibility: hidden !important; }
+    #a4PreviewBody, #a4PreviewBody * { visibility: visible !important; }
+    #a4PreviewBody { position: fixed; top: 0; left: 0; width: 100%; padding: 20mm 20mm; }
+    .no-print { display: none !important; }
+  }
+  .a4-sheet {
+    background: #fff;
+    width: 794px; min-height: 1123px;
+    margin: 0 auto;
+    padding: 40px 50px;
+    box-shadow: 0 2px 16px rgba(0,0,0,.12);
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 13px;
+    color: #1e293b;
+  }
+  .a4-logo-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; border-bottom: 2px solid #1e293b; padding-bottom: 12px; }
+  .a4-logo-bar .company { font-size: 18px; font-weight: 800; letter-spacing: .5px; color: #1e293b; }
+  .a4-logo-bar .ref { font-size: 11px; color: #64748b; text-align: right; }
+  .a4-section-title { background: #1e293b; color: #fff; font-size: 11px; font-weight: 700;
+    letter-spacing: .5px; text-transform: uppercase; padding: 5px 12px; margin: 18px 0 0; }
+  .a4-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .a4-table th { background: #f1f5f9; font-size: 10px; text-transform: uppercase; letter-spacing: .4px;
+    color: #64748b; padding: 5px 8px; border: 1px solid #e2e8f0; font-weight: 700; }
+  .a4-table td { padding: 6px 8px; border: 1px solid #e2e8f0; vertical-align: top; }
+  .a4-table tr:nth-child(even) { background: #f8fafc; }
+  .a4-daily { font-size: 11px; margin-top: 4px; }
+  .a4-daily td { border: 1px solid #f0f0f0; padding: 3px 6px; font-size: 11px; color: #374151; }
+  .a4-daily th { background: #fef3c7; font-size: 10px; letter-spacing: .3px; color: #92400e; padding: 3px 6px; border: 1px solid #fde68a; }
+  .a4-info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  .a4-info-cell { border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px; }
+  .a4-info-cell .lbl { font-size: 9px; text-transform: uppercase; letter-spacing: .5px; color: #94a3b8; font-weight: 700; margin-bottom: 2px; }
+  .a4-info-cell .val { font-size: 13px; font-weight: 600; color: #1e293b; }
+  .a4-venues { font-size: 12px; display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 16px; }
+  .a4-venue-tag { background: #dbeafe; color: #1e40af; border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 600; }
+  .a4-footer { margin-top: 40px; padding-top: 12px; border-top: 1px solid #e2e8f0;
+    font-size: 10px; color: #94a3b8; display: flex; justify-content: space-between; }
+
+  /* ── Tedarikçi arama dropdown ── */
+  .vs-wrapper { position: relative; }
+  .vs-dropdown {
+    position: absolute; z-index: 500; width: 100%;
+    background: #fff; border: 1px solid #cbd5e1;
+    border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
+    max-height: 240px; overflow-y: auto; margin-top: 2px;
+  }
+  .vs-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 12px; cursor: pointer; font-size: 13px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .vs-item:last-child { border-bottom: none; }
+  .vs-item:hover { background: #f1f5f9; }
+  .vs-item.vs-sel { background: #eff6ff; }
+  .vs-item .vsi-name { font-weight: 600; color: #1e293b; }
+  .vs-item .vsi-city { font-size: 11px; color: #64748b; }
+  .vs-no-res { padding: 12px; text-align: center; color: #94a3b8; font-size: 12px; }
+
+  /* ── Katalog modal ── */
+  .catalog-item-check { display: flex; align-items: flex-start; gap: 10px; padding: 9px 14px;
+    border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; transition: all .15s; margin-bottom: 6px; }
+  .catalog-item-check:hover { background: #f1f5f9; }
+  .catalog-item-check.selected { background: #dbeafe; border-color: #3b82f6; }
+  .catalog-item-check input[type=checkbox] { margin-top: 2px; width: 16px; height: 16px; cursor: pointer; }
+  .catalog-item-check .item-name { font-weight: 600; font-size: 13px; }
+  .catalog-item-check .item-unit { font-size: 11px; color: #64748b; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="mb-3">
+  <a href="/requests" class="text-muted text-decoration-none" style="font-size:13px;">
+    <i class="bi bi-arrow-left me-1"></i> Talep Listesine Dön
+  </a>
+</div>
+
+{% if error %}
+<div class="alert alert-danger d-flex align-items-center gap-2 py-2 mb-3">
+  <i class="bi bi-exclamation-circle-fill"></i>
+  <small>{{ error }}</small>
+</div>
+{% endif %}
+
+<form method="post"
+      action="{{ '/requests/' + req.id + '/edit' if req else '/requests/new' }}"
+      id="requestForm">
+
+  {# ─── BÖLÜM 1: GENEL BİLGİLER ─── #}
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="d-flex align-items-center justify-content-between mb-4">
+        <h5 class="fw-bold mb-0">
+          <i class="bi bi-info-circle me-2 text-primary"></i>Genel Bilgiler
+        </h5>
+        {% if req and req.request_no %}
+        <span class="badge bg-primary fw-bold font-monospace" style="font-size:13px; letter-spacing:.5px; padding:6px 12px;">
+          {{ req.request_no }}
+        </span>
+        {% else %}
+        <span class="text-muted" style="font-size:12px;">
+          <i class="bi bi-hash me-1"></i>Ref No kaydedince oluşur
+        </span>
+        {% endif %}
+      </div>
+      <div class="row g-3">
+
+        {# Müşteri Seçimi #}
+        <div class="col-md-5">
+          <label class="form-label fw-semibold" style="font-size:13px;">Müşteri / Firma <span class="text-danger">*</span></label>
+          <select name="customer_id" id="customerSelect" class="form-select" onchange="onCustomerChange(this)">
+            <option value="">— Müşteri Seçin —</option>
+            {% for cust in customers %}
+            <option value="{{ cust.id }}"
+                    data-code="{{ cust.code }}"
+                    {% if req and req.customer_id == cust.id %}selected{% endif %}>
+              {{ cust.name }} ({{ cust.code | upper }})
+            </option>
+            {% endfor %}
+          </select>
+          <input type="hidden" name="client_name" id="clientNameHidden"
+                 value="{{ req.client_name if req else '' }}">
+        </div>
+
+        {# Kontak Kişi #}
+        <div class="col-md-4">
+          <label class="form-label fw-semibold" style="font-size:13px;">Kontak Kişi <span class="text-danger">*</span></label>
+          <select id="contactSelect" class="form-select" onchange="onContactChange(this)" required>
+            <option value="">— Önce firma seçin —</option>
+          </select>
+          <div class="invalid-feedback">Firma seçildikten sonra kontak kişi seçimi zorunludur.</div>
+          <input type="hidden" name="contact_person_json" id="contactPersonJson"
+                 value="{{ req.contact_person_json if req else '{}' }}">
+        </div>
+
+        {# Etkinlik Tipi #}
+        <div class="col-md-3">
+          <label class="form-label fw-semibold" style="font-size:13px;">Etkinlik Tipi</label>
+          <select name="event_type" id="eventTypeSelect" class="form-select">
+            {% for et in event_types %}
+            <option value="{{ et.code }}" {% if req and req.event_type == et.code %}selected{% endif %}>
+              [{{ et.code }}] {{ et.label }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        {# Etkinlik Adı #}
+        <div class="col-md-6">
+          <label class="form-label fw-semibold" style="font-size:13px;">Etkinlik Adı <span class="text-danger">*</span></label>
+          <input type="text" name="event_name" class="form-control" required
+                 value="{{ req.event_name if req else '' }}"
+                 placeholder="Etkinlik adı...">
+        </div>
+
+        {# Katılımcı #}
+        <div class="col-md-3">
+          <label class="form-label fw-semibold" style="font-size:13px;">Katılımcı Sayısı</label>
+          <input type="number" name="attendee_count" id="attendeeCount" class="form-control" min="0"
+                 value="{{ req.attendee_count if req else 0 }}">
+        </div>
+
+        {# Teklif Son Tarihi #}
+        <div class="col-md-3">
+          <label class="form-label fw-semibold" style="font-size:13px;">
+            Teklif Son Tarihi
+            <span class="text-muted fw-normal" style="font-size:11px;">(tedarikçiden beklenen)</span>
+          </label>
+          <input type="date" name="quote_deadline" id="quoteDeadline" class="form-control"
+                 value="{{ req.quote_deadline if req and req.quote_deadline else '' }}">
+        </div>
+
+        {# Fon / Sponsor #}
+        <div class="col-md-3">
+          <label class="form-label fw-semibold" style="font-size:13px;">
+            Fon Desteği
+            <span class="text-muted fw-normal" style="font-size:11px;">(sponsor/grant)</span>
+          </label>
+          <div class="border rounded p-2 d-flex align-items-center gap-2" style="min-height:42px; background:white;">
+            <input type="checkbox" class="form-check-input m-0" id="isFunded" name="is_funded" value="on"
+                   {% if req and req.is_funded %}checked{% endif %}
+                   onchange="toggleFundingFields(this.checked)">
+            <label for="isFunded" class="m-0" style="font-size:13px; cursor:pointer;">Fon destekli etkinlik</label>
+          </div>
+        </div>
+        <div class="col-md-4" id="fundPoolWrap"
+             style="{% if not (req and req.is_funded) %}display:none;{% endif %}">
+          <label class="form-label fw-semibold" style="font-size:13px;">
+            Fon Havuzu <span class="text-muted fw-normal" style="font-size:11px;">(müşteriye ait)</span>
+          </label>
+          <select name="parent_fund_request_id" id="fundPoolSelect" class="form-select">
+            <option value="">— Havuz seçin (opsiyonel) —</option>
+            {% if req and req.parent_fund_request_id %}
+            <option value="{{ req.parent_fund_request_id }}" selected>(mevcut seçim)</option>
+            {% endif %}
+          </select>
+          <div class="form-text" style="font-size:11px;">Müşteri seçilince otomatik doldurulur.</div>
+        </div>
+        <div class="col-md-5" id="fundingSourceWrap"
+             style="{% if not (req and req.is_funded) %}display:none;{% endif %}">
+          <label class="form-label fw-semibold" style="font-size:13px;">
+            Fon Kaynağı <span class="text-muted fw-normal" style="font-size:11px;">(opsiyonel — serbest metin)</span>
+          </label>
+          <input type="text" name="funding_source" class="form-control"
+                 value="{{ req.funding_source if req else '' }}"
+                 placeholder="Örn: TÜBİTAK / Sponsor firma adı / AB grant…">
+        </div>
+        <script>
+          function toggleFundingFields(show) {
+            document.getElementById('fundPoolWrap').style.display = show ? '' : 'none';
+            document.getElementById('fundingSourceWrap').style.display = show ? '' : 'none';
+            if (show) loadFundPools();
+          }
+          async function loadFundPools() {
+            const custSelect = document.querySelector('select[name=customer_id]');
+            if (!custSelect || !custSelect.value) return;
+            const pSelect = document.getElementById('fundPoolSelect');
+            if (!pSelect) return;
+            const currentVal = pSelect.value;
+            try {
+              const r = await fetch('/requests/api/customer-fund-pools/' + custSelect.value);
+              const pools = await r.json();
+              pSelect.innerHTML = '<option value="">— Havuz seçin (opsiyonel) —</option>' +
+                pools.map(p => `<option value="${p.id}" ${p.id === currentVal ? 'selected' : ''}>${p.request_no} — ${p.event_name} (${p.currency})</option>`).join('');
+            } catch (e) {}
+          }
+          document.addEventListener('DOMContentLoaded', function() {
+            const cust = document.querySelector('select[name=customer_id]');
+            if (cust) cust.addEventListener('change', loadFundPools);
+            if (document.getElementById('isFunded')?.checked) loadFundPools();
+          });
+        </script>
+
+        {# Şehirler #}
+        <div class="col-md-6">
+          <label class="form-label fw-semibold" style="font-size:13px;">Etkinlik Şehri (çoklu)</label>
+          <div class="border rounded p-2" style="min-height:42px; background:white;" id="citiesContainer">
+            <div id="citiesTags" class="d-inline"></div>
+            <select id="cityAdder" class="border-0 bg-transparent" style="font-size:13px; outline:none; min-width:100px;">
+              <option value="">+ Şehir...</option>
+              {% for city in tr_cities %}
+              <option value="{{ city }}">{{ city }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <input type="hidden" name="cities_json" id="citiesJson"
+                 value="{{ req.cities_json if req else '[]' }}">
+        </div>
+
+        {# Etkinlik Tarihleri #}
+        <div class="col-md-3">
+          <label class="form-label fw-semibold" style="font-size:13px;">Etkinlik Başlangıç</label>
+          <input type="date" name="check_in" id="checkIn" class="form-control"
+                 value="{{ req.check_in if req else '' }}"
+                 onchange="onCheckInChange()">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold" style="font-size:13px;">Etkinlik Bitiş</label>
+          <input type="date" name="check_out" id="checkOut" class="form-control"
+                 value="{{ req.check_out if req else '' }}"
+                 onchange="onEventDateChange()">
+        </div>
+
+        {# Açıklama / Notlar #}
+        <div class="col-md-6">
+          <label class="form-label fw-semibold" style="font-size:13px;">Özel İstekler / Müşteri Notları</label>
+          <textarea name="description" class="form-control" rows="2"
+                    placeholder="Etkinlikle ilgili özel istekler, bütçe aralığı vb...">{{ req.description if req else '' }}</textarea>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold" style="font-size:13px;">Dahili Not (E-dem için)</label>
+          <textarea name="notes" class="form-control" rows="2"
+                    placeholder="Satın alma departmanına özel notlar...">{{ req.notes if req else '' }}</textarea>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  {# ─── BÖLÜM 2: HİZMET TALEPLERİ ─── #}
+  <div class="card mb-4">
+    <div class="card-body p-0">
+
+      <div class="px-4 py-3 border-bottom" style="background:#f8fafc;">
+        <h5 class="fw-bold mb-0">
+          <i class="bi bi-list-check me-2 text-success"></i>Hizmet Talepleri
+        </h5>
+      </div>
+
+      <ul class="nav nav-tabs px-4 pt-2" id="reqTabs" role="tablist">
+        {% for tab in request_tabs %}
+        <li class="nav-item" role="presentation">
+          <button class="nav-link {% if loop.first %}active{% endif %}"
+                  id="rtab-{{ tab.id }}"
+                  data-bs-toggle="tab"
+                  data-bs-target="#rpane-{{ tab.id }}"
+                  type="button" role="tab">
+            {{ tab.label }}
+          </button>
+        </li>
+        {% endfor %}
+      </ul>
+
+      <div class="tab-content" id="reqTabContent">
+        {% for tab in request_tabs %}
+        <div class="tab-pane fade {% if loop.first %}show active{% endif %}"
+             id="rpane-{{ tab.id }}" role="tabpanel">
+
+          {# ── Tedarikçi seçimi ── #}
+          <div class="px-4 pt-3 pb-2 border-bottom">
+            <p class="fw-semibold mb-1" style="font-size:12px; text-transform:uppercase; letter-spacing:.4px; color:#64748b;">
+              <i class="bi bi-building me-1"></i>
+              {% if tab.id == 'venue' %}Otel / Mekan Tedarikçileri
+              {% else %}Bu Kategori İçin Tedarikçiler{% endif %}
+            </p>
+            {% if tab.id == 'venue' %}
+            <p class="mb-2 text-muted" style="font-size:11px;">
+              <i class="bi bi-info-circle me-1"></i>
+              Seçilen otel/mekan; <strong>Konaklama</strong>, <strong>Toplantı</strong> ve <strong>F&amp;B</strong> hizmetlerinin tamamı için kullanılır — tek mail ile teklif alınır.
+            </p>
+            {% endif %}
+            <div class="vs-wrapper" id="vsWrap-{{ tab.id }}">
+              <div class="position-relative">
+                <i class="bi bi-search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:12px;pointer-events:none;"></i>
+                <input type="text" id="vsSearch-{{ tab.id }}" class="form-control form-control-sm"
+                       style="padding-left:30px;"
+                       placeholder="Tedarikçi ara veya listeden seçin..."
+                       onfocus="openVsDrop('{{ tab.id }}')"
+                       oninput="filterVsDrop('{{ tab.id }}', this.value)">
+              </div>
+              <div class="vs-dropdown" id="vsDrop-{{ tab.id }}" style="display:none;"></div>
+            </div>
+            <div class="mt-2" id="vsChips-{{ tab.id }}"></div>
+          </div>
+
+          {# ── Konaklama tarih barı (sadece venue/otel tabı) ── #}
+          {% if tab.id == 'venue' %}
+          <div class="accom-date-bar px-4">
+            <div>
+              <label><i class="bi bi-calendar-range me-1"></i>Konaklama Tarihleri</label>
+              <div style="font-size:10px; color:#64748b; font-weight:400; margin-top:1px;">Konaklama · Toplantı · F&amp;B için ortak tarih</div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <span style="font-size:11px; color:#374151; font-weight:600;">Giriş</span>
+              <input type="date" name="accom_check_in" id="accomCheckIn" class="form-control form-control-sm"
+                     style="width:150px; background:#fff; border:1px solid #93c5fd;"
+                     value="{{ req.accom_check_in if req and req.accom_check_in else (req.check_in if req else '') }}"
+                     onchange="updateAccomNightsLabel()">
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <span style="font-size:11px; color:#374151; font-weight:600;">Çıkış</span>
+              <input type="date" name="accom_check_out" id="accomCheckOut" class="form-control form-control-sm"
+                     style="width:150px; background:#fff; border:1px solid #93c5fd;"
+                     value="{{ req.accom_check_out if req and req.accom_check_out else (req.check_out if req else '') }}"
+                     onchange="updateAccomNightsLabel()">
+            </div>
+            <span id="accomNightsLabel" style="font-size:12px; color:#1d4ed8; font-weight:700; background:#dbeafe; padding:3px 10px; border-radius:12px;"></span>
+            <button type="button" class="btn btn-outline-primary btn-sm" style="font-size:11px; padding:3px 10px;"
+                    onclick="applyAccomDatesToAllRows()" title="Üstteki tarihleri tüm konaklama satırlarına uygula">
+              <i class="bi bi-arrow-down-circle me-1"></i>Tümüne Uygula
+            </button>
+          </div>
+          {% else %}
+          {# Placeholder for accom fields so they still get submitted #}
+          {% endif %}
+
+          {# ── Hizmet kalemleri ── #}
+          <div class="p-0">
+            {% for section in tab.sections %}
+            <div class="border-top">
+              <div class="sec-header">
+                <span>
+                  {% if section == 'accommodation' %}🛏 Konaklama
+                  {% elif section == 'meeting' %}🏛 Toplantı Hizmetleri
+                  {% elif section == 'fb' %}🍽 F&B Hizmetleri
+                  {% elif section == 'teknik' %}🔧 Teknik Ekipman
+                  {% elif section == 'dekor' %}🎨 Dekor
+                  {% elif section == 'transfer' %}🚌 Transfer
+                  {% elif section == 'tasarim' %}🖨 Tasarım & Baskı
+                  {% else %}📦 Diğer{% endif %}
+                </span>
+                <div class="d-flex gap-1">
+                  <button type="button" class="btn btn-sm btn-outline-light"
+                          onclick="openCatalogModal('{{ section }}')">
+                    <i class="bi bi-grid me-1"></i>Katalogdan Ekle
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-light"
+                          onclick="addManualRow('{{ section }}')">
+                    <i class="bi bi-plus me-1"></i>Boş Satır
+                  </button>
+                </div>
+              </div>
+
+              <div class="table-responsive">
+                <table class="table items-table mb-0" id="tbl-{{ section }}">
+                  <thead>
+                    <tr>
+                      <th class="ps-3">Hizmet Açıklaması</th>
+                      <th style="width:80px;">Birim</th>
+                      <th style="width:65px;">Miktar</th>
+                      {% if section == 'accommodation' %}
+                      <th style="width:120px;">Giriş</th>
+                      <th style="width:120px;">Çıkış</th>
+                      {% elif section == 'meeting' %}
+                      <th style="width:120px;">Başlangıç</th>
+                      <th style="width:120px;">Bitiş</th>
+                      {% else %}
+                      <th style="width:120px;">Başlangıç</th>
+                      <th style="width:120px;">Bitiş</th>
+                      {% endif %}
+                      <th>Not</th>
+                      <th style="width:60px;"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-{{ section }}"></tbody>
+                </table>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+
+        </div>
+        {% endfor %}
+      </div>
+
+    </div>
+  </div>
+
+  {# ─── Hidden fields ─── #}
+  <input type="hidden" name="items_json" id="itemsJson"
+         value="{{ req.items_json if req else '{}' }}">
+  <input type="hidden" name="preferred_venues_json" id="preferredVenuesJson"
+         value="{{ req.preferred_venues_json if req else '[]' }}">
+  {# Fallback accom fields when not in venue tab #}
+  {% if not (request_tabs | selectattr('id','equalto','venue') | list) %}
+  <input type="hidden" name="accom_check_in" value="">
+  <input type="hidden" name="accom_check_out" value="">
+  {% endif %}
+
+  {# ─── KAYDET BUTONLARI ─── #}
+  <div class="d-flex gap-2 flex-wrap mb-5 align-items-center">
+    <button type="submit" name="action" value="draft" class="btn btn-outline-secondary">
+      <i class="bi bi-floppy me-1"></i> Taslak Kaydet
+    </button>
+    <button type="button" class="btn btn-outline-primary" onclick="openPreview()">
+      <i class="bi bi-eye me-1"></i> Önizle
+    </button>
+    <button type="submit" name="action" value="send" class="btn btn-primary">
+      <i class="bi bi-check-circle me-1"></i> Aktifleştir & Kaydet
+    </button>
+    <a href="{{ '/requests/' + req.id if req else '/requests' }}" class="btn btn-outline-secondary">İptal</a>
+  </div>
+
+</form>
+
+{# ─── KATALOG MODAL ─── #}
+<div class="modal fade" id="catalogModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable" style="max-width:550px;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="catalogModalTitle">
+          <i class="bi bi-grid me-2"></i>Katalog
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="max-height:60vh;">
+        <p class="text-muted mb-3" style="font-size:12px;">
+          Seçili kalemleri tıklayarak işaretleyin. Seçimleriniz talep formuna eklenecektir.
+        </p>
+        <div id="catalogItemList"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+        <button type="button" class="btn btn-primary" onclick="addSelectedFromCatalog()">
+          <i class="bi bi-check-circle me-1"></i>Seçilenleri Ekle
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ─── ÖNİZLEME MODAL ─── #}
+<div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable" style="max-width:870px;">
+    <div class="modal-content" style="background:#e8ecf0;">
+      <div class="modal-header no-print" style="background:#1e293b; color:#fff; border:none;">
+        <h5 class="modal-title">
+          <i class="bi bi-eye me-2"></i>Talep Önizleme — A4
+        </h5>
+        <div class="d-flex gap-2 ms-auto me-2">
+          <button type="button" class="btn btn-sm btn-outline-light" onclick="window.print()">
+            <i class="bi bi-printer me-1"></i>Yazdır
+          </button>
+          <button type="button" class="btn btn-sm btn-success" onclick="sendFromPreview()">
+            <i class="bi bi-check-circle me-1"></i>Aktifleştir & Kaydet
+          </button>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4" id="a4PreviewBody">
+        <div class="a4-sheet" id="a4Sheet"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ─── Catalog + venue data ─── #}
+<script>
+const SERVICES_BY_CAT = {{ services_by_cat | tojson }};
+const VENUES_DATA = [{% for v in venues %}{id:{{ v.id|tojson }},name:{{ v.name|tojson }},city:{{ v.city|tojson }},cities:{{ (v.cities or [v.city]) | tojson }},supplier_type:{{ v.supplier_type|tojson }}},{% endfor %}];
+const TAB_TYPES = {
+  {% for tab in request_tabs %}'{{ tab.id }}': {{ tab.supplier_types | tojson }},
+  {% endfor %}
+};
+</script>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ─── Constants ───
+const SECTION_LABELS = {
+  accommodation: '🛏 Konaklama',
+  meeting:       '🏛 Toplantı Hizmetleri',
+  fb:            '🍽 F&B Hizmetleri',
+  teknik:        '🔧 Teknik Ekipman',
+  dekor:         '🎨 Dekor',
+  transfer:      '🚌 Transfer',
+  tasarim:       '🖨 Tasarım & Baskı',
+  other:         '📦 Diğer',
+};
+
+const SEATING_LAYOUTS = [
+  {value:'tiyatro',    label:'Tiyatro Düzeni'},
+  {value:'sinif',      label:'Sınıf Düzeni'},
+  {value:'u-seklinde', label:'U Şeklinde'},
+  {value:'toplanti',   label:'Toplantı Düzeni'},
+  {value:'adatr',      label:'Ada / Roundtable'},
+  {value:'kokteyl',    label:'Kokteyl'},
+  {value:'gala',       label:'Gala Oturma'},
+];
+
+// ─── Şehirler ───
+let cities = [];
+try { cities = JSON.parse(document.getElementById('citiesJson').value || '[]'); } catch(e) {}
+renderCityTags();
+
+document.getElementById('cityAdder').addEventListener('change', function() {
+  const v = this.value;
+  if (v && !cities.includes(v)) { cities.push(v); renderCityTags(); saveCitiesJson(); refreshAllVenueDrops(); }
+  this.value = '';
+});
+function renderCityTags() {
+  const c = document.getElementById('citiesTags');
+  c.innerHTML = cities.map((city, i) =>
+    `<span class="tag-badge">${escHtml(city)}<button type="button" onclick="removeCity(${i})">×</button></span>`
+  ).join('');
+}
+function removeCity(i) { cities.splice(i, 1); renderCityTags(); saveCitiesJson(); refreshAllVenueDrops(); }
+function saveCitiesJson() { document.getElementById('citiesJson').value = JSON.stringify(cities); }
+function refreshAllVenueDrops() {
+  // Açık olan tüm dropdown'ları ve chip listelerini güncelle
+  document.querySelectorAll('.vs-dropdown').forEach(drop => {
+    if (drop.style.display !== 'none') {
+      const tabId = drop.id.replace('vsDrop-', '');
+      renderVsDrop(tabId, document.getElementById('vsSearch-' + tabId)?.value || '');
+    }
+  });
+}
+
+// ─── Etkinlik tarihleri değişince ───
+function onCheckInChange() {
+  const ciEl  = document.getElementById('checkIn');
+  const coEl  = document.getElementById('checkOut');
+  const evIn  = ciEl?.value || '';
+  // Bitiş tarihi min = başlangıç tarihi
+  if (coEl) {
+    coEl.min = evIn;
+    if (coEl.value && coEl.value < evIn) coEl.value = evIn;
+  }
+  // Konaklama tarihlerine de yansıt (boşsa)
+  const acIn  = document.getElementById('accomCheckIn');
+  const acOut = document.getElementById('accomCheckOut');
+  if (acIn && !acIn.value)  acIn.value  = evIn;
+  if (acOut && !acOut.value) {
+    const evOut = document.getElementById('checkOut')?.value || '';
+    acOut.value = evOut;
+  }
+  updateAccomNightsLabel();
+}
+
+function onEventDateChange() {
+  const evOut = document.getElementById('checkOut')?.value || '';
+  const acOut = document.getElementById('accomCheckOut');
+  if (acOut && !acOut.value) acOut.value = evOut;
+  updateAccomNightsLabel();
+}
+
+function updateAccomNightsLabel() {
+  const ciEl = document.getElementById('accomCheckIn');
+  const coEl = document.getElementById('accomCheckOut');
+  const lbl  = document.getElementById('accomNightsLabel');
+  if (!ciEl || !coEl || !lbl) return;
+  const n = calcNights(ciEl.value, coEl.value);
+  lbl.textContent = n > 0 ? n + ' gece' : '';
+}
+
+// Init: checkIn varsa checkOut min'ini set et
+(function() {
+  const ciEl = document.getElementById('checkIn');
+  const coEl = document.getElementById('checkOut');
+  if (ciEl && ciEl.value && coEl) coEl.min = ciEl.value;
+  // Konaklama tarihleri init: eğer boşsa etkinlik tarihinden doldur
+  const acIn  = document.getElementById('accomCheckIn');
+  const acOut = document.getElementById('accomCheckOut');
+  if (acIn && !acIn.value && ciEl?.value)  acIn.value  = ciEl.value;
+  if (acOut && !acOut.value && coEl?.value) acOut.value = coEl.value;
+  if (acIn) {
+    acIn.addEventListener('change', updateAccomNightsLabel);
+    document.getElementById('accomCheckOut')?.addEventListener('change', updateAccomNightsLabel);
+    updateAccomNightsLabel();
+  }
+})();
+
+// ─── Hizmet kalemleri ───
+let items = {};
+try { items = JSON.parse(document.getElementById('itemsJson').value || '{}'); } catch(e) {}
+
+{% for tab in request_tabs %}
+{% for section in tab.sections %}
+if (!items['{{ section }}']) items['{{ section }}'] = [];
+renderItems('{{ section }}');
+{% endfor %}
+{% endfor %}
+
+function addManualRow(section) {
+  if (!items[section]) items[section] = [];
+  items[section].push({
+    service_id: null, description: '', unit: 'Adet', qty: 1,
+    notes: '', date_from: '', date_to: '', seating_layout: 'tiyatro', daily_attendees: []
+  });
+  renderItems(section);
+  saveItemsJson();
+  // Otel/mekan sekmeleri için konaklama tarih barını doldur (boşsa)
+  if (['accommodation', 'meeting', 'fb'].includes(section)) {
+    const acIn  = document.getElementById('accomCheckIn');
+    const acOut = document.getElementById('accomCheckOut');
+    const evIn  = document.getElementById('checkIn')?.value  || '';
+    const evOut = document.getElementById('checkOut')?.value || evIn;
+    if (acIn  && !acIn.value  && evIn)  acIn.value  = evIn;
+    if (acOut && !acOut.value && evOut) acOut.value = evOut;
+    updateAccomNightsLabel();
+  }
+}
+
+function removeItem(section, idx) {
+  items[section].splice(idx, 1);
+  renderItems(section);
+  saveItemsJson();
+}
+
+// ─── Günlük detay (toplantı) ───
+function buildDailyAttendees(dateFrom, dateTo, existingAttendees, defaultQty) {
+  if (!dateFrom) return [];
+  const d1 = new Date(dateFrom);
+  const d2 = dateTo ? new Date(dateTo) : d1;
+  // Başlangıç bitiş'ten sonraysa boş dön (crash önlenir)
+  if (d1 > d2) return [];
+  const days = [];
+  for (let d = new Date(d1); d <= d2; d.setDate(d.getDate() + 1)) {
+    const iso = d.toISOString().split('T')[0];
+    const existing = existingAttendees.find(a => a.date === iso);
+    days.push({
+      date: iso,
+      qty: existing ? existing.qty : (defaultQty || 1),
+      seating_layout: existing ? existing.seating_layout : 'tiyatro'
+    });
+  }
+  return days;
+}
+
+function onMeetingDateChange(section, idx) {
+  const fromEl = document.getElementById(`mtg_from_${section}_${idx}`);
+  const toEl   = document.getElementById(`mtg_to_${section}_${idx}`);
+  if (!fromEl) return;
+  const dateFrom = fromEl.value;
+  const dateTo   = toEl ? toEl.value : dateFrom;
+  const defaultQty = parseInt(document.getElementById('attendeeCount')?.value) || 1;
+  const existing = items[section][idx].daily_attendees || [];
+  items[section][idx].date_from = dateFrom;
+  items[section][idx].date_to   = dateTo;
+  items[section][idx].daily_attendees = buildDailyAttendees(dateFrom, dateTo, existing, defaultQty);
+  saveItemsJson();
+  renderItems(section);
+}
+
+// ─── Render ───
+function renderItems(section) {
+  const tbody = document.getElementById('tbody-' + section);
+  if (!tbody) return;
+  const rows = items[section] || [];
+
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-3" style="font-size:12px; background:#fafafa;">
+      <em>Katalogdan veya boş satır ekleyin</em></td></tr>`;
+    return;
+  }
+
+  let html = '';
+  rows.forEach((row, i) => {
+    // Service name cell
+    const descCell = `<input type="text" class="form-control form-control-sm"
+      style="min-width:180px;"
+      value="${escHtml(row.description || '')}" placeholder="Hizmet açıklaması..."
+      oninput="items['${section}'][${i}].description=this.value;saveItemsJson()" id="desc-${section}-${i}">`;
+
+    const unitCell = `<input type="text" class="form-control form-control-sm"
+      value="${escHtml(row.unit || 'Adet')}"
+      oninput="items['${section}'][${i}].unit=this.value;saveItemsJson()">`;
+
+    const qtyCell = `<input type="number" class="form-control form-control-sm text-center" value="${row.qty || 1}" min="1"
+      oninput="items['${section}'][${i}].qty=parseInt(this.value)||1;saveItemsJson()">`;
+
+    const notesCell = `<input type="text" class="form-control form-control-sm"
+      value="${escHtml(row.notes || '')}" placeholder="Not..."
+      oninput="items['${section}'][${i}].notes=this.value;saveItemsJson()">`;
+
+    const delBtn = `<button type="button" class="btn btn-sm btn-outline-danger py-0 px-1"
+      onclick="removeItem('${section}',${i})"><i class="bi bi-x-lg" style="font-size:11px;"></i></button>`;
+
+    if (section === 'accommodation') {
+      // Konaklama: per-row giriş/çıkış, üstteki bardan default alır
+      const acIn  = document.getElementById('accomCheckIn')?.value  || '';
+      const acOut = document.getElementById('accomCheckOut')?.value || '';
+      const rowIn  = row.date_from || acIn;
+      const rowOut = row.date_to   || acOut;
+      html += `<tr>
+        <td class="ps-3">${descCell}</td>
+        <td>${unitCell}</td>
+        <td>${qtyCell}</td>
+        <td><input type="date" class="form-control form-control-sm" value="${escHtml(rowIn)}"
+               onchange="items['${section}'][${i}].date_from=this.value;saveItemsJson()"></td>
+        <td><input type="date" class="form-control form-control-sm" value="${escHtml(rowOut)}"
+               onchange="items['${section}'][${i}].date_to=this.value;saveItemsJson()"></td>
+        <td>${notesCell}</td>
+        <td>${delBtn}</td>
+      </tr>`;
+
+    } else if (section === 'meeting') {
+      // Toplantı: başlangıç/bitiş + günlük detay subrow
+      const defDate = document.getElementById('checkIn')?.value || '';
+      const dateFrom = row.date_from || defDate;
+      const dateTo   = row.date_to   || dateFrom;
+
+      html += `<tr>
+        <td class="ps-3">${descCell}</td>
+        <td>${unitCell}</td>
+        <td>${qtyCell}</td>
+        <td>
+          <input type="date" class="form-control form-control-sm" id="mtg_from_${section}_${i}"
+                 value="${escHtml(dateFrom)}"
+                 onchange="onMeetingDateChange('${section}',${i})">
+        </td>
+        <td>
+          <input type="date" class="form-control form-control-sm" id="mtg_to_${section}_${i}"
+                 value="${escHtml(dateTo)}"
+                 onchange="onMeetingDateChange('${section}',${i})">
+        </td>
+        <td>${notesCell}</td>
+        <td>${delBtn}</td>
+      </tr>`;
+
+      // Günlük detay
+      const dailyRows = row.daily_attendees || [];
+      if (dailyRows.length > 0) {
+        html += `<tr class="daily-detail-row">
+          <td colspan="8" style="padding:0;">
+            <div class="daily-detail-header">
+              <i class="bi bi-calendar-week me-1"></i>Günlük Detay
+            </div>
+            <table class="table daily-detail-table mb-0">
+              <thead><tr>
+                <th class="ps-3" style="width:140px;">Tarih</th>
+                <th style="width:130px;">Kişi Sayısı</th>
+                <th>Oturma Düzeni</th>
+              </tr></thead>
+              <tbody>
+                ${dailyRows.map((da, di) => {
+                  const layoutOpts = SEATING_LAYOUTS.map(l =>
+                    `<option value="${l.value}" ${da.seating_layout===l.value?'selected':''}>${l.label}</option>`
+                  ).join('');
+                  return `<tr>
+                    <td class="ps-3" style="font-size:12px; font-weight:600; color:#374151;">
+                      ${formatDate(da.date)}
+                    </td>
+                    <td>
+                      <input type="number" class="form-control form-control-sm text-center" min="1" style="width:80px;"
+                             value="${da.qty || 1}"
+                             oninput="items['${section}'][${i}].daily_attendees[${di}].qty=parseInt(this.value)||1;saveItemsJson()">
+                    </td>
+                    <td>
+                      <select class="form-select form-select-sm" style="max-width:200px;"
+                              onchange="items['${section}'][${i}].daily_attendees[${di}].seating_layout=this.value;saveItemsJson()">
+                        ${layoutOpts}
+                      </select>
+                    </td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </td>
+        </tr>`;
+      } else if (dateFrom) {
+        // Tarih seçildi ama daily_attendees henüz oluşmadı — oluştur
+        setTimeout(() => {
+          const defQty = parseInt(document.getElementById('attendeeCount')?.value) || 1;
+          const built = buildDailyAttendees(dateFrom, dateTo, [], defQty);
+          if (built.length > 0) {
+            // Sadece geçerli tarih aralığında yeniden render et
+            // built.length === 0 ise (ters/geçersiz tarih) döngüye girme
+            items[section][i].daily_attendees = built;
+            saveItemsJson();
+            renderItems(section);
+          }
+        }, 0);
+      }
+
+    } else {
+      // Diğer servisler: başlangıç / bitiş
+      const dateFrom = row.date_from || '';
+      const dateTo   = row.date_to   || '';
+      html += `<tr>
+        <td class="ps-3">${descCell}</td>
+        <td>${unitCell}</td>
+        <td>${qtyCell}</td>
+        <td>
+          <input type="date" class="form-control form-control-sm" value="${escHtml(dateFrom)}"
+                 onchange="items['${section}'][${i}].date_from=this.value;saveItemsJson()">
+        </td>
+        <td>
+          <input type="date" class="form-control form-control-sm" value="${escHtml(dateTo)}"
+                 onchange="items['${section}'][${i}].date_to=this.value;saveItemsJson()">
+        </td>
+        <td>${notesCell}</td>
+        <td>${delBtn}</td>
+      </tr>`;
+    }
+  });
+
+  tbody.innerHTML = html;
+}
+
+// ─── Katalog Modal ───
+let _catalogSection = null;
+
+function openCatalogModal(section) {
+  _catalogSection = section;
+  const svcs = SERVICES_BY_CAT[section] || [];
+  document.getElementById('catalogModalTitle').innerHTML =
+    `<i class="bi bi-grid me-2"></i>Katalog — ${SECTION_LABELS[section] || section}`;
+
+  if (!svcs.length) {
+    document.getElementById('catalogItemList').innerHTML =
+      `<p class="text-muted text-center py-4">Bu kategori için katalogda hizmet bulunmuyor.</p>`;
+  } else {
+    document.getElementById('catalogItemList').innerHTML = svcs.map(s =>
+      `<label class="catalog-item-check" id="ci-${s.id}">
+        <input type="checkbox" value="${escHtml(s.id)}"
+               onchange="this.closest('.catalog-item-check').classList.toggle('selected',this.checked)">
+        <div>
+          <div class="item-name">${escHtml(s.name)}</div>
+          <div class="item-unit">Birim: ${escHtml(s.unit)}</div>
+        </div>
+      </label>`
+    ).join('');
+  }
+
+  new bootstrap.Modal(document.getElementById('catalogModal')).show();
+}
+
+function addSelectedFromCatalog() {
+  const sec = _catalogSection;
+  if (!sec) return;
+  const checked = document.querySelectorAll('#catalogItemList input[type=checkbox]:checked');
+  if (!checked.length) {
+    bootstrap.Modal.getInstance(document.getElementById('catalogModal')).hide();
+    return;
+  }
+  if (!items[sec]) items[sec] = [];
+  const defDate = document.getElementById('checkIn')?.value || '';
+  const defDateTo = document.getElementById('checkOut')?.value || defDate;
+  const defQty = parseInt(document.getElementById('attendeeCount')?.value) || 1;
+
+  checked.forEach(cb => {
+    const svcs = SERVICES_BY_CAT[sec] || [];
+    const svc = svcs.find(s => s.id === cb.value);
+    if (!svc) return;
+    const rowDateFrom = sec === 'accommodation'
+      ? (document.getElementById('accomCheckIn')?.value  || defDate)
+      : defDate;
+    const rowDateTo = sec === 'accommodation'
+      ? (document.getElementById('accomCheckOut')?.value || defDateTo)
+      : defDateTo;
+    const newRow = {
+      service_id: svc.id, description: svc.name, unit: svc.unit, qty: 1,
+      notes: '', date_from: rowDateFrom, date_to: rowDateTo,
+      seating_layout: 'tiyatro', daily_attendees: []
+    };
+    if (sec === 'meeting' && defDate) {
+      newRow.daily_attendees = buildDailyAttendees(defDate, defDateTo, [], defQty);
+    }
+    items[sec].push(newRow);
+  });
+
+  saveItemsJson();
+  renderItems(sec);
+
+  // Otel/mekan sekmeleri için konaklama tarih barını doldur (boşsa)
+  if (['accommodation', 'meeting', 'fb'].includes(sec)) {
+    const acIn  = document.getElementById('accomCheckIn');
+    const acOut = document.getElementById('accomCheckOut');
+    if (acIn  && !acIn.value  && defDate)   acIn.value  = defDate;
+    if (acOut && !acOut.value && defDateTo) acOut.value = defDateTo;
+    updateAccomNightsLabel();
+  }
+
+  bootstrap.Modal.getInstance(document.getElementById('catalogModal')).hide();
+}
+
+// ─── Tedarikçi arama dropdown ───
+let selectedVenueIds = new Set();
+try {
+  const _init = JSON.parse(document.getElementById('preferredVenuesJson')?.value || '[]');
+  _init.forEach(id => selectedVenueIds.add(id));
+} catch(e) {}
+
+function savePreferredVenues() {
+  document.getElementById('preferredVenuesJson').value = JSON.stringify([...selectedVenueIds]);
+}
+
+// collectPreferredVenues → backward-compat alias
+function collectPreferredVenues() { savePreferredVenues(); }
+
+function openVsDrop(tabId) {
+  document.querySelectorAll('.vs-dropdown').forEach(d => {
+    if (d.id !== 'vsDrop-' + tabId) d.style.display = 'none';
+  });
+  const drop = document.getElementById('vsDrop-' + tabId);
+  if (drop) { drop.style.display = 'block'; renderVsDrop(tabId, document.getElementById('vsSearch-' + tabId)?.value || ''); }
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.vs-wrapper')) document.querySelectorAll('.vs-dropdown').forEach(d => d.style.display = 'none');
+});
+
+function filterVsDrop(tabId, query) {
+  const drop = document.getElementById('vsDrop-' + tabId);
+  if (drop) { drop.style.display = 'block'; renderVsDrop(tabId, query); }
+}
+
+function getSelectedCities() {
+  // form.html'deki global `cities` array'ini kullan (renderCityTags tarafından yönetilir)
+  if (typeof cities !== 'undefined' && cities.length) return cities;
+  return [];
+}
+
+function renderVsDrop(tabId, query) {
+  const drop = document.getElementById('vsDrop-' + tabId);
+  if (!drop) return;
+  const types = TAB_TYPES[tabId] || [];
+  const q = query.toLowerCase().trim();
+  const selectedCities = getSelectedCities().map(c => c.toLowerCase());
+  const typeLabels = {otel:'Otel',etkinlik:'Etkinlik Mekanı',teknik:'Teknik',dekor:'Dekor',
+    transfer:'Transfer',tasarim:'Tasarım',restaurant:'Restoran',susleme:'Süsleme',ik:'İK',diger:'Diğer'};
+
+  const filtered = VENUES_DATA.filter(v => {
+    if (!types.includes(v.supplier_type)) return false;
+    // Şehir filtresi: seçili şehir varsa tedarikçinin şehirleri ile kesişmeli
+    if (selectedCities.length > 0) {
+      const vCities = (v.cities || [v.city]).map(c => c.toLowerCase());
+      const match = selectedCities.some(sc => vCities.some(vc => vc.includes(sc) || sc.includes(vc)));
+      if (!match) return false;
+    }
+    // Arama filtresi
+    if (q) return v.name.toLowerCase().includes(q) || v.city.toLowerCase().includes(q);
+    return true;
+  });
+
+  if (!filtered.length) {
+    const hint = selectedCities.length > 0
+      ? `<div class="vs-no-res">Seçili şehirlerde (${selectedCities.join(', ')}) tedarikçi bulunamadı.<br><small>Farklı bir şehir seçin veya arama yapın.</small></div>`
+      : `<div class="vs-no-res">Sonuç bulunamadı</div>`;
+    drop.innerHTML = hint;
+    return;
+  }
+  drop.innerHTML = filtered.map(v =>
+    `<div class="vs-item ${selectedVenueIds.has(v.id)?'vs-sel':''}" onclick="toggleVenueSelect('${tabId}','${escHtml(v.id)}')">
+      <i class="bi bi-check2" style="flex-shrink:0;visibility:${selectedVenueIds.has(v.id)?'visible':'hidden'};color:#1d4ed8;"></i>
+      <div>
+        <div class="vsi-name">${escHtml(v.name)}
+          <span class="badge bg-secondary bg-opacity-10 text-secondary ms-1" style="font-size:10px;">${escHtml(typeLabels[v.supplier_type]||v.supplier_type)}</span>
+        </div>
+        <div class="vsi-city"><i class="bi bi-geo-alt me-1"></i>${escHtml(v.city)}</div>
+      </div>
+    </div>`
+  ).join('');
+}
+
+function toggleVenueSelect(tabId, venueId) {
+  if (selectedVenueIds.has(venueId)) selectedVenueIds.delete(venueId);
+  else selectedVenueIds.add(venueId);
+  savePreferredVenues();
+  renderVsDrop(tabId, document.getElementById('vsSearch-' + tabId)?.value || '');
+  renderVsChips(tabId);
+}
+
+function renderVsChips(tabId) {
+  const el = document.getElementById('vsChips-' + tabId);
+  if (!el) return;
+  const types = TAB_TYPES[tabId] || [];
+  const sel = VENUES_DATA.filter(v => selectedVenueIds.has(v.id) && types.includes(v.supplier_type));
+  if (!sel.length) {
+    el.innerHTML = '<span style="font-size:11px;color:#94a3b8;">Henüz tedarikçi seçilmedi</span>';
+    return;
+  }
+  el.innerHTML = sel.map(v =>
+    `<span class="venue-chip selected" data-venue-id="${escHtml(v.id)}">
+      ${escHtml(v.name)} <span style="font-size:10px;opacity:.7;">${escHtml(v.city)}</span>
+      <button type="button" onclick="toggleVenueSelect('${tabId}','${escHtml(v.id)}')"
+              style="background:none;border:none;color:inherit;padding:0 0 0 4px;cursor:pointer;font-size:13px;">×</button>
+    </span>`
+  ).join('');
+}
+
+// Init chips for all tabs
+{% for tab in request_tabs %}renderVsChips('{{ tab.id }}');{% endfor %}
+
+// ─── Müşteri seçimi ───
+async function onCustomerChange(sel) {
+  const customerId = sel.value;
+  const optText = sel.options[sel.selectedIndex]?.text || '';
+  if (customerId) {
+    const match = optText.match(/^(.+?)\s*\(/);
+    document.getElementById('clientNameHidden').value = match ? match[1].trim() : optText;
+  } else {
+    document.getElementById('clientNameHidden').value = '';
+  }
+  const contactSel = document.getElementById('contactSelect');
+  contactSel.innerHTML = '<option value="">— Kontak Seçin —</option>';
+  document.getElementById('contactPersonJson').value = '{}';
+  if (!customerId) return;
+  try {
+    const resp = await fetch('/requests/api/customer-contacts/' + customerId);
+    const contacts = await resp.json();
+    contacts.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = JSON.stringify(c);
+      opt.textContent = `${c.name} — ${c.title || ''}`;
+      contactSel.appendChild(opt);
+    });
+  } catch(e) {}
+}
+
+function onContactChange(sel) {
+  document.getElementById('contactPersonJson').value = sel.value || '{}';
+}
+
+// Init: restore contact in edit mode
+(async function() {
+  const sel = document.getElementById('customerSelect');
+  if (sel && sel.value) {
+    try {
+      const resp = await fetch('/requests/api/customer-contacts/' + sel.value);
+      const contacts = await resp.json();
+      const contactSel = document.getElementById('contactSelect');
+      contacts.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = JSON.stringify(c);
+        opt.textContent = `${c.name} — ${c.title || ''}`;
+        contactSel.appendChild(opt);
+      });
+      const savedContact = document.getElementById('contactPersonJson').value;
+      if (savedContact && savedContact !== '{}') {
+        try {
+          const sc = JSON.parse(savedContact);
+          for (let i = 0; i < contactSel.options.length; i++) {
+            try {
+              const oc = JSON.parse(contactSel.options[i].value);
+              if (oc.email === sc.email) { contactSel.selectedIndex = i; break; }
+            } catch(e) {}
+          }
+        } catch(e) {}
+      }
+    } catch(e) {}
+  }
+})();
+
+// ─── Form submit ───
+document.getElementById('requestForm').addEventListener('submit', function(e) {
+  saveCitiesJson();
+  saveItemsJson();
+  collectPreferredVenues();
+  const clientName = document.getElementById('clientNameHidden');
+  if (!clientName.value) {
+    const sel = document.getElementById('customerSelect');
+    const optText = sel?.options[sel.selectedIndex]?.text || 'Müşteri';
+    const match = optText.match(/^(.+?)\s*\(/);
+    clientName.value = match ? match[1].trim() : optText;
+  }
+  const custSel = document.getElementById('customerSelect');
+  const contactSel = document.getElementById('contactSelect');
+  if (custSel && custSel.value && contactSel && !contactSel.value) {
+    e.preventDefault();
+    contactSel.classList.add('is-invalid');
+    contactSel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return false;
+  }
+  if (contactSel) contactSel.classList.remove('is-invalid');
+});
+
+function saveItemsJson() {
+  document.getElementById('itemsJson').value = JSON.stringify(items);
+}
+
+function applyAccomDatesToAllRows() {
+  const acIn  = document.getElementById('accomCheckIn')?.value  || '';
+  const acOut = document.getElementById('accomCheckOut')?.value || '';
+  if (!acIn && !acOut) return;
+  (items.accommodation || []).forEach(row => {
+    if (acIn)  row.date_from = acIn;
+    if (acOut) row.date_to   = acOut;
+  });
+  saveItemsJson();
+  renderItems('accommodation');
+}
+
+// ─── Yardımcılar ───
+function calcNights(from, to) {
+  if (!from || !to) return 0;
+  return Math.max(0, Math.round((new Date(to) - new Date(from)) / 86400000));
+}
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  const [y, m, d] = iso.split('-');
+  return `${d}.${m}.${y}`;
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ─── ÖNİZLEME ───
+function openPreview() {
+  saveItemsJson();
+  collectPreferredVenues();
+
+  // Genel bilgiler
+  const clientName  = document.getElementById('clientNameHidden')?.value || '—';
+  const eventName   = document.querySelector('[name=event_name]')?.value   || '—';
+  const attendees   = document.getElementById('attendeeCount')?.value      || '—';
+  const evIn        = document.getElementById('checkIn')?.value            || '';
+  const evOut       = document.getElementById('checkOut')?.value           || '';
+  const accomIn     = document.getElementById('accomCheckIn')?.value       || '';
+  const accomOut    = document.getElementById('accomCheckOut')?.value      || '';
+  const evTypeEl    = document.getElementById('eventTypeSelect');
+  const evType      = evTypeEl?.options[evTypeEl.selectedIndex]?.text      || '—';
+  const contactJson = document.getElementById('contactPersonJson')?.value  || '{}';
+  let contact = {};
+  try { contact = JSON.parse(contactJson); } catch(e) {}
+
+  const citiesArr = [];
+  try { citiesArr.push(...JSON.parse(document.getElementById('citiesJson')?.value || '[]')); } catch(e) {}
+
+  // Seçilen tedarikçiler (chip text)
+  const selVenues = [];
+  document.querySelectorAll('.venue-chip.selected').forEach(c => selVenues.push(c.childNodes[0].textContent.trim()));
+
+  // Tarih aralığı formatla
+  const dateRange = (from, to) => {
+    if (!from) return '—';
+    if (!to || from === to) return formatDate(from);
+    return `${formatDate(from)} → ${formatDate(to)}`;
+  };
+
+  // Referans no (taslakta henüz yok)
+  const refNo = '{{ req.request_no if req else "Taslak" }}';
+  const today = formatDate(new Date().toISOString().split('T')[0]);
+
+  let html = `
+  <div class="a4-logo-bar">
+    <div class="company">PrizmaDesk</div>
+    <div class="ref">
+      <div style="font-size:13px; font-weight:700; color:#1e293b;">ETKİNLİK TALEP FORMU</div>
+      <div>Ref: ${escHtml(refNo)}</div>
+      <div>Tarih: ${today}</div>
+    </div>
+  </div>
+
+  <div class="a4-info-grid">
+    <div class="a4-info-cell">
+      <div class="lbl">Müşteri / Firma</div>
+      <div class="val">${escHtml(clientName)}</div>
+    </div>
+    <div class="a4-info-cell">
+      <div class="lbl">Kontak Kişi</div>
+      <div class="val">${escHtml(contact.name || '—')}</div>
+      ${contact.title ? `<div style="font-size:11px; color:#64748b;">${escHtml(contact.title)}</div>` : ''}
+    </div>
+    <div class="a4-info-cell">
+      <div class="lbl">Etkinlik Tipi</div>
+      <div class="val">${escHtml(evType)}</div>
+    </div>
+    <div class="a4-info-cell" style="grid-column:span 2;">
+      <div class="lbl">Etkinlik Adı</div>
+      <div class="val" style="font-size:15px;">${escHtml(eventName)}</div>
+    </div>
+    <div class="a4-info-cell">
+      <div class="lbl">Katılımcı Sayısı</div>
+      <div class="val">${escHtml(attendees)} kişi</div>
+    </div>
+    <div class="a4-info-cell">
+      <div class="lbl">Etkinlik Tarihleri</div>
+      <div class="val">${dateRange(evIn, evOut)}</div>
+    </div>
+    <div class="a4-info-cell">
+      <div class="lbl">Konaklama Tarihleri</div>
+      <div class="val">${dateRange(accomIn, accomOut)}${accomIn ? ` <span style="font-size:11px; color:#64748b;">(${calcNights(accomIn, accomOut)} gece)</span>` : ''}</div>
+    </div>
+    <div class="a4-info-cell">
+      <div class="lbl">Şehir(ler)</div>
+      <div class="val">${citiesArr.length ? escHtml(citiesArr.join(', ')) : '—'}</div>
+    </div>
+  </div>`;
+
+  // Tercih edilen mekanlar
+  if (selVenues.length) {
+    html += `<div style="margin-bottom:8px;">
+      <div style="font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:#64748b; font-weight:700; margin-bottom:6px;">Tercih Edilen Tedarikçiler</div>
+      <div class="a4-venues">${selVenues.map(v => `<span class="a4-venue-tag">${escHtml(v)}</span>`).join('')}</div>
+    </div>`;
+  }
+
+  // Hizmet kalemleri
+  const SECTIONS_ORDER = ['accommodation','meeting','fb','teknik','dekor','transfer','tasarim','other'];
+  let hasAnyItems = false;
+
+  SECTIONS_ORDER.forEach(sec => {
+    const secItems = (items[sec] || []).filter(r => r.description || r.service_id);
+    if (!secItems.length) return;
+    hasAnyItems = true;
+
+    html += `<div class="a4-section-title">${SECTION_LABELS[sec] || sec}</div>`;
+
+    if (sec === 'accommodation') {
+      // Konaklama: tarihler üstten
+      html += `<table class="a4-table">
+        <thead><tr>
+          <th style="width:45%;">Hizmet / Açıklama</th>
+          <th>Birim</th>
+          <th>Miktar</th>
+          <th>Konaklama Tarihleri</th>
+          <th>Not</th>
+        </tr></thead><tbody>`;
+      secItems.forEach(row => {
+        html += `<tr>
+          <td><strong>${escHtml(row.description || '—')}</strong></td>
+          <td>${escHtml(row.unit || 'Adet')}</td>
+          <td class="text-center">${row.qty || 1}</td>
+          <td style="font-size:11px;">${dateRange(accomIn, accomOut)}</td>
+          <td style="font-size:11px; color:#64748b;">${escHtml(row.notes || '')}</td>
+        </tr>`;
+      });
+      html += `</tbody></table>`;
+
+    } else if (sec === 'meeting') {
+      // Toplantı: başlangıç/bitiş + günlük detay
+      html += `<table class="a4-table">
+        <thead><tr>
+          <th style="width:35%;">Hizmet / Açıklama</th>
+          <th>Birim</th>
+          <th>Miktar</th>
+          <th>Başlangıç</th>
+          <th>Bitiş</th>
+          <th>Not</th>
+        </tr></thead><tbody>`;
+      secItems.forEach(row => {
+        html += `<tr>
+          <td><strong>${escHtml(row.description || '—')}</strong></td>
+          <td>${escHtml(row.unit || 'Adet')}</td>
+          <td class="text-center">${row.qty || 1}</td>
+          <td>${formatDate(row.date_from)}</td>
+          <td>${formatDate(row.date_to)}</td>
+          <td style="font-size:11px; color:#64748b;">${escHtml(row.notes || '')}</td>
+        </tr>`;
+        // Günlük detay
+        const daily = row.daily_attendees || [];
+        if (daily.length) {
+          const layoutLabel = {tiyatro:'Tiyatro',sinif:'Sınıf','u-seklinde':'U Şeklinde',
+            toplanti:'Toplantı',adatr:'Ada/Roundtable',kokteyl:'Kokteyl',gala:'Gala Oturma'};
+          html += `<tr><td colspan="6" style="padding:0 8px 8px; background:#fefce8;">
+            <table class="a4-daily" style="width:100%; border-collapse:collapse; margin-top:6px;">
+              <thead><tr>
+                <th style="width:30%;">📅 Tarih</th>
+                <th style="width:30%;">👥 Kişi Sayısı</th>
+                <th>🪑 Oturma Düzeni</th>
+              </tr></thead><tbody>
+              ${daily.map(da => `<tr>
+                <td><strong>${formatDate(da.date)}</strong></td>
+                <td>${da.qty || '—'} kişi</td>
+                <td>${layoutLabel[da.seating_layout] || da.seating_layout || '—'}</td>
+              </tr>`).join('')}
+            </tbody></table>
+          </td></tr>`;
+        }
+      });
+      html += `</tbody></table>`;
+
+    } else {
+      // Diğer servisler
+      html += `<table class="a4-table">
+        <thead><tr>
+          <th style="width:40%;">Hizmet / Açıklama</th>
+          <th>Birim</th>
+          <th>Miktar</th>
+          <th>Başlangıç</th>
+          <th>Bitiş</th>
+          <th>Not</th>
+        </tr></thead><tbody>`;
+      secItems.forEach(row => {
+        html += `<tr>
+          <td><strong>${escHtml(row.description || '—')}</strong></td>
+          <td>${escHtml(row.unit || 'Adet')}</td>
+          <td class="text-center">${row.qty || 1}</td>
+          <td>${formatDate(row.date_from)}</td>
+          <td>${formatDate(row.date_to)}</td>
+          <td style="font-size:11px; color:#64748b;">${escHtml(row.notes || '')}</td>
+        </tr>`;
+      });
+      html += `</tbody></table>`;
+    }
+  });
+
+  if (!hasAnyItems) {
+    html += `<div style="text-align:center; color:#94a3b8; padding:40px; font-size:13px;">
+      Henüz hizmet kalemi girilmedi.
+    </div>`;
+  }
+
+  // Açıklama / notlar
+  const desc  = document.querySelector('[name=description]')?.value || '';
+  const notes = document.querySelector('[name=notes]')?.value       || '';
+  if (desc || notes) {
+    html += `<div style="margin-top:20px; display:grid; grid-template-columns:1fr 1fr; gap:12px;">`;
+    if (desc) html += `<div style="border:1px solid #e2e8f0; border-radius:6px; padding:10px 14px;">
+      <div style="font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:#64748b; font-weight:700; margin-bottom:4px;">Özel İstekler / Müşteri Notları</div>
+      <div style="font-size:12px; color:#374151; white-space:pre-wrap;">${escHtml(desc)}</div>
+    </div>`;
+    if (notes) html += `<div style="border:1px solid #fde68a; border-radius:6px; padding:10px 14px; background:#fefce8;">
+      <div style="font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:#92400e; font-weight:700; margin-bottom:4px;">Dahili Not (E-dem için)</div>
+      <div style="font-size:12px; color:#374151; white-space:pre-wrap;">${escHtml(notes)}</div>
+    </div>`;
+    html += `</div>`;
+  }
+
+  html += `<div class="a4-footer">
+    <span>PrizmaDesk</span>
+    <span>Oluşturma: ${today}</span>
+  </div>`;
+
+  document.getElementById('a4Sheet').innerHTML = html;
+  new bootstrap.Modal(document.getElementById('previewModal')).show();
+}
+
+function sendFromPreview() {
+  // Modal'ı kapat, formu "send" action ile submit et
+  bootstrap.Modal.getInstance(document.getElementById('previewModal')).hide();
+  setTimeout(() => {
+    const btn = document.createElement('button');
+    btn.type = 'submit';
+    btn.name = 'action';
+    btn.value = 'send';
+    btn.style.display = 'none';
+    document.getElementById('requestForm').appendChild(btn);
+    btn.click();
+  }, 300);
+}
+</script>
+{% endblock %}

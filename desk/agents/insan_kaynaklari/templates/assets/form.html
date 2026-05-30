@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Yeni Zimmet — HR Ajanı{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div><div class="page-title">Yeni Zimmet Ekle</div></div>
+  <a href="/assets" class="btn btn-secondary">Geri</a>
+</div>
+
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+<form method="post" action="/assets/new">
+  <div class="card">
+    <div class="card-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Çalışan *</label>
+          <select name="employee_id" required>
+            <option value="">— Çalışan Seçin —</option>
+            {% for emp in employees %}
+            <option value="{{ emp.id }}" {% if preselected_employee == emp.id %}selected{% endif %}>
+              {{ emp.full_name }} ({{ emp.employee_no }})
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Zimmet Türü</label>
+          <select name="asset_type">
+            {% for t in asset_types %}
+            <option value="{{ t.value }}">{{ t.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Marka</label>
+          <input type="text" name="brand" placeholder="Ör: Apple, Dell, Samsung">
+        </div>
+        <div class="form-group">
+          <label>Model</label>
+          <input type="text" name="model" placeholder="Ör: MacBook Pro 14, iPhone 15">
+        </div>
+        <div class="form-group">
+          <label>Seri No</label>
+          <input type="text" name="serial_no">
+        </div>
+        <div class="form-group">
+          <label>Teslim Tarihi *</label>
+          <input type="date" name="assigned_date" required value="{{ today.isoformat() if today else '' }}">
+        </div>
+        <div class="form-group">
+          <label>Durum</label>
+          <select name="condition">
+            {% for c in conditions %}
+            <option value="{{ c.value }}">{{ c.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group form-grid-full">
+          <label>Notlar</label>
+          <textarea name="notes"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:16px;display:flex;gap:8px">
+    <button type="submit" class="btn btn-primary">Zimmet Oluştur</button>
+    <a href="/assets" class="btn btn-secondary">İptal</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>document.querySelector('[name=assigned_date]').value = new Date().toISOString().split('T')[0];</script>
+{% endblock %}

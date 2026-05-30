@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block page_title %}Harcama Formları{% endblock %}
+{% block page_title_block %}Harcama Formları (HBF){% endblock %}
+
+{% block topbar_actions %}
+<a href="/expenses/new" class="btn btn-primary btn-sm">
+  <i class="bi bi-plus-lg me-1"></i> Yeni HBF
+</a>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .filter-bar { background:#fff; border-radius:10px; padding:14px 18px;
+                box-shadow:0 1px 4px rgba(0,0,0,.06); margin-bottom:18px; }
+  .hbf-table th { font-size:11px; text-transform:uppercase; letter-spacing:.4px;
+                  color:#64748b; background:#f8fafc; white-space:nowrap; }
+  .hbf-table td { font-size:13px; vertical-align:middle; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+
+  {# Özet kartlar #}
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+      <div class="card text-center py-3 border-0 shadow-sm">
+        <div class="fs-4 fw-bold text-warning">{{ pending_count }}</div>
+        <div class="small text-muted">Onay Bekliyor</div>
+      </div>
+    </div>
+  </div>
+
+  {# Filtre çubuğu #}
+  <div class="filter-bar d-flex flex-wrap gap-2 align-items-center">
+    <span class="small text-muted me-1">Durum:</span>
+    <div class="btn-group btn-group-sm">
+      <a href="/expenses?status_filter=all"
+         class="btn btn-outline-secondary {% if status_filter == 'all' %}active{% endif %}">Tümü</a>
+      <a href="/expenses?status_filter=submitted"
+         class="btn btn-outline-warning {% if status_filter == 'submitted' %}active{% endif %}">
+        Onay Bekliyor {% if pending_count > 0 %}<span class="badge bg-warning text-dark ms-1">{{ pending_count }}</span>{% endif %}
+      </a>
+      <a href="/expenses?status_filter=approved"
+         class="btn btn-outline-success {% if status_filter == 'approved' %}active{% endif %}">Onaylandı</a>
+      <a href="/expenses?status_filter=rejected"
+         class="btn btn-outline-danger {% if status_filter == 'rejected' %}active{% endif %}">Reddedildi</a>
+      <a href="/expenses?status_filter=draft"
+         class="btn btn-outline-secondary {% if status_filter == 'draft' %}active{% endif %}">Taslak</a>
+    </div>
+  </div>
+
+  {# Tablo #}
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      {% if reports %}
+      <div class="table-responsive">
+        <table class="table table-hover mb-0 hbf-table">
+          <thead>
+            <tr>
+              <th class="ps-3">Referans</th>
+              <th>Başlık</th>
+              <th>Gönderen</th>
+              <th>Tarih</th>
+              <th class="text-end">Tutar (KDV hariç)</th>
+              <th class="text-end">Tutar (KDV dahil)</th>
+              <th class="text-center">Durum</th>
+              <th class="text-center pe-3">İşlem</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for rpt in reports %}
+            <tr>
+              <td class="ps-3">
+                <a href="/requests/{{ rpt.request_id }}#tab-financial"
+                   class="text-decoration-none fw-semibold text-primary">
+                  {{ rpt.request.request_no if rpt.request else '—' }}
+                </a>
+                {% if rpt.request %}
+                <div class="small text-muted">{{ rpt.request.event_name }}</div>
+                {% endif %}
+              </td>
+              <td>{{ rpt.title or '—' }}</td>
+              <td>
+                {% if rpt.submitter %}
+                  {{ rpt.submitter.name }} {{ rpt.submitter.surname }}
+                {% else %}—{% endif %}
+              </td>
+              <td class="text-muted">
+                {{ rpt.created_at.strftime('%d.%m.%Y') if rpt.created_at else '—' }}
+              </td>
+              <td class="text-end">
+                ₺{{ '{:,.2f}'.format(rpt.grand_excl_vat).replace(',', '.') }}
+              </td>
+              <td class="text-end fw-semibold">
+                ₺{{ '{:,.2f}'.format(rpt.grand_total).replace(',', '.') }}
+              </td>
+              <td class="text-center">
+                <span class="badge bg-{{ rpt.status_color }}
+                  {% if rpt.status_color == 'warning' %}text-dark{% endif %}">
+                  {{ rpt.status_label }}
+                </span>
+                {% if rpt.status == 'rejected' and rpt.rejection_note %}
+                <div class="small text-danger" style="font-size:10px;"
+                     title="{{ rpt.rejection_note }}">
+                  {{ rpt.rejection_note[:40] }}{% if rpt.rejection_note|length > 40 %}…{% endif %}
+                </div>
+                {% endif %}
+              </td>
+              <td class="text-center pe-3">
+                <div class="d-flex gap-1 justify-content-center">
+                  <a href="/expenses/{{ rpt.id }}"
+                     class="btn btn-sm btn-outline-secondary py-0 px-2" title="Görüntüle">
+                    <i class="bi bi-eye" style="font-size:11px;"></i>
+                  </a>
+                  {% if rpt.status == 'submitted' and (
+                      current_user.role == 'admin' or
+                      (rpt.request and rpt.request.created_by == current_user.id)
+                  ) %}
+                  <form method="post" action="/expenses/{{ rpt.id }}/approve" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-success py-0 px-2" title="Onayla"
+                            onclick="return confirm('Bu HBF\'yi onaylıyorsunuz?')">
+                      <i class="bi bi-check2" style="font-size:11px;"></i>
+                    </button>
+                  </form>
+                  <button class="btn btn-sm btn-danger py-0 px-2" title="Reddet"
+                          onclick="openRejectModal('{{ rpt.id }}')">
+                    <i class="bi bi-x" style="font-size:11px;"></i>
+                  </button>
+                  {% endif %}
+                  {% if rpt.status in ('draft','rejected') and (
+                      current_user.role == 'admin' or rpt.submitted_by == current_user.id
+                  ) %}
+                  <a href="/expenses/{{ rpt.id }}/edit"
+                     class="btn btn-sm btn-outline-primary py-0 px-2" title="Düzenle">
+                    <i class="bi bi-pencil" style="font-size:11px;"></i>
+                  </a>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-clipboard-check fs-1 d-block mb-2 opacity-25"></i>
+        {% if status_filter == 'submitted' %}Onay bekleyen HBF yok.
+        {% elif status_filter != 'all' %}Bu filtreye uyan HBF bulunamadı.
+        {% else %}Henüz harcama formu oluşturulmamış.{% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{# Red modal #}
+<div class="modal fade" id="rejectModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title">HBF Reddet</h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="rejectForm">
+        <div class="modal-body">
+          <textarea name="rejection_note" class="form-control form-control-sm"
+                    rows="3" placeholder="Red gerekçesi (opsiyonel)"></textarea>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-sm btn-danger">Reddet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function openRejectModal(rptId) {
+  document.getElementById('rejectForm').action = '/expenses/' + rptId + '/reject';
+  new bootstrap.Modal(document.getElementById('rejectModal')).show();
+}
+</script>
+{% endblock %}

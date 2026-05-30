@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — HR Ajanı{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Hoşgeldiniz, {{ user.display_name }}</div>
+    <div class="page-subtitle">{{ today.strftime('%d.%m.%Y') }} — {{ employee.title if employee else '' }}</div>
+  </div>
+  <a href="/leaves/new" class="btn btn-primary">+ Yeni İzin Talebi</a>
+</div>
+
+<!-- KPI'lar -->
+<div class="stats-grid">
+  {% if leave_balance %}
+  <div class="stat-card">
+    <div class="stat-label">Kalan Yıllık İzin</div>
+    <div class="stat-value {% if leave_balance.remaining_days < 3 %}warning{% endif %}">
+      {{ leave_balance.remaining_days }}
+    </div>
+    <div class="stat-sub">{{ leave_balance.total_days }} günden {{ leave_balance.used_days }} kullanıldı</div>
+  </div>
+  {% endif %}
+  {% if last_payroll %}
+  <div class="stat-card">
+    <div class="stat-label">Son Maaş ({{ last_payroll.period_label }})</div>
+    <div class="stat-value positive">{{ last_payroll.net_salary | currency }}</div>
+    <div class="stat-sub">
+      <span class="badge badge-{% if last_payroll.status == 'odendi' %}success{% elif last_payroll.status == 'onaylandi' %}info{% else %}neutral{% endif %}">
+        {{ last_payroll.status_label }}
+      </span>
+    </div>
+  </div>
+  {% endif %}
+  {% if flex_benefit %}
+  <div class="stat-card">
+    <div class="stat-label">Esnek Hak Puanı</div>
+    <div class="stat-value">{{ flex_benefit.remaining_points }}</div>
+    <div class="stat-sub">{{ flex_benefit.total_points }} puanın {{ flex_benefit.used_points }} kullanıldı</div>
+  </div>
+  {% endif %}
+  {% if employee %}
+  <div class="stat-card">
+    <div class="stat-label">Zimmet Sayısı</div>
+    <div class="stat-value">{{ employee.active_assets | length }}</div>
+    <div class="stat-sub">Aktif zimmet kaydı</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Avans talepleri -->
+{% if my_advances %}
+<div class="card" style="margin-bottom:20px">
+  <div class="card-header">
+    <span class="card-title">💸 Avans Taleplerim</span>
+    <a href="/advances/new?advance_type=maas" class="btn btn-sm btn-primary">+ Yeni Avans</a>
+  </div>
+  <div class="card-body" style="padding:0">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Tür</th><th class="text-right">Tutar</th><th>Talep Tarihi</th><th>Durum</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for adv in my_advances %}
+          <tr>
+            <td><span class="badge badge-{% if adv.advance_type == 'maas' %}primary{% else %}info{% endif %}">{{ adv.advance_type_label }}</span></td>
+            <td class="text-right font-mono">{{ adv.amount | currency }}</td>
+            <td class="nowrap">{{ adv.request_date | fmtdate }}</td>
+            <td>
+              <span class="badge badge-{% if adv.status == 'kapandi' %}success{% elif adv.status == 'odendi' %}info{% elif adv.status == 'onaylandi' %}primary{% elif adv.status == 'reddedildi' %}danger{% elif adv.status == 'iptal' %}neutral{% else %}warning{% endif %}">
+                {{ adv.status_label }}
+              </span>
+            </td>
+            <td><a href="/advances/{{ adv.id }}" class="btn btn-xs btn-outline">Detay</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Son izin talepleri -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">🏖️ İzin Taleplerim</span>
+    <a href="/leaves/new" class="btn btn-sm btn-primary">+ Yeni Talep</a>
+  </div>
+  <div class="card-body" style="padding:0">
+    {% if my_leave_requests %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Tür</th><th>Tarih Aralığı</th><th>Gün</th><th>Durum</th></tr>
+        </thead>
+        <tbody>
+          {% for lr in my_leave_requests %}
+          <tr>
+            <td>{{ lr.leave_type_label }}</td>
+            <td class="nowrap">{{ lr.start_date | fmtdate }} – {{ lr.end_date | fmtdate }}</td>
+            <td>{{ lr.days }}</td>
+            <td>
+              <span class="badge badge-{% if lr.status == 'onaylandi' %}success{% elif lr.status == 'reddedildi' %}danger{% elif lr.status == 'beklemede' %}warning{% else %}neutral{% endif %}">
+                {{ lr.status_label }}
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">🏖️</div>
+      <div class="empty-state-text">Henüz izin talebiniz yok</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

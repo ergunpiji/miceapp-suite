@@ -1,0 +1,202 @@
+{# E-Fatura yerel HTML preview (FakeProvider veya gerçek URL yokken).
+   Tarayıcı Print to PDF ile yazdırılabilir. #}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>{{ page_title }}</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+         color: #1e293b; margin: 0; background: #f1f5f9; padding: 24px; }
+  .page { max-width: 820px; margin: auto; background: #fff;
+          box-shadow: 0 8px 32px rgba(0,0,0,.08); border-radius: 6px; padding: 30px 36px; }
+  .top-bar { display:flex; align-items:center; justify-content:space-between;
+             padding-bottom:14px; border-bottom: 3px solid {{ company('brand_color', '#1A3A5C') }}; }
+  .top-bar h1 { margin:0; color: {{ company('brand_color', '#1A3A5C') }}; font-size: 22px; font-weight: 800; }
+  .top-bar .left { display: flex; align-items: center; gap: 14px; }
+  .top-bar .left img { max-height: 60px; max-width: 200px; }
+  .top-bar .meta { font-size: 11px; color: #64748b; text-align:right; }
+  .top-bar .meta strong { color:#1A3A5C; }
+  .stamp {
+    display:inline-block; padding: 4px 10px; border-radius: 4px; font-size: 11px;
+    font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  }
+  .stamp-fake { background:#fef3c7; color:#92400e; border:1px solid #fde68a; }
+  .stamp-prod { background:#dcfce7; color:#166534; border:1px solid #bbf7d0; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 18px 0; }
+  .box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 12px 14px; }
+  .box h6 { margin: 0 0 8px; font-size: 11px; color:#64748b; text-transform: uppercase; letter-spacing:.04em; }
+  .box .name { font-weight: 700; font-size: 13px; }
+  .box .row { font-size: 11.5px; color:#475569; margin-top:3px; }
+  table.lines { width:100%; border-collapse: collapse; margin-top: 16px; font-size: 11.5px; }
+  table.lines th { background: {{ company('brand_color', '#1A3A5C') }}; color: #fff; padding: 8px 10px; text-align: left; font-weight: 700; font-size: 11px; }
+  table.lines td { padding: 7px 10px; border-bottom: 1px solid #e2e8f0; }
+  table.lines td.r { text-align: right; }
+  table.lines td.c { text-align: center; }
+  .totals { margin-top: 12px; display:flex; justify-content: flex-end; }
+  .totals table { font-size: 12.5px; }
+  .totals td { padding: 4px 14px; }
+  .totals tr.grand { background: {{ company('brand_color', '#1A3A5C') }}; color:#fff; font-weight:700; font-size: 14px; }
+  .totals tr.grand td { padding: 8px 14px; }
+  .footer { margin-top: 26px; padding-top: 12px; border-top: 1px dashed #cbd5e1;
+            font-size: 11px; color: #94a3b8; text-align: center; }
+  .uuid-box { margin-top: 14px; background: #f1f5f9; padding: 10px 12px; border-radius:4px;
+              font-size: 11px; color:#475569; }
+  .uuid-box code { color: {{ company('brand_color', '#1A3A5C') }}; }
+
+  @media print {
+    body { background: #fff; padding: 0; }
+    .page { box-shadow: none; border-radius: 0; }
+    .no-print { display: none; }
+  }
+  .toolbar { max-width: 820px; margin: 0 auto 16px; display:flex; gap:8px; justify-content:flex-end; }
+  .toolbar a, .toolbar button { padding: 6px 14px; font-size: 13px; border-radius: 6px;
+                                 background: {{ company('brand_color', '#1A3A5C') }}; color:#fff; border:0; cursor:pointer;
+                                 text-decoration: none; }
+  .toolbar .secondary { background: #64748b; }
+</style>
+</head>
+<body>
+
+<div class="toolbar no-print">
+  <button onclick="window.print()"><i class="bi bi-printer"></i> Yazdır / PDF Olarak Kaydet</button>
+  <a class="secondary" href="javascript:history.back()"><i class="bi bi-arrow-left"></i> Geri</a>
+</div>
+
+<div class="page">
+  <div class="top-bar">
+    <div class="left">
+      {% if company('logo_path') %}<img src="{{ company('logo_path') }}" alt="Logo">{% endif %}
+      <div>
+        <h1>e-Fatura</h1>
+        <div style="font-size:11px;color:#64748b;margin-top:4px;">
+          UBL-TR · {{ invoice.currency or 'TRY' }} ·
+          {% if is_fake %}
+          <span class="stamp stamp-fake">Sandbox / Test</span>
+          {% else %}
+          <span class="stamp stamp-prod">Resmi</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="meta">
+      <div><strong>Fatura No:</strong> {{ invoice.invoice_no or invoice.id }}</div>
+      <div><strong>Düzenlenme:</strong> {{ invoice.invoice_date | date_tr }}</div>
+      {% if invoice.due_date %}<div><strong>Vade:</strong> {{ invoice.due_date | date_tr }}</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="box">
+      <h6>Düzenleyen (Satıcı)</h6>
+      <div class="name">{{ company('name', 'Şirket Profili henüz tanımlanmadı') }}</div>
+      {% if company('tax_no') %}<div class="row">Vergi No: <code>{{ company('tax_no') }}</code></div>{% endif %}
+      {% if company('tax_office') %}<div class="row">Vergi Dairesi: {{ company('tax_office') }}</div>{% endif %}
+      {% if company('address') %}<div class="row">{{ company('address') }}</div>{% endif %}
+      {% if company('phone') %}<div class="row">Tel: {{ company('phone') }}</div>{% endif %}
+      {% if company('email') %}<div class="row">{{ company('email') }}</div>{% endif %}
+      {% if company('kep_address') %}<div class="row">KEP: {{ company('kep_address') }}</div>{% endif %}
+    </div>
+    <div class="box">
+      <h6>Alıcı</h6>
+      {% if customer %}
+      <div class="name">{{ customer.name }}</div>
+      {% if customer.tax_no %}<div class="row">Vergi No: <code>{{ customer.tax_no }}</code></div>{% endif %}
+      {% if customer.tax_office %}<div class="row">Vergi Dairesi: {{ customer.tax_office }}</div>{% endif %}
+      {% if customer.address %}<div class="row">{{ customer.address }}</div>{% endif %}
+      {% if customer.email %}<div class="row">{{ customer.email }}</div>{% endif %}
+      {% else %}
+      <div class="row" style="color:#94a3b8;">Müşteri bilgisi bulunamadı</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <table class="lines">
+    <thead>
+      <tr>
+        <th>Açıklama</th>
+        <th class="c" style="width:70px;">Mik.</th>
+        <th class="c" style="width:60px;">Br.</th>
+        <th class="r" style="width:120px;">Birim Fiyat</th>
+        <th class="c" style="width:60px;">KDV%</th>
+        <th class="r" style="width:120px;">Toplam</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set ns = namespace(subtotal=0, vat=0) %}
+      {% for li in items %}
+        {% set qty = (li.qty or 1) | float %}
+        {% set price = (li.price or li.unit_price or 0) | float %}
+        {% set vrate = (li.vat_rate or invoice.vat_rate or 0.20) | float %}
+        {% set base = qty * price %}
+        {% set vat_amt = base * vrate %}
+        {% set ns.subtotal = ns.subtotal + base %}
+        {% set ns.vat = ns.vat + vat_amt %}
+        <tr>
+          <td>{{ li.description or 'Hizmet' }}</td>
+          <td class="c">{{ qty }}</td>
+          <td class="c">{{ li.unit or 'ADET' }}</td>
+          <td class="r">{{ price | money }}</td>
+          <td class="c">%{{ (vrate * 100) | int }}</td>
+          <td class="r">{{ (base + vat_amt) | money }}</td>
+        </tr>
+      {% else %}
+        {% set base = invoice.amount or 0 %}
+        {% set vat_amt = base * (invoice.vat_rate or 0.20) %}
+        {% set ns.subtotal = base %}
+        {% set ns.vat = vat_amt %}
+        <tr>
+          <td>{{ invoice.invoice_no or 'Hizmet bedeli' }}</td>
+          <td class="c">1</td>
+          <td class="c">ADET</td>
+          <td class="r">{{ base | money }}</td>
+          <td class="c">%{{ ((invoice.vat_rate or 0.20) * 100) | int }}</td>
+          <td class="r">{{ (base + vat_amt) | money }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="totals">
+    <table>
+      <tr><td>Mal/Hizmet Toplamı</td><td class="r">{{ ns.subtotal | money }}</td></tr>
+      <tr><td>Toplam KDV</td><td class="r">{{ ns.vat | money }}</td></tr>
+      <tr class="grand"><td>ÖDENECEK TUTAR</td><td class="r" style="text-align:right;">{{ (ns.subtotal + ns.vat) | money }}</td></tr>
+    </table>
+  </div>
+
+  {% if company('iban_1') or company('iban_2') %}
+  <div class="uuid-box" style="margin-top:14px;">
+    <strong>Banka Bilgileri</strong>
+    {% if company('iban_1') %}<div>{{ company('iban_1_bank') }} — <code>{{ company('iban_1') }}</code></div>{% endif %}
+    {% if company('iban_2') %}<div>{{ company('iban_2_bank') }} — <code>{{ company('iban_2') }}</code></div>{% endif %}
+  </div>
+  {% endif %}
+
+  {% if company('invoice_footer') %}
+  <div style="margin-top:12px;padding:10px 12px;background:#fffbeb;border-left:3px solid #f59e0b;font-size:11.5px;color:#475569;">
+    {{ company('invoice_footer') }}
+  </div>
+  {% endif %}
+
+  <div class="uuid-box">
+    <strong>Belge UUID/ETTN:</strong> <code>{{ invoice.einvoice_uuid or '—' }}</code><br>
+    <strong>Gönderim:</strong> {{ invoice.einvoice_sent_at | datetime_tr if invoice.einvoice_sent_at else '—' }} ·
+    <strong>Durum:</strong> {{ invoice.einvoice_status or 'gönderilmedi' }}
+  </div>
+
+  <div class="footer">
+    {% if is_fake %}
+    Bu bir <strong>sandbox/simülasyon</strong> e-fatura preview'udur. Gerçek GİB iletimi yapılmamıştır.
+    Mali mühür ve entegratör seçimi sonrası gerçek e-fatura PDF'i entegratör tarafından üretilecektir.
+    {% else %}
+    Bu belge GİB sistemine iletilmiştir. UBL-TR formatında resmi belgenin orijinali entegratör servisinde saklanmaktadır.
+    {% endif %}
+  </div>
+</div>
+
+</body>
+</html>

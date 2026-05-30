@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}{{ event.name }} — Dashboard{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">{{ event.name }}</div>
+    <div class="page-subtitle">
+      {{ event.start_date.strftime('%d.%m.%Y') }}
+      {% if event.end_date != event.start_date %} — {{ event.end_date.strftime('%d.%m.%Y') }}{% endif %}
+      {% if event.city %} · {{ event.city }}{% endif %}
+      {% if event.venue %} · {{ event.venue }}{% endif %}
+    </div>
+    {% if event.edem_request_no %}
+    <div style="margin-top:6px;">
+      <span style="font-size:12px; background:#eff6ff; color:#1d4ed8; padding:2px 10px; border-radius:999px; font-weight:600;">
+        🔗 E-dem: {{ event.edem_request_no }}
+      </span>
+    </div>
+    {% endif %}
+  </div>
+  <div class="btn-group">
+    <a href="{{ base_url }}/events/{{ event.id }}/edit" class="btn btn-secondary">Düzenle</a>
+    <a href="{{ base_url }}/events/{{ event.id }}/import" class="btn btn-primary">📥 Excel Aktar</a>
+  </div>
+</div>
+
+<!-- İstatistikler -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-icon">👥</div>
+    <div class="stat-value">{{ event.participant_count }}</div>
+    <div class="stat-label">Katılımcı</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon">✈️</div>
+    <div class="stat-value">{{ event.flight_count }}</div>
+    <div class="stat-label">Uçuş Kaydı</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon">🏨</div>
+    <div class="stat-value">{{ event.accommodation_count }}</div>
+    <div class="stat-label">Konaklama</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon">🚌</div>
+    <div class="stat-value">{{ event.transfer_count }}</div>
+    <div class="stat-label">Transfer</div>
+  </div>
+  {% if event.missing_info_count > 0 %}
+  <div class="stat-card warning">
+    <div class="stat-icon">⚠️</div>
+    <div class="stat-value">{{ event.missing_info_count }}</div>
+    <div class="stat-label">Eksik Bilgi</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Hızlı Erişim -->
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">👥 Son Katılımcılar</div>
+      <a href="{{ base_url }}/events/{{ event.id }}/participants" class="btn btn-secondary btn-sm">Tümünü Gör</a>
+    </div>
+    {% if event.participants %}
+      {% for p in event.participants[-5:] | reverse %}
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid #f1f5f9;">
+        <div>
+          <a href="{{ base_url }}/events/{{ event.id }}/participants/{{ p.id }}" class="table-link">{{ p.full_name }}</a>
+          {% if p.company %}<span style="color:#94a3b8; font-size:12px;"> · {{ p.company }}</span>{% endif %}
+        </div>
+        <span class="badge badge-{{ p.status }}">
+          {% if p.status == 'complete' %}✅ Tam
+          {% elif p.status == 'warning' %}⚠️ Eksik
+          {% else %}— Boş{% endif %}
+        </span>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty-state" style="padding:20px">
+        <div class="empty-state-text">Henüz katılımcı yok.</div>
+        <br>
+        <a href="{{ base_url }}/events/{{ event.id }}/participants/new" class="btn btn-primary btn-sm">+ Katılımcı Ekle</a>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">🚀 Hızlı İşlemler</div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <a href="{{ base_url }}/events/{{ event.id }}/participants/new" class="btn btn-secondary" style="justify-content:flex-start;">
+        👤 Manuel Katılımcı Ekle
+      </a>
+      <a href="{{ base_url }}/events/{{ event.id }}/import" class="btn btn-secondary" style="justify-content:flex-start;">
+        📥 Excel'den Katılımcı Aktar
+      </a>
+      <a href="{{ base_url }}/events/{{ event.id }}/flights" class="btn btn-secondary" style="justify-content:flex-start;">
+        ✈️ Uçuş Listesini Gör
+      </a>
+      <a href="{{ base_url }}/events/{{ event.id }}/accommodations" class="btn btn-secondary" style="justify-content:flex-start;">
+        🏨 Konaklama Listesini Gör
+      </a>
+      <a href="{{ base_url }}/events/{{ event.id }}/transfers" class="btn btn-secondary" style="justify-content:flex-start;">
+        🚌 Transfer Listesini Gör
+      </a>
+      <a href="{{ base_url }}/events/{{ event.id }}/notifications" class="btn btn-secondary" style="justify-content:flex-start;">
+        🔔 Bildirimler
+      </a>
+    </div>
+
+    {% if links %}
+    <div style="margin-top:16px;">
+      <div style="font-size:12px; color:#64748b; font-weight:700; text-transform:uppercase;
+                  letter-spacing:.05em; margin-bottom:8px;">🔗 Paylaşım Linkleri</div>
+
+      {% set link_defs = [
+        ("manager",        "👔", "Yönetici Paneli",       "#dbeafe", "#1d4ed8"),
+        ("coordinator",    "🎯", "Koordinatör Paneli",    "#dbeafe", "#1d4ed8"),
+        ("transfers",      "🚌", "Transfer Tedarikçisi",  "#dcfce7", "#166534"),
+        ("accommodations", "🏨", "Konaklama Tedarikçisi", "#dcfce7", "#166534"),
+        ("tasks",          "🔧", "Görev Portalı",         "#fef3c7", "#92400e"),
+        ("client",         "👥", "Müşteri Portalı",       "#f3e8ff", "#7e22ce"),
+      ] %}
+
+      {% for key, icon, label, bg, fg in link_defs %}
+      {% if links[key] %}
+      <div style="margin-bottom:6px;">
+        <div style="font-size:10px; font-weight:700; color:{{ fg }}; margin-bottom:3px;
+                    background:{{ bg }}; display:inline-block; padding:1px 8px; border-radius:20px;">
+          {{ icon }} {{ label }}
+        </div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <input type="text" id="link-{{ key }}"
+                 value="{{ links[key] }}"
+                 readonly
+                 style="flex:1; font-size:11px; padding:4px 8px;
+                        border:1px solid #e2e8f0; border-radius:4px; background:#f8fafc;
+                        color:#374151; font-family:monospace;">
+          <button class="btn btn-sm btn-secondary"
+                  onclick="copyLink('{{ key }}', this)"
+                  style="white-space:nowrap; flex-shrink:0;">
+            Kopyala
+          </button>
+        </div>
+      </div>
+      {% endif %}
+      {% endfor %}
+
+      <div style="font-size:11px; color:#94a3b8; margin-top:8px;">
+        Login gerektirmez — linki alana iletebilirsiniz.
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+function copyLink(key, btn) {
+  const input = document.getElementById('link-' + key);
+  if (!input) return;
+  navigator.clipboard.writeText(input.value)
+    .then(() => { btn.textContent = '✅'; setTimeout(() => btn.textContent = 'Kopyala', 2000); })
+    .catch(() => { input.select(); document.execCommand('copy'); });
+}
+</script>
+{% endblock %}

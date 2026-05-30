@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block page_title %}Kullanıcılar{% endblock %}
+{% block topbar_actions %}
+<a href="/users/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Yeni Kullanıcı</a>
+{% endblock %}
+{% block content %}
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Ad</th>
+          <th>E-posta</th>
+          <th>Rol</th>
+          <th>Şirket</th>
+          <th>Müdür</th>
+          <th>Durum</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        {% set role_colors = {
+          'kullanici':   'secondary',
+          'mudur':       'info',
+          'genel_mudur': 'primary',
+          'admin':       'danger',
+          'super_admin': 'dark'
+        } %}
+        <tr>
+          <td class="fw-semibold">
+            {{ u.name }}{% if u.surname and u.surname != 'None' %} {{ u.surname }}{% endif %}
+            {% if u.title and u.title != 'None' %}<br><small class="text-muted">{{ u.title }}</small>{% endif %}
+          </td>
+          <td>{{ u.email }}</td>
+          <td>
+            <span class="badge bg-{{ role_colors.get(u.role, 'secondary') }}">
+              {{ role_labels.get(u.role, u.role) }}
+            </span>
+          </td>
+          <td class="text-muted small">
+            {% if u.company %}
+              <span class="badge bg-light text-dark border">{{ u.company.short_name or u.company.name }}</span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-muted small">
+            {% if u.manager %}{{ u.manager.name }}{% else %}—{% endif %}
+          </td>
+          <td>
+            <span class="badge {% if u.active %}bg-success{% else %}bg-secondary{% endif %}">
+              {{ "Aktif" if u.active else "Pasif" }}
+            </span>
+          </td>
+          <td class="text-end">
+            <a href="/users/{{ u.id }}/edit" class="btn btn-sm btn-outline-secondary py-0">Düzenle</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-4">Kullanıcı bulunamadı.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

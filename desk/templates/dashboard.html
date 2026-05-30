@@ -1,0 +1,360 @@
+{% extends "base.html" %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<style>
+  .kpi-link { text-decoration: none; color: inherit; display: block; height: 100%; }
+  .kpi-link .card { transition: transform .15s ease, box-shadow .15s ease; }
+  .kpi-link:hover .card { transform: translateY(-2px); box-shadow: 0 .5rem 1rem rgba(0,0,0,.12) !important; }
+  .kpi-val { white-space: nowrap; overflow: hidden; display: block; }
+</style>
+<script>
+(function () {
+  function fitKpi() {
+    document.querySelectorAll('.kpi-val').forEach(function (el) {
+      el.style.fontSize = '';
+      var fs = parseFloat(getComputedStyle(el).fontSize);
+      while (el.scrollWidth > el.offsetWidth + 1 && fs > 10) {
+        fs -= 0.5;
+        el.style.fontSize = fs + 'px';
+      }
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fitKpi);
+  } else {
+    fitKpi();
+  }
+  window.addEventListener('resize', fitKpi);
+}());
+</script>
+
+<!-- Filtre kartı -->
+<div class="card border-0 shadow-sm mb-4" style="background:#f8fafc;">
+  <div class="card-body py-3 px-4">
+    <form method="get" action="/dashboard" id="dashFilterForm">
+      <div class="d-flex align-items-end gap-3 flex-wrap">
+        <div>
+          <label class="form-label mb-1" style="font-size:11px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.4px;">Başlangıç</label>
+          <input type="date" name="date_from" id="dfFrom" value="{{ d_from }}" class="form-control form-control-sm" style="width:140px;">
+        </div>
+        <div style="padding-bottom:6px;color:#94a3b8;">→</div>
+        <div>
+          <label class="form-label mb-1" style="font-size:11px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.4px;">Bitiş</label>
+          <input type="date" name="date_to" id="dfTo" value="{{ d_to }}" class="form-control form-control-sm" style="width:140px;">
+        </div>
+        <div style="min-width:200px;">
+          <label class="form-label mb-1" style="font-size:11px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.4px;">Müşteri</label>
+          <select name="customer_id" class="form-select form-select-sm">
+            <option value="">— Tüm Müşteriler —</option>
+            {% for c in customers %}
+            <option value="{{ c.id }}" {% if selected_customer_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="d-flex gap-2" style="padding-bottom:2px;">
+          <button type="submit" class="btn btn-sm btn-primary px-3">
+            <i class="bi bi-funnel me-1"></i>Filtrele
+          </button>
+          <a href="/dashboard" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-x-lg"></i>
+          </a>
+        </div>
+      </div>
+      <!-- Hızlı dönem seçimi -->
+      <div class="d-flex gap-2 mt-2 flex-wrap">
+        <span style="font-size:11px;color:#94a3b8;align-self:center;">Hızlı:</span>
+        <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:11px;" onclick="setRange(0,0)">Bugün</button>
+        <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:11px;" onclick="setRange(6,0)">Son 7 Gün</button>
+        <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:11px;" onclick="setRange(29,0)">Son 30 Gün</button>
+        <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:11px;" onclick="setRange(89,0)">Son 90 Gün</button>
+        <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:11px;" onclick="setThisMonth()">Bu Ay</button>
+        <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:11px;" onclick="setThisYear()">Bu Yıl</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+function setRange(daysBefore, daysAfter) {
+  var t = new Date(); var f = new Date();
+  f.setDate(f.getDate() - daysBefore);
+  t.setDate(t.getDate() + daysAfter);
+  document.getElementById('dfFrom').value = f.toISOString().slice(0,10);
+  document.getElementById('dfTo').value   = t.toISOString().slice(0,10);
+  document.getElementById('dashFilterForm').submit();
+}
+function setThisMonth() {
+  var n = new Date();
+  document.getElementById('dfFrom').value = new Date(n.getFullYear(), n.getMonth(), 1).toISOString().slice(0,10);
+  document.getElementById('dfTo').value   = new Date(n.getFullYear(), n.getMonth()+1, 0).toISOString().slice(0,10);
+  document.getElementById('dashFilterForm').submit();
+}
+function setThisYear() {
+  var y = new Date().getFullYear();
+  document.getElementById('dfFrom').value = y + '-01-01';
+  document.getElementById('dfTo').value   = y + '-12-31';
+  document.getElementById('dashFilterForm').submit();
+}
+</script>
+
+<div class="row g-3 mb-4">
+  {% if can_see(request, 'invoices') %}
+  <div class="col-6 col-md-3">
+    <a href="/invoices?invoice_type=kesilen" class="kpi-link">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small mb-1">Ciro <span class="text-muted" style="font-size:10px;">{{ d_from_tr }} – {{ d_to_tr }}</span></div>
+          <div class="fs-2 fw-bold text-success kpi-val">{{ ciro | money }}</div>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endif %}
+  {% if can_see(request, 'invoices') %}
+  <div class="col-6 col-md-3">
+    <a href="/invoices?invoice_type=gelen" class="kpi-link">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small mb-1">Gelen Fatura <span class="text-muted" style="font-size:10px;">{{ d_from_tr }} – {{ d_to_tr }}</span></div>
+          <div class="fs-2 fw-bold text-danger kpi-val">{{ gelen_yil | money }}</div>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endif %}
+  {# Kâr: ciro - gelen fatura - (sadece muhasebe için) genel giderler #}
+  {% if can_see(request, 'invoices') %}
+  <div class="col-6 col-md-3">
+    {% if can_see(request, 'reports_financial') %}
+    <a href="/reports/pl" class="kpi-link">
+    {% else %}
+    <div class="kpi-link" style="cursor:default;">
+    {% endif %}
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small mb-1">Kâr <span class="text-muted" style="font-size:10px;">{{ d_from_tr }} – {{ d_to_tr }}</span></div>
+          <div class="fs-2 fw-bold kpi-val" style="color:{% if ytd_kar > 0 %}#16a34a{% elif ytd_kar < 0 %}#dc2626{% else %}#64748b{% endif %}"
+              >{{ ytd_kar | money }}</div>
+        </div>
+      </div>
+    {% if can_see(request, 'reports_financial') %}
+    </a>
+    {% else %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+  {# 4. slot:
+       - reports_financial görenler (muhasebe/GM/admin) → Tahsilat Beklenen
+       - Diğer (sales) → Kârlılık #}
+  {% if can_see(request, 'reports_financial') %}
+  <div class="col-6 col-md-3">
+    <a href="/invoices?invoice_type=kesilen" class="kpi-link">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small mb-1">Tahsilat Beklenen</div>
+          <div class="fs-2 fw-bold text-success kpi-val">{{ tahsilat_beklenen | money }}</div>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% elif can_see(request, 'invoices') %}
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small mb-1">Kârlılık</div>
+        <div class="fs-2 fw-bold kpi-val"
+             style="color:{% if karlilik is not none and karlilik > 0 %}#16a34a{% elif karlilik is not none and karlilik < 0 %}#dc2626{% else %}#64748b{% endif %}">
+          {% if karlilik is not none %}%{{ karlilik }}{% else %}—{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{% set has_finance_kpi = can_see(request, 'banks') or can_see(request, 'credit_cards') or can_see(request, 'cash') or can_see(request, 'reports_financial') %}
+{% if has_finance_kpi %}
+<div class="row g-3 mb-4">
+  {% if can_see(request, 'banks') %}
+  <div class="col-6 col-md-3">
+    <a href="/bank-accounts" class="kpi-link">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small mb-1">Banka Toplamı</div>
+          <div class="fs-4 fw-bold kpi-val" style="color:{% if bank_total >= 0 %}#16a34a{% else %}#dc2626{% endif %}"
+              >{{ bank_total | money }}</div>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endif %}
+  {% if can_see(request, 'credit_cards') %}
+  <div class="col-6 col-md-3">
+    <a href="/credit-cards" class="kpi-link">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small mb-1">Kredi Kartı Toplamı</div>
+          <div class="fs-4 fw-bold kpi-val" style="color:{% if kk_bakiye > 0 %}#dc2626{% else %}#64748b{% endif %}"
+              >{{ kk_bakiye | money }}</div>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endif %}
+  {% if can_see(request, 'cash') %}
+  <div class="col-6 col-md-3">
+    <a href="/cash" class="kpi-link">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small mb-1">Kasa Toplamı</div>
+          <div class="fs-4 fw-bold kpi-val" style="color:{% if cash_total >= 0 %}#16a34a{% else %}#dc2626{% endif %}"
+              >{{ cash_total | money }}</div>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endif %}
+  {% if can_see(request, 'reports_financial') %}
+  <div class="col-6 col-md-3">
+    <a href="/invoices?invoice_type=gelen" class="kpi-link">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small mb-1">Ödenecek Tutar</div>
+          <div class="fs-4 fw-bold text-danger kpi-val">{{ odeme_yapilacak | money }}</div>
+          <div class="text-muted small mt-1">KK dahil</div>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- Hızlı Erişim — sadece role/departmana göre erişimi olan -->
+{% set has_shortcuts = can_edit(request, 'invoices') or can_edit(request, 'general_expenses') or can_edit(request, 'references') or can_edit(request, 'employees') or can_see(request, 'advances') or can_see(request, 'hbf') %}
+{% if has_shortcuts %}
+<div class="row g-2 mb-4">
+  <div class="col-12">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <span class="text-muted small fw-semibold" style="white-space:nowrap;">Hızlı Erişim:</span>
+      {% if can_edit(request, 'invoices') %}
+      <a href="/invoices/new" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-receipt me-1"></i>Fatura Ekle
+      </a>
+      {% endif %}
+      {% if can_edit(request, 'general_expenses') %}
+      <a href="/general-expenses/new" class="btn btn-sm btn-outline-danger">
+        <i class="bi bi-cash-stack me-1"></i>Gider Ekle
+      </a>
+      {% endif %}
+      {% if can_edit(request, 'references') %}
+      <a href="/references/new" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-folder-plus me-1"></i>Yeni Referans
+      </a>
+      {% endif %}
+      {% if can_edit(request, 'employees') %}
+      <a href="/employees/new" class="btn btn-sm btn-outline-info">
+        <i class="bi bi-person-plus me-1"></i>Yeni Çalışan
+      </a>
+      {% endif %}
+      {% if can_see(request, 'advances') %}
+      <a href="/advances" class="btn btn-sm btn-outline-warning">
+        <i class="bi bi-cash me-1"></i>Avans Talepleri
+      </a>
+      {% endif %}
+      {% if can_see(request, 'hbf') %}
+      <a href="/hbf" class="btn btn-sm btn-outline-dark">
+        <i class="bi bi-file-earmark-text me-1"></i>Harcama Bildirimleri
+      </a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if pending_instr_count and can_see(request, 'payment_instructions') %}
+<div class="row g-3 mb-4">
+  <div class="col-md-12">
+    <a href="/payment-instructions/inbox" class="kpi-link">
+      <div class="card border-0 shadow-sm" style="border-left: 4px solid #f59e0b !important;">
+        <div class="card-body d-flex align-items-center">
+          <div>
+            <div class="text-muted small mb-1"><i class="bi bi-inbox"></i> Bekleyen Ödeme Talimatları</div>
+            <div class="fs-4 fw-bold">{{ pending_instr_count }} kalem · {{ pending_instr_total | money }}</div>
+          </div>
+          <span class="ms-auto badge bg-warning text-dark">İnfaz bekliyor</span>
+        </div>
+      </div>
+    </a>
+  </div>
+</div>
+{% endif %}
+
+{% set show_recent_refs = can_see(request, 'references') %}
+{% set show_recent_invoices = can_see(request, 'invoices') %}
+{% if show_recent_refs or show_recent_invoices %}
+<div class="row g-3">
+  {% if show_recent_refs %}
+  <div class="col-md-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 d-flex align-items-center">
+        <span class="fw-semibold">Son Referanslar</span>
+        <a href="/references" class="ms-auto btn btn-sm btn-outline-primary">Tümü</a>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+          <tbody>
+            {% for r in son_referanslar %}
+            <tr>
+              <td class="ps-3">
+                <a href="/references/{{ r.id }}" class="text-decoration-none fw-semibold">{{ r.ref_no }}</a>
+                <div class="text-muted small">{{ r.title }}</div>
+              </td>
+              <td class="text-end pe-3">
+                <span class="badge {% if r.status == 'aktif' %}bg-success{% elif r.status == 'tamamlandi' %}bg-secondary{% else %}bg-danger{% endif %}">{{ r.status }}</span>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td class="text-muted ps-3 py-3" colspan="2">Henüz referans yok.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if show_recent_invoices %}
+  <div class="col-md-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 d-flex align-items-center">
+        <span class="fw-semibold">Son Faturalar</span>
+        <a href="/invoices" class="ms-auto btn btn-sm btn-outline-primary">Tümü</a>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+          <tbody>
+            {% for inv in son_faturalar %}
+            <tr>
+              <td class="ps-3">
+                <a href="/invoices/{{ inv.id }}" class="text-decoration-none">{{ inv.invoice_no or ("#" ~ inv.id) }}</a>
+                <div class="text-muted small">{{ inv.invoice_date | date_tr }}{% if inv.vendor %} · {{ inv.vendor.name }}{% endif %}</div>
+              </td>
+              <td class="text-end pe-3">
+                <div class="fw-semibold">{{ inv.amount | money }}</div>
+                <span class="badge {% if inv.status == 'paid' %}bg-success{% elif inv.status == 'approved' %}bg-warning text-dark{% else %}bg-secondary{% endif %} small">{{ inv.status }}</span>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td class="text-muted ps-3 py-3" colspan="2">Henüz fatura yok.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

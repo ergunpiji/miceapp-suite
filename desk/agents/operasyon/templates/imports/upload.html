@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Excel Aktar — {{ event.name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">📥 Excel'den Katılımcı Aktar</div>
+    <div class="page-subtitle">{{ event.name }}</div>
+  </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">❌ {{ error }}</div>
+{% endif %}
+
+<!-- YOL 1: Şablon -->
+<div class="card" style="border-left:4px solid #1e5f8c; margin-bottom:16px;">
+  <div style="display:flex; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+    <div style="flex:1; min-width:260px;">
+      <div class="card-title" style="margin-bottom:6px;">📋 Şablon ile Aktar (Önerilen)</div>
+      <p style="color:#64748b; font-size:13px; line-height:1.6; margin:0 0 14px;">
+        Hazır şablonu indirin, katılımcıları doldurun ve yükleyin.<br>
+        <strong>Yapay zeka gerekmez</strong> — hızlı ve güvenilir.
+      </p>
+      <a href="{{ base_url }}/events/{{ event.id }}/import/template"
+         class="btn btn-primary" style="margin-bottom:10px; display:inline-block;">
+        ⬇️ Şablonu İndir
+      </a>
+    </div>
+    <div style="flex:1; min-width:260px;">
+      <form method="post"
+            action="{{ base_url }}/events/{{ event.id }}/import/upload-template"
+            enctype="multipart/form-data"
+            id="template-form">
+        <div class="upload-area" id="template-area"
+             style="padding:20px; border-color:#1e5f8c;">
+          <div class="upload-area-icon">📂</div>
+          <div class="upload-area-title" style="font-size:14px;">Doldurulmuş şablonu yükle</div>
+          <div class="upload-area-hint">.xlsx formatı</div>
+          <input type="file" name="file" id="template-file-input"
+                 accept=".xlsx,.xls" style="display:none">
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div style="margin-top:8px; padding:12px; background:#f0f9ff; border-radius:8px;
+              font-size:12px; color:#0369a1;">
+    <strong>Şablon colonları:</strong>
+    Ad · Soyad · Şirket · Unvan · E-posta · Telefon · Yaka Kartı Adı · Beslenme Kısıtı ·
+    Geliş/Dönüş Uçuşu (Uçuş No, Tarih, Kalkış, Varış, Saatler, Koltuk, PNR) ·
+    Konaklama (Otel, Oda, Tarihler)
+  </div>
+</div>
+
+<!-- YOL 2: AI -->
+<div class="card" style="border-left:4px solid #7c3aed;">
+  <div class="card-title" style="margin-bottom:6px;">🤖 Yapay Zeka ile Aktar</div>
+  <p style="color:#64748b; font-size:13px; line-height:1.6; margin:0 0 14px;">
+    Müşterinin gönderdiği <strong>herhangi bir Excel formatını</strong> yükleyin.
+    Yapay zeka otomatik olarak analiz eder ve standart formata dönüştürür.
+    Onaylamadan önce önizleme göreceksiniz.
+  </p>
+
+  <form method="post"
+        action="{{ base_url }}/events/{{ event.id }}/import/upload"
+        enctype="multipart/form-data"
+        id="ai-form">
+    <div class="upload-area" id="ai-area">
+      <div class="upload-area-icon">📂</div>
+      <div class="upload-area-title">Excel dosyasını buraya sürükleyin veya tıklayın</div>
+      <div class="upload-area-hint">.xlsx veya .xls · Her format desteklenir</div>
+      <input type="file" name="file" id="ai-file-input"
+             accept=".xlsx,.xls" style="display:none">
+    </div>
+  </form>
+
+  <div style="margin-top:12px; font-size:12px; color:#94a3b8;">
+    ⚠️ Yapay zeka formattaki farklılıklar nedeniyle bazen hata verebilir.
+    Hata alırsanız şablon yöntemini deneyin.
+  </div>
+</div>
+
+<script>
+  // Şablon upload alanı
+  const templateArea = document.getElementById('template-area');
+  const templateInput = document.getElementById('template-file-input');
+  const templateForm = document.getElementById('template-form');
+  templateArea.addEventListener('click', () => templateInput.click());
+  templateArea.addEventListener('dragover', e => { e.preventDefault(); templateArea.classList.add('drag-over'); });
+  templateArea.addEventListener('dragleave', () => templateArea.classList.remove('drag-over'));
+  templateArea.addEventListener('drop', e => {
+    e.preventDefault(); templateArea.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) { templateInput.files = e.dataTransfer.files; submitTemplate(file); }
+  });
+  templateInput.addEventListener('change', () => {
+    if (templateInput.files[0]) submitTemplate(templateInput.files[0]);
+  });
+  function submitTemplate(file) {
+    templateArea.querySelector('.upload-area-title').textContent = '⏳ ' + file.name + ' yükleniyor...';
+    templateForm.submit();
+  }
+
+  // AI upload alanı
+  const aiArea = document.getElementById('ai-area');
+  const aiInput = document.getElementById('ai-file-input');
+  const aiForm = document.getElementById('ai-form');
+  aiArea.addEventListener('click', () => aiInput.click());
+  aiArea.addEventListener('dragover', e => { e.preventDefault(); aiArea.classList.add('drag-over'); });
+  aiArea.addEventListener('dragleave', () => aiArea.classList.remove('drag-over'));
+  aiArea.addEventListener('drop', e => {
+    e.preventDefault(); aiArea.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) { aiInput.files = e.dataTransfer.files; submitAI(file); }
+  });
+  aiInput.addEventListener('change', () => {
+    if (aiInput.files[0]) submitAI(aiInput.files[0]);
+  });
+  function submitAI(file) {
+    aiArea.querySelector('.upload-area-title').textContent = '⏳ ' + file.name + ' analiz ediliyor...';
+    aiArea.querySelector('.upload-area-hint').textContent = 'Yapay zeka çalışıyor, lütfen bekleyin...';
+    aiForm.submit();
+  }
+</script>
+{% endblock %}

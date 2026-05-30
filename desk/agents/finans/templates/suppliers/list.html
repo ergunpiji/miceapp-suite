@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Tedarikçi Cari{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">🏢 Tedarikçi Cari Hesapları</div>
+  </div>
+  <a href="/suppliers/new" class="btn btn-primary">+ Yeni Tedarikçi</a>
+</div>
+
+{% if suppliers %}
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Firma Adı</th>
+          <th>Vergi No</th>
+          <th>İletişim</th>
+          <th class="text-right">Ödenen</th>
+          <th class="text-right">Bekleyen Borç</th>
+          <th>Durum</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in suppliers %}
+        <tr>
+          <td><a href="/suppliers/{{ s.id }}" style="color:var(--accent);font-weight:600">{{ s.name }}</a></td>
+          <td class="font-mono">{{ s.tax_number or '—' }}</td>
+          <td>
+            {% if s.contact_name %}{{ s.contact_name }}<br>{% endif %}
+            {% if s.phone %}<span style="font-size:12px;color:var(--text-muted)">{{ s.phone }}</span>{% endif %}
+          </td>
+          <td class="text-right font-mono amount-positive">{{ s.total_paid | currency }}</td>
+          <td class="text-right font-mono {% if s.total_debt > 0 %}amount-negative{% endif %}">{{ s.total_debt | currency }}</td>
+          <td>
+            {% if s.status == 'aktif' %}<span class="badge badge-success">Aktif</span>
+            {% else %}<span class="badge badge-neutral">Pasif</span>{% endif %}
+          </td>
+          <td class="nowrap">
+            <a href="/suppliers/{{ s.id }}" class="btn btn-xs btn-outline">Detay</a>
+            <a href="/suppliers/{{ s.id }}/edit" class="btn btn-xs btn-secondary">Düzenle</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon">🏢</div>
+  <div class="empty-state-text">Henüz tedarikçi yok. <a href="/suppliers/new">Ekle</a></div>
+</div>
+{% endif %}
+{% endblock %}

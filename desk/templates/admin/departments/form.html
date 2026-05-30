@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .icon-picker { display:flex; flex-wrap:wrap; gap:6px; padding:8px;
+                 border:1px solid #e5e7eb; border-radius:6px; max-height:200px; overflow-y:auto; }
+  .icon-opt { width:38px; height:38px; border-radius:6px; display:flex; align-items:center;
+              justify-content:center; cursor:pointer; font-size:18px; border:1px solid transparent; }
+  .icon-opt:hover { background:#f1f5f9; }
+  .icon-opt.active { background:#1e5f8c; color:#fff; border-color:#1a3a5c; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-3">
+  <a href="/admin/departments" class="btn btn-link text-decoration-none p-0 me-3">
+    <i class="bi bi-arrow-left"></i> Geri
+  </a>
+  <h5 class="mb-0">{{ page_title }}</h5>
+</div>
+
+<form method="post"
+      action="{% if mode == 'new' %}/admin/departments/create{% else %}/admin/departments/{{ dept.id }}/update{% endif %}"
+      class="card border-0 shadow-sm p-4" style="max-width:640px;">
+
+  <div class="mb-3">
+    <label class="form-label">Departman Adı <span class="text-danger">*</span></label>
+    <input type="text" name="name" class="form-control" required
+           value="{{ dept.name if dept else '' }}"
+           placeholder="Satış, Muhasebe, İK, Muhasebe & İK, vb.">
+    <small class="text-muted">Adı yazınca slug otomatik üretilir.</small>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-md-4">
+      <label class="form-label">Renk</label>
+      <input type="color" name="color" class="form-control form-control-color"
+             value="{{ dept.color if dept else '#1A3A5C' }}" style="height:42px;">
+    </div>
+    <div class="col-md-8">
+      <label class="form-label">İkon</label>
+      <input type="hidden" name="icon" id="icon-input"
+             value="{{ dept.icon if dept else 'bi-people' }}">
+      <div class="icon-picker" id="icon-picker">
+        {% for ico in ['bi-people','bi-briefcase','bi-calculator','bi-diagram-3',
+                       'bi-cash-stack','bi-receipt','bi-truck','bi-tools',
+                       'bi-megaphone','bi-graph-up','bi-building','bi-globe',
+                       'bi-shield-check','bi-heart-pulse','bi-mortarboard'] %}
+        <div class="icon-opt" data-icon="{{ ico }}">
+          <i class="bi {{ ico }}"></i>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {% if mode == 'edit' %}
+  <div class="mb-3">
+    <div class="form-check">
+      <input type="checkbox" class="form-check-input" id="active" name="active" value="1"
+             {% if dept.active %}checked{% endif %}>
+      <label class="form-check-label" for="active">Aktif</label>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="d-flex gap-2 mt-2">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-lg me-1"></i>Kaydet
+    </button>
+    <a href="/admin/departments" class="btn btn-outline-secondary">İptal</a>
+  </div>
+</form>
+
+<script>
+(function(){
+  const input = document.getElementById('icon-input');
+  const picker = document.getElementById('icon-picker');
+  function markActive() {
+    picker.querySelectorAll('.icon-opt').forEach(el => {
+      el.classList.toggle('active', el.dataset.icon === input.value);
+    });
+  }
+  picker.addEventListener('click', e => {
+    const opt = e.target.closest('.icon-opt');
+    if (!opt) return;
+    input.value = opt.dataset.icon;
+    markActive();
+  });
+  markActive();
+})();
+</script>
+{% endblock %}

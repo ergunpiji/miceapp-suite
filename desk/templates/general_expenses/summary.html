@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center mb-3">
+  <div class="col-md-4">
+    <form class="d-flex gap-2" method="get">
+      <input type="number" name="year" value="{{ year }}" class="form-control" min="2020" max="2030">
+      <button type="submit" class="btn btn-outline-secondary">Göster</button>
+    </form>
+  </div>
+</div>
+
+<div class="row g-3">
+  {% for parent in categories %}
+  <div class="col-md-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0">
+        <span class="fw-bold">{{ parent.name }}</span>
+        <span class="ms-auto text-muted small">
+          {% set parent_total = namespace(v=0) %}
+          {% for sub in parent._children %}
+          {% set parent_total.v = parent_total.v + cat_totals.get(sub.id, 0) %}
+          {% endfor %}
+          {{ parent_total.v | money }}
+        </span>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <tbody>
+            {% for sub in parent._children %}
+            {% set amt = cat_totals.get(sub.id, 0) %}
+            {% if amt > 0 %}
+            <tr>
+              <td class="ps-3">{{ sub.name }}</td>
+              <td class="text-end pe-3 fw-semibold">{{ amt | money }}</td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  <div class="col-12">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <span class="fw-bold fs-5">{{ year }} Yılı Toplam Gider</span>
+        <span class="fw-bold fs-4 text-danger">{{ total | money }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+{% block page_title %}{{ ref.ref_no }}{% endblock %}
+
+{% block topbar_actions %}
+{% if can_edit(request, 'references') and (not ref.is_locked or current_user.is_admin) %}
+<a href="/references/{{ ref.id }}/edit" class="btn btn-sm btn-outline-secondary">Düzenle</a>
+{% endif %}
+{% if can_edit(request, 'invoices') and not ref.is_locked %}
+<a href="/invoices/new?ref_id={{ ref.id }}" class="btn btn-sm btn-primary">+ Fatura Ekle</a>
+{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .fin-card {
+    border-radius: 12px;
+    padding: 16px 20px;
+    flex: 1;
+    min-width: 0;
+  }
+  .fin-label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; font-weight: 700; margin-bottom: 4px; opacity: .75; }
+  .fin-value { font-size: 22px; font-weight: 800; white-space: nowrap; overflow: hidden; display: block; }
+</style>
+<script>
+(function () {
+  function fitFinValues() {
+    document.querySelectorAll('.fin-value').forEach(function (el) {
+      el.style.fontSize = '';
+      var fs = parseFloat(getComputedStyle(el).fontSize);
+      while (el.scrollWidth > el.offsetWidth + 1 && fs > 10) {
+        fs -= 0.5;
+        el.style.fontSize = fs + 'px';
+      }
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fitFinValues);
+  } else {
+    fitFinValues();
+  }
+  window.addEventListener('resize', fitFinValues);
+}());
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body">
+        <h6 class="fw-bold mb-3">Referans Bilgileri</h6>
+        <table class="table table-sm mb-0">
+          <tr><th class="text-muted fw-normal">Ref No</th><td class="fw-semibold">{{ ref.ref_no }}</td></tr>
+          <tr><th class="text-muted fw-normal">Başlık</th><td>{{ ref.title }}</td></tr>
+          <tr><th class="text-muted fw-normal">Müşteri</th><td>{{ ref.customer.name if ref.customer else "—" }}</td></tr>
+          <tr><th class="text-muted fw-normal">Etkinlik Tipi</th><td>{{ ref.event_type or "—" }}</td></tr>
+          <tr><th class="text-muted fw-normal">Giriş</th><td>{{ ref.check_in | date_tr }}</td></tr>
+          <tr><th class="text-muted fw-normal">Çıkış</th><td>{{ ref.check_out | date_tr }}</td></tr>
+          <tr><th class="text-muted fw-normal">Durum</th><td>
+            <span class="badge {% if ref.status == 'aktif' %}bg-success{% elif ref.status == 'tamamlandi' %}bg-secondary{% else %}bg-danger{% endif %}">{{ ref.status }}</span>
+          </td></tr>
+        </table>
+        {% if ref.notes %}
+        <div class="mt-2 text-muted small">{{ ref.notes }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Onay & Durum -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <h6 class="fw-bold mb-3">Onay Durumu</h6>
+
+        {% set ap = ref.approval_status %}
+
+        <!-- Durum rozeti -->
+        <div class="mb-3">
+          {% if ap == 'gm_onayladi' %}
+            <span class="badge bg-success fs-6"><i class="bi bi-lock-fill me-1"></i>GM Onaylı — Kilitli</span>
+            {% if ref.gm_approver %}
+            <div class="text-muted small mt-1">{{ ref.gm_approver.name }} · {{ ref.gm_approved_at | date_tr }}</div>
+            {% endif %}
+          {% elif ap == 'reaktivasyon_talep' %}
+            <span class="badge bg-warning text-dark fs-6"><i class="bi bi-arrow-counterclockwise me-1"></i>Aktifleştirme Talep Edildi</span>
+            {% if ref.reactivation_requester %}
+            <div class="text-muted small mt-1">{{ ref.reactivation_requester.name }} · {{ ref.reactivation_requested_at | date_tr }}</div>
+            {% endif %}
+            {% if ref.reactivation_note %}
+            <div class="alert alert-warning py-1 mt-2 small">{{ ref.reactivation_note }}</div>
+            {% endif %}
+          {% elif ap == 'mudur_onayladi' %}
+            <span class="badge bg-info text-dark fs-6"><i class="bi bi-person-check me-1"></i>Müdür Onayladı</span>
+            <div class="text-muted small mt-1">GM onayı bekleniyor</div>
+          {% elif ap == 'kapanış_talep' %}
+            <span class="badge bg-warning text-dark fs-6"><i class="bi bi-hourglass-split me-1"></i>Kapanış Talep Edildi</span>
+            {% if ref.approval_requester %}
+            <div class="text-muted small mt-1">{{ ref.approval_requester.name }} · {{ ref.approval_requested_at | date_tr }}</div>
+            {% endif %}
+          {% elif ap == 'reddedildi' %}
+            <span class="badge bg-danger fs-6"><i class="bi bi-x-circle me-1"></i>Reddedildi</span>
+            {% if ref.approval_rejection_note %}
+            <div class="alert alert-danger py-1 mt-2 small">{{ ref.approval_rejection_note }}</div>
+            {% endif %}
+          {% else %}
+            <span class="badge {% if ref.status == 'aktif' %}bg-success{% elif ref.status == 'tamamlandi' %}bg-secondary{% else %}bg-danger{% endif %}">{{ ref.status }}</span>
+          {% endif %}
+        </div>
+
+        <!-- Aksiyonlar -->
+        {% if not ref.is_locked %}
+          {% if ap not in ('kapanış_talep', 'mudur_onayladi') %}
+            <!-- Kapanış talep et / direkt kapat -->
+            {% if ref.status == 'aktif' %}
+            <form method="post" action="/references/{{ ref.id }}/request-close" class="mb-2">
+              <button class="btn btn-sm {% if current_user.is_approver %}btn-success{% else %}btn-outline-success{% endif %} w-100">
+                <i class="bi bi-check2-circle me-1"></i>
+                {% if current_user.is_approver %}
+                  Tamamlandı Olarak Kapat
+                {% elif current_user.role == 'mudur' and limit_mudur is not none and ref_total <= limit_mudur %}
+                  Kapat (Limit Dahilinde)
+                {% elif limit_kullanici is not none and ref_total <= limit_kullanici %}
+                  Kapat (Limit Dahilinde)
+                {% else %}
+                  Kapanış Talep Et
+                {% endif %}
+              </button>
+            </form>
+            {% if not current_user.is_approver %}
+            <div class="text-muted" style="font-size:11px;">
+              Fatura toplamı: <strong>{{ ref_total | money }}</strong>
+              {% if current_user.role == 'mudur' %}
+                · Müdür limiti: {% if limit_mudur is not none %}{{ limit_mudur | money }}{% else %}—{% endif %}
+              {% else %}
+                · Kullanıcı limiti: {% if limit_kullanici is not none %}{{ limit_kullanici | money }}{% else %}—{% endif %}
+              {% endif %}
+            </div>
+            {% endif %}
+            {% endif %}
+          {% else %}
+            <!-- Onay veya red (müdür/GM) -->
+            {% if current_user.role in ['mudur','genel_mudur','admin','super_admin'] %}
+            <form method="post" action="/references/{{ ref.id }}/approve" class="mb-2">
+              <button class="btn btn-sm btn-success w-100">
+                <i class="bi bi-check-circle me-1"></i>
+                {% if current_user.is_approver %}GM Onayı Ver — Kapat{% else %}Müdür Onayı Ver{% endif %}
+              </button>
+            </form>
+            <button class="btn btn-sm btn-outline-danger w-100" data-bs-toggle="modal" data-bs-target="#rejectModal">
+              <i class="bi bi-x-circle me-1"></i>Reddet
+            </button>
+            {% endif %}
+          {% endif %}
+
+          <!-- İptal / Aktife al -->
+          <div class="d-flex gap-2 mt-2 flex-wrap">
+            {% if ref.status != 'aktif' %}
+            <form method="post" action="/references/{{ ref.id }}/status">
+              <button name="new_status" value="aktif" class="btn btn-sm btn-outline-success">Aktife Al</button>
+            </form>
+            {% endif %}
+            {% if ref.status != 'iptal' %}
+            <form method="post" action="/references/{{ ref.id }}/status">
+              <button name="new_status" value="iptal" class="btn btn-sm btn-outline-danger"
+                      onclick="return confirm('İptal edilsin mi?')">İptal Et</button>
+            </form>
+            {% endif %}
+          </div>
+        {% else %}
+          <!-- Kilitli — admin direkt açar, diğerleri talep oluşturur -->
+          {% if current_user.is_approver %}
+            <form method="post" action="/references/{{ ref.id }}/approve-reactivate" class="mb-2">
+              <button class="btn btn-sm btn-warning w-100">
+                <i class="bi bi-unlock me-1"></i>Aktife Al (GM Onayı)
+              </button>
+            </form>
+            {% if ap == 'reaktivasyon_talep' %}
+            <div class="text-muted small mt-1"><i class="bi bi-info-circle me-1"></i>Aktifleştirme talebi bekliyor</div>
+            {% endif %}
+          {% elif current_user.is_admin %}
+          <form method="post" action="/references/{{ ref.id }}/status" class="mb-2">
+            <button name="new_status" value="aktif" class="btn btn-sm btn-outline-warning w-100">
+              <i class="bi bi-unlock me-1"></i>Kilidi Kaldır (Admin)
+            </button>
+          </form>
+          {% else %}
+            {% if ap != 'reaktivasyon_talep' %}
+            <button class="btn btn-sm btn-outline-secondary w-100" data-bs-toggle="modal" data-bs-target="#reactivateModal">
+              <i class="bi bi-arrow-counterclockwise me-1"></i>Aktifleştirme Talep Et
+            </button>
+            {% else %}
+            <div class="alert alert-warning py-2 small mb-0">
+              <i class="bi bi-hourglass-split me-1"></i>Aktifleştirme talebiniz GM onayı bekliyor.
+            </div>
+            {% endif %}
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Aktifleştirme Talep Modal -->
+    <div class="modal fade" id="reactivateModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title"><i class="bi bi-arrow-counterclockwise me-2"></i>Aktifleştirme Talep Et</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <form method="post" action="/references/{{ ref.id }}/request-reactivate">
+            <div class="modal-body">
+              <p class="text-muted small">Bu dosyanın tekrar aktife alınması için GM onayı gereklidir. Gerekçenizi kısaca belirtin.</p>
+              <label class="form-label fw-semibold">Gerekçe (isteğe bağlı)</label>
+              <textarea name="reactivation_note" class="form-control" rows="3" placeholder="Neden aktife alınması gerekiyor?"></textarea>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+              <button type="submit" class="btn btn-primary">Talep Gönder</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Red Modal -->
+    <div class="modal fade" id="rejectModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Kapanış Talebini Reddet</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <form method="post" action="/references/{{ ref.id }}/reject-close">
+            <div class="modal-body">
+              <label class="form-label fw-semibold">Red Nedeni</label>
+              <textarea name="rejection_note" class="form-control" rows="3" placeholder="Açıklama..."></textarea>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+              <button type="submit" class="btn btn-danger">Reddet</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-8">
+    <!-- Finansal özet kartları -->
+    <div class="d-flex gap-3 mb-3 flex-wrap">
+      <div class="fin-card" style="background:#eff6ff; color:#1d4ed8;">
+        <div class="fin-label">Kesilen Fatura</div>
+        <div class="fin-value">{{ total_kesilen | money }}</div>
+      </div>
+      <div class="fin-card" style="background:#fef2f2; color:#b91c1c;">
+        <div class="fin-label">Gelen Fatura</div>
+        <div class="fin-value">{{ total_gelen | money }}</div>
+      </div>
+      <div class="fin-card" style="background:{% if kar >= 0 %}#f0fdf4{% else %}#fef2f2{% endif %}; color:{% if kar >= 0 %}#15803d{% else %}#b91c1c{% endif %};">
+        <div class="fin-label">Kar</div>
+        <div class="fin-value">{{ kar | money }}</div>
+      </div>
+      {% if kar_orani is not none %}
+      <div class="fin-card" style="background:{% if kar_orani >= 0 %}#fefce8{% else %}#fef2f2{% endif %}; color:{% if kar_orani >= 0 %}#854d0e{% else %}#b91c1c{% endif %};">
+        <div class="fin-label">Karlılık</div>
+        <div class="fin-value">%{{ kar_orani }}</div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Fatura tablosu -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 d-flex align-items-center py-2">
+        <span class="fw-semibold">Faturalar</span>
+        <a href="/invoices/new?ref_id={{ ref.id }}" class="ms-auto btn btn-sm btn-primary">+ Fatura Ekle</a>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0" style="font-size:13px;">
+          <thead style="background:#f8fafc;">
+            <tr>
+              <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Fatura No</th>
+              <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Tip</th>
+              <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Tedarikçi / Müşteri</th>
+              <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Tarih</th>
+              <th class="text-end" style="font-size:11px;color:#64748b;text-transform:uppercase;">Tutar</th>
+              <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Durum</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for inv in invoices %}
+            <tr>
+              <td><a href="/invoices/{{ inv.id }}" class="text-decoration-none fw-semibold text-dark">{{ inv.invoice_no or ("#" ~ inv.id) }}</a></td>
+              <td><span class="badge bg-light text-dark border" style="font-size:11px;">{{ inv.invoice_type }}</span></td>
+              <td class="text-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{% if inv.invoice_type in ('kesilen', 'iade_gelen') %}{% if inv.customer %}<a href="/customers/{{ inv.customer.id }}" class="text-decoration-none text-muted">{{ inv.customer.name }}</a>{% else %}—{% endif %}{% else %}{% if inv.vendor %}<a href="/vendors/{{ inv.vendor.id }}" class="text-decoration-none text-muted">{{ inv.vendor.name }}</a>{% else %}—{% endif %}{% endif %}</td>
+              <td class="text-muted">{{ inv.invoice_date | date_tr }}</td>
+              <td class="text-end fw-semibold">{{ inv.amount | money }}</td>
+              <td>
+                <span class="badge {% if inv.status == 'paid' %}bg-success{% elif inv.status == 'approved' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                  {{ inv.status }}
+                </span>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="text-center text-muted py-4">Bu referansa ait fatura yok.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

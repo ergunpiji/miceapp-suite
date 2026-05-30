@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        <form method="post">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Hesap Adı</label>
+            <input type="text" name="name" class="form-control" required value="{{ account.name if account else '' }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Banka Adı</label>
+            <input type="text" name="bank_name" class="form-control" value="{{ account.bank_name if account else '' }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">IBAN</label>
+            <input type="text" name="iban" class="form-control font-monospace" value="{{ account.iban if account else '' }}">
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Para Birimi</label>
+              <select name="currency" class="form-select">
+                <option value="TRY" {% if not account or account.currency == 'TRY' %}selected{% endif %}>TRY</option>
+                <option value="USD" {% if account and account.currency == 'USD' %}selected{% endif %}>USD</option>
+                <option value="EUR" {% if account and account.currency == 'EUR' %}selected{% endif %}>EUR</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Açılış Bakiyesi</label>
+              <input type="number" name="opening_balance" step="0.01" class="form-control" value="{{ account.opening_balance if account else '0' }}">
+            </div>
+          </div>
+          <div class="d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-primary">Kaydet</button>
+            <a href="/bank-accounts" class="btn btn-outline-secondary">İptal</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

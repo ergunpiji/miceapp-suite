@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block page_title %}Banka Hesapları{% endblock %}
+{% block topbar_actions %}
+{% if can_edit(request, 'banks') %}<a href="/bank-accounts/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Yeni Hesap</a>{% endif %}
+{% endblock %}
+{% block content %}
+<div class="row g-3">
+  {% for item in accounts_with_balance %}
+  <div class="col-md-4">
+    <a href="/bank-accounts/{{ item.account.id }}" class="text-decoration-none">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <i class="bi bi-bank text-primary fs-4"></i>
+            <div>
+              <h6 class="mb-0 fw-bold">{{ item.account.name }}</h6>
+              <div class="text-muted small">{{ item.account.bank_name or "" }}</div>
+            </div>
+          </div>
+          <div class="fs-3 fw-bold {% if item.balance >= 0 %}text-success{% else %}text-danger{% endif %}">{{ item.balance | money }}</div>
+          <div class="text-muted small mt-1 font-monospace">{{ item.account.iban or "" }}</div>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% else %}
+  <div class="col-12 text-center text-muted py-4">Henüz banka hesabı tanımlı değil.</div>
+  {% endfor %}
+</div>
+{% endblock %}

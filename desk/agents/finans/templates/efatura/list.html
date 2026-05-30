@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}E-Fatura{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">🧾 E-Fatura</div>
+  </div>
+  <div class="flex gap-2">
+    <a href="/efatura/new?invoice_type=satis" class="btn btn-primary">+ Satış Faturası</a>
+    <a href="/efatura/new?invoice_type=alis"  class="btn btn-outline">+ Alış Faturası</a>
+  </div>
+</div>
+
+<!-- Filtreler -->
+<div class="filters-bar">
+  <form method="get" style="display:contents">
+    <select name="type_filter" onchange="this.form.submit()">
+      <option value="all" {{ 'selected' if type_filter=='all' }}>Tüm Tipler</option>
+      {% for t in types %}
+      <option value="{{ t.value }}" {{ 'selected' if type_filter==t.value }}>{{ t.label }}</option>
+      {% endfor %}
+    </select>
+    <select name="status_filter" onchange="this.form.submit()">
+      <option value="all" {{ 'selected' if status_filter=='all' }}>Tüm Durumlar</option>
+      {% for s in statuses %}
+      <option value="{{ s.value }}" {{ 'selected' if status_filter==s.value }}>{{ s.label }}</option>
+      {% endfor %}
+    </select>
+    <input name="q" value="{{ q }}" placeholder="Fatura no, firma adı...">
+    <button type="submit" class="btn btn-outline">Filtrele</button>
+    <a href="/efatura" class="btn btn-secondary">Temizle</a>
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    {% if invoices %}
+    <table>
+      <thead>
+        <tr>
+          <th>Fatura No</th>
+          <th>Tarih</th>
+          <th>Tip</th>
+          <th>Düzenleyen</th>
+          <th>Alıcı</th>
+          <th class="text-right">KDV Hariç</th>
+          <th class="text-right">KDV</th>
+          <th class="text-right">Toplam</th>
+          <th>Durum</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for inv in invoices %}
+        <tr>
+          <td class="font-mono"><a href="/efatura/{{ inv.id }}" style="color:var(--accent)">{{ inv.invoice_no }}</a></td>
+          <td class="nowrap">{{ inv.invoice_date | fmtdate }}</td>
+          <td>
+            {% if inv.invoice_type == 'satis' %}<span class="badge badge-success">Satış</span>
+            {% elif inv.invoice_type == 'alis' %}<span class="badge badge-info">Alış</span>
+            {% else %}<span class="badge badge-warning">İade</span>{% endif %}
+          </td>
+          <td>{{ inv.seller_name }}</td>
+          <td>{{ inv.buyer_name }}</td>
+          <td class="text-right font-mono">{{ inv.total_excl_vat | currency }}</td>
+          <td class="text-right font-mono">{{ inv.total_vat | currency }}</td>
+          <td class="text-right font-mono" style="font-weight:700">{{ inv.total_incl_vat | currency }}</td>
+          <td>
+            {% if inv.status == 'kesildi' %}<span class="badge badge-success">Kesildi</span>
+            {% elif inv.status == 'taslak' %}<span class="badge badge-warning">Taslak</span>
+            {% else %}<span class="badge badge-danger">İptal</span>{% endif %}
+          </td>
+          <td class="nowrap">
+            <a href="/efatura/{{ inv.id }}" class="btn btn-xs btn-outline">Görüntüle</a>
+            <form method="post" action="/efatura/{{ inv.id }}/delete" style="display:inline"
+                  data-confirm="Fatura silinsin mi?">
+              <button class="btn btn-xs btn-danger">✕</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">🧾</div>
+      <div class="empty-state-text">Fatura bulunamadı</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

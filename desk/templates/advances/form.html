@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header" style="background:linear-gradient(135deg,#1a3a5c,#1e5f8c);color:#fff;border-radius:10px 10px 0 0">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-cash-coin me-2"></i>Avans Talebi</h6>
+        {% if not is_manager and my_emp %}
+        <div style="font-size:12px;opacity:.8;margin-top:3px">{{ my_emp.name }} — {{ my_emp.title or '' }}</div>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <form method="post" action="/advances/new">
+          {% if is_manager %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Çalışan <span class="text-danger">*</span></label>
+            <select name="employee_id" class="form-select" required>
+              <option value="">— Seçin —</option>
+              {% for emp in employees %}
+              <option value="{{ emp.id }}">{{ emp.name }}{% if emp.title %} — {{ emp.title }}{% endif %}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Avans Türü <span class="text-danger">*</span></label>
+            <div class="d-flex gap-3">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="advance_type" id="type_maas" value="maas" checked onchange="toggleRef()">
+                <label class="form-check-label" for="type_maas">Maaş Avansı<br><small class="text-muted">Maaştan kesilir</small></label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="advance_type" id="type_is" value="is" onchange="toggleRef()">
+                <label class="form-check-label" for="type_is">İş Avansı<br><small class="text-muted">Referansa bağlı, fiş ibrazıyla kapanır</small></label>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Tutar (₺) <span class="text-danger">*</span></label>
+            <input type="number" name="amount" step="0.01" min="1" class="form-control" placeholder="0,00" required>
+          </div>
+
+          <div class="mb-3" id="refBlock" style="display:none">
+            <label class="form-label fw-semibold">Referans <span class="text-danger">*</span></label>
+            <select name="ref_id" class="form-select" id="refSelect">
+              <option value="">— Seçin —</option>
+              {% for ref in references %}
+              <option value="{{ ref.id }}">{{ ref.ref_no }} — {{ ref.title or '' }}</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">İş avansı için hangi referansa/projeye ait olduğunu belirtin.</div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Gerekçe</label>
+            <textarea name="reason" class="form-control" rows="3"
+                      placeholder="Avans talebinin gerekçesini açıklayın…"></textarea>
+          </div>
+
+          <div class="alert alert-info py-2" style="font-size:13px">
+            <i class="bi bi-info-circle me-1"></i>
+            {% if is_manager %}
+            Yönetici olarak oluşturduğunuz avans <strong>otomatik onaylı</strong> sayılır.
+            {% else %}
+            Talebiniz yöneticiye iletilecek; onaylandıktan sonra ödeme yapılacaktır.
+            {% endif %}
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-send me-1"></i>
+              {% if is_manager %}Avans Oluştur{% else %}Talep Gönder{% endif %}
+            </button>
+            <a href="/advances" class="btn btn-outline-secondary">İptal</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleRef() {
+  const isIs = document.getElementById('type_is').checked;
+  document.getElementById('refBlock').style.display = isIs ? '' : 'none';
+  document.getElementById('refSelect').required = isIs;
+}
+</script>
+{% endblock %}

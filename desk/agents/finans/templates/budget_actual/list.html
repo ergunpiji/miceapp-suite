@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Bütçe vs Gerçekleşen{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">📋 Bütçe vs Gerçekleşen</div>
+    <div class="page-subtitle">Proje bazlı bütçe takibi</div>
+  </div>
+  <a href="/projects/new" class="btn btn-primary">+ Yeni Proje</a>
+</div>
+
+{% if projects %}
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Proje Adı</th>
+          <th>E-dem Ref</th>
+          <th>Müşteri</th>
+          <th>Etkinlik Tarihi</th>
+          <th class="text-right">Bütçe</th>
+          <th class="text-right">Gerçekleşen</th>
+          <th class="text-right">Sapma</th>
+          <th>%</th>
+          <th>Durum</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in projects %}
+        <tr>
+          <td><a href="/projects/{{ p.id }}" style="color:var(--accent);font-weight:600">{{ p.name }}</a></td>
+          <td class="font-mono">{{ p.edem_request_no or '—' }}</td>
+          <td>{{ p.customer_name or '—' }}</td>
+          <td class="nowrap">
+            {% if p.event_date %}{{ p.event_date | fmtdate }}{% else %}—{% endif %}
+          </td>
+          <td class="text-right font-mono">{{ p.total_budgeted | currency }}</td>
+          <td class="text-right font-mono">{{ p.total_actual | currency }}</td>
+          <td class="text-right font-mono {% if p.variance >= 0 %}amount-positive{% else %}amount-negative{% endif %}">
+            {{ p.variance | currency }}
+          </td>
+          <td style="min-width:80px">
+            <div class="progress">
+              <div class="progress-bar {% if p.completion_pct > 100 %}over{% endif %}"
+                   style="width:{{ [p.completion_pct, 100] | min }}%"></div>
+            </div>
+            <div style="font-size:11px;color:var(--text-muted)">{{ p.completion_pct }}%</div>
+          </td>
+          <td>
+            {% if p.status == 'aktif' %}<span class="badge badge-success">Aktif</span>
+            {% elif p.status == 'tamamlandi' %}<span class="badge badge-info">Tamamlandı</span>
+            {% else %}<span class="badge badge-neutral">{{ p.status }}</span>{% endif %}
+          </td>
+          <td class="nowrap">
+            <a href="/projects/{{ p.id }}" class="btn btn-xs btn-outline">Detay</a>
+            <a href="/projects/{{ p.id }}/edit" class="btn btn-xs btn-secondary">Düzenle</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon">📋</div>
+  <div class="empty-state-text">Henüz proje yok. <a href="/projects/new">Yeni proje oluştur</a></div>
+</div>
+{% endif %}
+{% endblock %}

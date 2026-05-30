@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/fund-pools/{{ pool.id }}/export" class="btn btn-outline-success btn-sm">
+  <i class="bi bi-file-earmark-excel me-1"></i>Excel İndir
+</a>
+{% if current_user.is_admin %}
+<button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#transferModal">
+  <i class="bi bi-arrow-left-right me-1"></i>Transfer Ekle
+</button>
+{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .kpi-card { background:#fff; border-radius:12px; padding:18px 22px; border:1px solid #e2e8f0; }
+  .kpi-card .kpi-label { font-size:11px; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+  .kpi-card .kpi-value { font-size:22px; font-weight:800; margin-top:4px; line-height:1.2; }
+
+  .pool-meta { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px 18px; margin-bottom:16px; }
+  .pool-meta span { font-size:13px; color:#475569; margin-right:18px; }
+  .pool-meta strong { color:#1e293b; }
+
+  .txn-table { background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; }
+  .txn-table table { margin:0; }
+  .txn-table thead th { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#64748b; padding:10px 14px; border-bottom:2px solid #e2e8f0; white-space:nowrap; background:#fafafa; }
+  .txn-table tbody td { padding:10px 14px; border-bottom:1px solid #f1f5f9; font-size:13.5px; vertical-align:middle; }
+  .txn-table tbody tr:last-child td { border-bottom:none; }
+
+  .row-acilis { background:#f0fdf4; }
+  .row-out    { background:#eff6ff; }
+  .row-in     { background:#fefce8; }
+
+  .amt-out  { color:#2563eb; font-weight:700; }
+  .amt-in   { color:#d97706; font-weight:700; }
+  .bal-col  { font-weight:700; font-size:13px; }
+
+  .progress-bar-custom { height:8px; border-radius:4px; background:#e2e8f0; overflow:hidden; margin-top:6px; }
+  .progress-bar-fill   { height:100%; border-radius:4px; background:#2563eb; transition:width .4s; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Havuz Meta Bilgileri -->
+<div class="pool-meta d-flex flex-wrap align-items-center gap-2 mb-3">
+  <span><strong>Müşteri:</strong> {{ pool.customer.name if pool.customer else '—' }}</span>
+  <span><strong>Para Birimi:</strong> {{ pool.currency }}</span>
+  <span><strong>Yıl:</strong> {{ pool.year or '—' }}</span>
+  <span><strong>KDV:</strong> %{{ (pool.vat_rate * 100) | int }}</span>
+  {% if pool.invoice_no %}
+  <span><strong>Fatura No:</strong> {{ pool.invoice_no }}</span>
+  {% endif %}
+  {% if pool.invoice_date %}
+  <span><strong>Fatura Tarihi:</strong> {{ pool.invoice_date | date_tr }}</span>
+  {% endif %}
+  {% if pool.notes %}
+  <span class="text-muted fst-italic">{{ pool.notes }}</span>
+  {% endif %}
+</div>
+
+<!-- KPI Kartları -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-label">Başlangıç (KDV dahil)</div>
+      <div class="kpi-value">{{ pool.initial_amount | money }}</div>
+      <div class="text-muted" style="font-size:11px;margin-top:2px">
+        KDV hariç: {{ (pool.initial_amount / (1 + pool.vat_rate)) | money }}
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-label">Toplam Dağıtılan</div>
+      <div class="kpi-value" style="color:#2563eb">{{ total_out | money }}</div>
+      {% if pool.initial_amount > 0 %}
+      {% set pct = (total_out / pool.initial_amount * 100) | round(1) %}
+      <div class="progress-bar-custom">
+        <div class="progress-bar-fill" style="width:{{ [pct, 100] | min }}%"></div>
+      </div>
+      <div style="font-size:11px;color:#64748b;margin-top:2px">%{{ pct }}</div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-label">Toplam İade</div>
+      <div class="kpi-value" style="color:#d97706">{{ total_in | money }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="kpi-card">
+      <div class="kpi-label">Kalan Bakiye</div>
+      <div class="kpi-value {% if balance < 0 %}text-danger{% elif balance == 0 %}text-secondary{% else %}text-success{% endif %}">
+        {{ balance | money }}
+      </div>
+      {% if balance < 0 %}
+      <div class="text-danger" style="font-size:11px;margin-top:2px"><i class="bi bi-exclamation-triangle me-1"></i>Bakiye aşıldı</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Hesap Hareketleri -->
+<h6 class="fw-bold text-secondary mb-2" style="font-size:12px;text-transform:uppercase;letter-spacing:.05em">
+  <i class="bi bi-list-ul me-1"></i>Hesap Hareketleri
+</h6>
+<div class="txn-table mb-4">
+  <table class="table mb-0">
+    <thead>
+      <tr>
+        <th>Tarih</th>
+        <th>Tür</th>
+        <th>İlişkili Referans</th>
+        <th>Açıklama</th>
+        <th class="text-end">Tutar (KDV dahil)</th>
+        <th class="text-end">KDV Hariç</th>
+        <th class="text-end">Bakiye</th>
+        {% if current_user.is_admin %}<th style="width:50px"></th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Açılış satırı -->
+      <tr class="row-acilis">
+        <td>{{ pool.invoice_date | date_tr }}</td>
+        <td><span class="badge bg-success">Açılış</span></td>
+        <td>—</td>
+        <td class="text-muted">Fon açılış tutarı</td>
+        <td class="text-end fw-bold text-success">+{{ pool.initial_amount | money }}</td>
+        <td class="text-end text-muted" style="font-size:12px">
+          {{ (pool.initial_amount / (1 + pool.vat_rate)) | money }}
+        </td>
+        <td class="text-end bal-col">{{ pool.initial_amount | money }}</td>
+        {% if current_user.is_admin %}<td></td>{% endif %}
+      </tr>
+      {% set running = namespace(val=pool.initial_amount) %}
+      {% for t in pool.transfers %}
+      {% set excl = (t.amount / (1 + t.vat_rate)) if t.vat_rate else t.amount %}
+      {% if t.direction == 'out' %}{% set running.val = running.val - t.amount %}{% else %}{% set running.val = running.val + t.amount %}{% endif %}
+      <tr class="{% if t.direction == 'out' %}row-out{% else %}row-in{% endif %}">
+        <td>{{ t.transfer_date | date_tr }}</td>
+        <td>
+          {% if t.direction == 'out' %}
+          <span class="badge bg-primary">Dağıtım</span>
+          {% else %}
+          <span class="badge bg-warning text-dark">İade</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if t.reference %}
+          <a href="/references/{{ t.ref_id }}" class="text-decoration-none">
+            <span class="badge bg-dark" style="font-size:11px">{{ t.reference.ref_no }}</span>
+          </a>
+          {% else %}—{% endif %}
+        </td>
+        <td class="text-muted" style="font-size:13px">{{ t.description or '—' }}</td>
+        <td class="text-end {% if t.direction=='out' %}amt-out{% else %}amt-in{% endif %}">
+          {% if t.direction == 'out' %}-{% else %}+{% endif %}{{ t.amount | money }}
+        </td>
+        <td class="text-end text-muted" style="font-size:12px">{{ excl | money }}</td>
+        <td class="text-end bal-col {% if running.val < 0 %}text-danger{% else %}text-dark{% endif %}">
+          {{ running.val | money }}
+        </td>
+        {% if current_user.is_admin %}
+        <td class="text-end">
+          <form method="post" action="/fund-pools/{{ pool.id }}/transfer/{{ t.id }}/delete" class="d-inline">
+            <button type="button" class="btn btn-sm py-0"
+                    style="border:1px solid #e2e8f0;border-radius:6px;padding:2px 6px;color:#94a3b8;font-size:12px"
+                    onclick="if(confirm('Bu transfer silinsin mi?')) this.closest('form').submit()">
+              <i class="bi bi-trash"></i>
+            </button>
+          </form>
+        </td>
+        {% endif %}
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="{% if current_user.is_admin %}8{% else %}7{% endif %}" class="text-center text-muted py-4">
+          Henüz transfer kaydı yok. Transfer eklemek için "Transfer Ekle" butonunu kullanın.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Transfer Ekle Modal -->
+{% if current_user.is_admin %}
+<div class="modal fade" id="transferModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header" style="background:linear-gradient(135deg,#1a3a5c,#1e5f8c);color:#fff;border-radius:8px 8px 0 0">
+        <h6 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>Transfer Ekle</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/fund-pools/{{ pool.id }}/transfer">
+        <div class="modal-body">
+          <!-- Kalan bakiye bilgisi -->
+          <div class="alert {% if balance >= 0 %}alert-info{% else %}alert-danger{% endif %} py-2 mb-3" style="font-size:13px">
+            <i class="bi bi-wallet2 me-1"></i>
+            Kalan Bakiye: <strong>{{ balance | money }} {{ pool.currency }}</strong>
+            {% if balance < 0 %} — Bakiye aşılmış!{% endif %}
+          </div>
+
+          <!-- Yön -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">İşlem Türü <span class="text-danger">*</span></label>
+            <div class="d-flex gap-3">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="direction" id="dir_out" value="out" checked>
+                <label class="form-check-label" for="dir_out">
+                  <span class="badge bg-primary">Dağıtım</span>
+                  <small class="text-muted d-block">Referansa fon aktar</small>
+                </label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="direction" id="dir_in" value="in">
+                <label class="form-check-label" for="dir_in">
+                  <span class="badge bg-warning text-dark">İade</span>
+                  <small class="text-muted d-block">Fondan geri al</small>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">İlişkili Referans</label>
+            <select name="ref_id" class="form-select form-select-sm">
+              <option value="">— Seçin (opsiyonel) —</option>
+              {% for ref in references %}
+              <option value="{{ ref.id }}">{{ ref.ref_no }} — {{ ref.title or '' }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">Tutar (KDV dahil) <span class="text-danger">*</span></label>
+              <input type="number" name="amount" step="0.01" min="0.01" class="form-control" placeholder="0,00" required>
+            </div>
+            <div class="col-3">
+              <label class="form-label fw-semibold">KDV %</label>
+              <select name="vat_rate" class="form-select form-select-sm">
+                <option value="0.0">%0</option>
+                <option value="0.01">%1</option>
+                <option value="0.08">%8</option>
+                <option value="0.10">%10</option>
+                <option value="0.18">%18</option>
+                <option value="0.20" {% if pool.vat_rate == 0.20 %}selected{% endif %}>%20</option>
+              </select>
+            </div>
+            <div class="col-3" id="kurBlock" style="{% if pool.currency == 'TRY' %}display:none{% endif %}">
+              <label class="form-label fw-semibold">Kur (TRY)</label>
+              <input type="number" name="exchange_rate" step="0.0001" min="0.0001" class="form-control form-control-sm" value="1" placeholder="ör. 38.50">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Tarih <span class="text-danger">*</span></label>
+            <input type="date" name="transfer_date" class="form-control" value="{{ today_str }}" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Açıklama</label>
+            <input type="text" name="description" class="form-control" placeholder="opsiyonel">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-primary btn-sm px-4">
+            <i class="bi bi-check-lg me-1"></i>Kaydet
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script>
+// Yabancı para birimi için kur alanını göster/gizle
+{% if pool.currency != 'TRY' %}
+document.getElementById('kurBlock').style.display = '';
+{% endif %}
+</script>
+{% endblock %}

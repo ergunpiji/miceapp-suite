@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Bordro — HR Ajanı{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">{% if user.role == 'employee' %}Maaş Slipim{% else %}Bordro{% endif %}</div>
+    <div class="page-subtitle">{{ month | fmtmonth }} {{ year }} — {{ payrolls | length }} kayıt</div>
+  </div>
+  {% if user.role == 'hr_admin' %}
+  <form method="post" action="/payroll/generate" style="display:flex;gap:8px;align-items:center">
+    <select name="year">
+      {% for y in years %}
+      <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+    <select name="month">
+      {% for m in range(1, 13) %}
+      <option value="{{ m }}" {% if m == month %}selected{% endif %}>{{ m | fmtmonth }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary" onclick="return confirm('Taslak bordrolar oluşturulsun mu?')">Bordro Oluştur</button>
+  </form>
+  {% endif %}
+</div>
+
+<!-- Dönem filtresi -->
+<div class="filters-bar">
+  <form method="get" style="display:contents">
+    <select name="year">
+      {% for y in years %}
+      <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+    <select name="month">
+      {% for m in range(1, 13) %}
+      <option value="{{ m }}" {% if m == month %}selected{% endif %}>{{ m | fmtmonth }}</option>
+      {% endfor %}
+    </select>
+    {% if user.role != 'employee' %}
+    <select name="status">
+      <option value="">Tüm Durumlar</option>
+      {% for s in payroll_statuses %}
+      <option value="{{ s.value }}" {% if status_filter == s.value %}selected{% endif %}>{{ s.label }}</option>
+      {% endfor %}
+    </select>
+    {% endif %}
+    <button type="submit" class="btn btn-outline">Görüntüle</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-body" style="padding:0">
+    {% if payrolls %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            {% if user.role != 'employee' %}<th>Çalışan</th>{% endif %}
+            <th class="text-right">Brüt Maaş</th>
+            <th class="text-right">SGK (Çalışan)</th>
+            <th class="text-right">Vergi</th>
+            <th class="text-right">Overtime</th>
+            <th class="text-right">Net Maaş</th>
+            <th>Ödeme Tarihi</th>
+            <th>Durum</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set total_gross = 0 %}{% set total_net = 0 %}
+          {% for pr in payrolls %}
+          <tr>
+            {% if user.role != 'employee' %}
+            <td>{{ pr.employee.full_name if pr.employee else '—' }}</td>
+            {% endif %}
+            <td class="text-right font-mono">{{ pr.gross_salary | currency }}</td>
+            <td class="text-right font-mono amount-negative">{{ pr.sgk_employee | currency }}</td>
+            <td class="text-right font-mono amount-negative">{{ pr.income_tax | currency }}</td>
+            <td class="text-right font-mono {% if pr.overtime_pay > 0 %}amount-positive{% endif %}">{{ pr.overtime_pay | currency }}</td>
+            <td class="text-right font-mono" style="font-weight:700">{{ pr.net_salary | currency }}</td>
+            <td class="nowrap">{{ pr.payment_date | fmtdate if pr.payment_date else '—' }}</td>
+            <td>
+              <span class="badge badge-{% if pr.status == 'odendi' %}success{% elif pr.status == 'onaylandi' %}info{% else %}neutral{% endif %}">
+                {{ pr.status_label }}
+              </span>
+            </td>
+            <td><a href="/payroll/{{ pr.id }}" class="btn btn-xs btn-outline">Slip</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        {% if user.role != 'employee' and payrolls | length > 1 %}
+        <tfoot>
+          <tr class="totals-row">
+            <td><strong>Toplam</strong></td>
+            <td class="text-right font-mono">{{ payrolls | sum(attribute='gross_salary') | currency }}</td>
+            <td class="text-right font-mono amount-negative">{{ payrolls | sum(attribute='sgk_employee') | currency }}</td>
+            <td class="text-right font-mono amount-negative">{{ payrolls | sum(attribute='income_tax') | currency }}</td>
+            <td class="text-right font-mono">{{ payrolls | sum(attribute='overtime_pay') | currency }}</td>
+            <td class="text-right font-mono" style="font-weight:700">{{ payrolls | sum(attribute='net_salary') | currency }}</td>
+            <td colspan="3"></td>
+          </tr>
+        </tfoot>
+        {% endif %}
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">💰</div>
+      <div class="empty-state-text">Bu dönem için bordro bulunamadı</div>
+      {% if user.role == 'hr_admin' %}
+      <div style="margin-top:12px">
+        <form method="post" action="/payroll/generate">
+          <input type="hidden" name="year" value="{{ year }}">
+          <input type="hidden" name="month" value="{{ month }}">
+          <button type="submit" class="btn btn-primary">Bordro Oluştur</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        <form method="post">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Kart Adı</label>
+            <input type="text" name="name" class="form-control" required value="{{ card.name if card else '' }}">
+          </div>
+          <div class="row g-3">
+            <div class="col-md-7">
+              <label class="form-label fw-semibold">Banka</label>
+              <input type="text" name="bank_name" class="form-control" value="{{ card.bank_name if card else '' }}">
+            </div>
+            <div class="col-md-5">
+              <label class="form-label fw-semibold">Son 4 Hane</label>
+              <input type="text" name="last4" class="form-control" maxlength="4" value="{{ card.last4 if card else '' }}">
+            </div>
+          </div>
+          <div class="mb-3 mt-3">
+            <label class="form-label fw-semibold">Limit</label>
+            <input type="number" name="credit_limit" step="0.01" class="form-control" required value="{{ card.credit_limit if card else '0' }}">
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Ekstre Günü</label>
+              <input type="number" name="statement_day" min="1" max="28" class="form-control" required value="{{ card.statement_day if card else '1' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Son Ödeme Ofseti (gün)</label>
+              <input type="number" name="payment_offset_days" class="form-control" value="{{ card.payment_offset_days if card else '10' }}">
+            </div>
+          </div>
+          <div class="mb-3 mt-3">
+            <label class="form-label fw-semibold">Para Birimi</label>
+            <select name="currency" class="form-select">
+              <option value="TRY" {% if not card or card.currency == 'TRY' %}selected{% endif %}>TRY</option>
+              <option value="USD" {% if card and card.currency == 'USD' %}selected{% endif %}>USD</option>
+              <option value="EUR" {% if card and card.currency == 'EUR' %}selected{% endif %}>EUR</option>
+            </select>
+          </div>
+          <div class="d-flex gap-2 mt-3">
+            <button type="submit" class="btn btn-primary">Kaydet</button>
+            <a href="/credit-cards" class="btn btn-outline-secondary">İptal</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

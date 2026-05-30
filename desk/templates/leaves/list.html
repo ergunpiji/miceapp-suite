@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block page_title %}İzinlerim{% endblock %}
+
+{% block topbar_actions %}
+{% if employee %}
+<a href="/leaves/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Yeni Talep</a>
+{% endif %}
+<a href="/leaves/calendar/view" class="btn btn-outline-secondary btn-sm ms-1"><i class="bi bi-calendar3 me-1"></i>Takvim</a>
+{% if current_user.role in ['mudur','genel_mudur','admin','super_admin'] %}
+<a href="/leaves/team/requests" class="btn btn-outline-secondary btn-sm ms-1"><i class="bi bi-people me-1"></i>Ekip</a>
+<a href="/leaves/balances/manage" class="btn btn-outline-secondary btn-sm ms-1"><i class="bi bi-sliders me-1"></i>Bakiye Tanımla</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+
+{% if not employee %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle me-2"></i>
+  Kullanıcı hesabınıza bağlı bir çalışan kaydı bulunmuyor. Admin ile iletişime geçin.
+</div>
+{% else %}
+
+{% if balances %}
+<div class="row g-3 mb-4">
+  {% for b in balances %}
+  <div class="col-md-3">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body py-3 px-3">
+        <div class="d-flex align-items-center mb-2">
+          <span class="rounded-circle me-2" style="width:10px;height:10px;background:{{ b.type.color }};display:inline-block;flex-shrink:0"></span>
+          <small class="fw-bold text-muted text-uppercase" style="font-size:10px;letter-spacing:.05em">{{ b.type.name }}</small>
+        </div>
+        {% if b.balance %}
+        <div class="fw-bold fs-4">{{ b.balance.remaining_days }}</div>
+        <small class="text-muted">/ {{ b.balance.entitled_days + b.balance.carried_over_days }} gün</small>
+        {% if b.balance.carried_over_days > 0 %}
+        <div><small class="text-info">+ {{ b.balance.carried_over_days }} devir</small></div>
+        {% endif %}
+        {% else %}
+        <div class="text-muted small">Dönem tanımlanmamış</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-transparent">
+    <strong>İzin Geçmişim</strong>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0" style="font-size:13px">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Tür</th>
+          <th>Başlangıç</th>
+          <th>İşe Dönüş</th>
+          <th class="text-center">Gün</th>
+          <th>Durum</th>
+          <th>Tarih</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in my_requests %}
+        {% set sl = status_labels.get(r.status, ('secondary', r.status)) %}
+        <tr onclick="window.location='/leaves/{{ r.id }}'" style="cursor:pointer">
+          <td class="ps-3">
+            <span class="me-1" style="color:{{ r.leave_type.color }}">&#9679;</span>
+            {{ r.leave_type.name }}
+          </td>
+          <td>{{ r.start_date | date_tr }}</td>
+          <td>{% if r.half_day %}{{ r.end_date | date_tr }}<small class="text-muted ms-1">(½)</small>{% else %}{{ r.end_date | next_day | date_tr }}{% endif %}</td>
+          <td class="text-center fw-semibold">
+            {{ r.total_days }}
+            {% if r.half_day %}
+            <small class="text-muted">(½)</small>
+            {% endif %}
+          </td>
+          <td><span class="badge bg-{{ sl[0] }}">{{ sl[1] }}</span></td>
+          <td class="text-muted">{{ r.created_at.strftime('%d.%m.%Y') }}</td>
+          <td class="text-end pe-3">
+            {% if r.status in ('talep','mudur_onayladi') %}
+            <form method="post" action="/leaves/{{ r.id }}/cancel" onsubmit="return confirm('Talep iptal edilsin mi?')">
+              <button class="btn btn-xs btn-outline-danger" style="font-size:11px;padding:2px 7px">İptal</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-4">Henüz izin talebiniz yok.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endif %}
+{% endblock %}

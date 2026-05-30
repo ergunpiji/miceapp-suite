@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block page_title %}{{ module.name }}{% endblock %}
+
+{% block content %}
+<style>
+  .mod-hero {
+    background: linear-gradient(135deg, {{ module.color }} 0%, #0f172a 100%);
+    color: #fff; padding: 28px 24px; border-radius: 12px;
+    display: flex; align-items: center; gap: 18px; margin-bottom: 22px;
+  }
+  .mod-hero-icon {
+    width: 64px; height: 64px; border-radius: 14px;
+    background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .mod-hero-icon .bi { font-size: 28px; }
+  .mod-hero h3 { margin: 0; font-weight: 700; }
+  .mod-hero .subtitle { font-size: 13px; opacity: .85; margin-top: 2px; }
+  .mod-status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 999px;
+    background: rgba(255,255,255,.18); font-size: 12px; font-weight: 600;
+    margin-top: 8px;
+  }
+  .info-section { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 18px; }
+  .info-section h5 { font-size: 14px; font-weight: 700; color: #0f172a; margin: 0 0 12px; }
+  .info-section ul { margin: 0; padding-left: 18px; }
+  .info-section li { margin-bottom: 6px; color: #334155; font-size: 13.5px; line-height: 1.55; }
+  .blocked-banner {
+    background: #fff7ed; border: 1px solid #fed7aa; border-left: 4px solid #f59e0b;
+    padding: 14px 18px; border-radius: 8px; margin-bottom: 18px;
+  }
+  .blocked-banner .icon { color: #f59e0b; font-size: 18px; margin-right: 6px; }
+</style>
+
+<a href="/admin/modules" class="btn btn-sm btn-outline-secondary mb-2">
+  <i class="bi bi-arrow-left"></i> Modüllere Dön
+</a>
+
+<div class="mod-hero">
+  <div class="mod-hero-icon"><i class="bi {{ module.icon }}"></i></div>
+  <div>
+    <h3>{{ module.name }}</h3>
+    <div class="subtitle">{{ module.description }}</div>
+    <div class="mod-status-pill">
+      {% if module.status == 'inactive' %}<i class="bi bi-lock-fill"></i>
+      {% elif module.status == 'configuring' %}<i class="bi bi-gear-fill"></i>
+      {% elif module.status == 'active' %}<i class="bi bi-check-circle-fill"></i>
+      {% else %}<i class="bi bi-clock-history"></i>{% endif %}
+      {{ module.status_label }}
+    </div>
+  </div>
+</div>
+
+{% if module.simulation_note %}
+<div class="blocked-banner" style="background:#eff6ff;border-color:#bfdbfe;border-left-color:#3b82f6;">
+  <i class="bi bi-flask-fill icon" style="color:#3b82f6;"></i>
+  <strong>Simülasyon Modu:</strong> {{ module.simulation_note }}
+</div>
+{% endif %}
+
+{% if module.blocked_reason %}
+<div class="blocked-banner">
+  <i class="bi bi-info-circle-fill icon"></i>
+  <strong>Not:</strong> {{ module.blocked_reason }}
+</div>
+{% endif %}
+
+{% if module.scope %}
+<div class="info-section">
+  <h5><i class="bi bi-list-check"></i> Kapsam</h5>
+  <ul>
+    {% for s in module.scope %}<li>{{ s }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% if module.next_steps %}
+<div class="info-section">
+  <h5><i class="bi bi-signpost-2"></i> Sonraki Adımlar</h5>
+  <ol style="margin:0;padding-left:18px;">
+    {% for step in module.next_steps %}<li style="margin-bottom:6px;color:#334155;font-size:13.5px;">{{ step }}</li>{% endfor %}
+  </ol>
+</div>
+{% endif %}
+
+<div class="info-section">
+  <h5><i class="bi bi-gear"></i> Aktivasyon</h5>
+  <p class="text-muted mb-3">
+    {% if module.enabled %}
+    Modül <strong class="text-success">aktif</strong>. İlgili UI bölümleri sidebar ve sayfalarda görünür.
+    {% else %}
+    Modül <strong class="text-warning">pasif</strong>. Aktive ettiğinizde sidebar'a ve ilgili sayfalara
+    UI elementleri eklenecek; mevcut akışlarınız değişmez.
+    {% endif %}
+  </p>
+
+  {% if module.enabled %}
+  <form method="post" action="/admin/modules/{{ module.key }}/deactivate"
+        onsubmit="return confirm('Modülü devre dışı bırakmak istediğinizden emin misiniz? UI elementleri gizlenecek.');">
+    <button type="submit" class="btn btn-outline-warning">
+      <i class="bi bi-pause-fill"></i> Devre Dışı Bırak
+    </button>
+  </form>
+  {% else %}
+  <form method="post" action="/admin/modules/{{ module.key }}/activate">
+    <button type="submit" class="btn btn-success">
+      <i class="bi bi-play-fill"></i> Aktive Et
+    </button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

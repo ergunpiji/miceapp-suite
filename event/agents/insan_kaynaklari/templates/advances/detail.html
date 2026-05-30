@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+{% block title %}Avans Detayı — HR Ajanı{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">{{ advance.advance_type_label }}</div>
+    <div class="page-subtitle">
+      {{ advance.employee.full_name if advance.employee else '' }} —
+      {{ advance.amount | currency }}
+    </div>
+  </div>
+  <a href="/advances" class="btn btn-secondary">Listeye Dön</a>
+</div>
+
+<div class="grid-2">
+
+  <!-- Talep Bilgileri -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Talep Bilgileri</span>
+      <span class="badge badge-{% if advance.status == 'kapandi' %}success{% elif advance.status == 'odendi' %}info{% elif advance.status == 'onaylandi' %}primary{% elif advance.status == 'reddedildi' %}danger{% elif advance.status == 'iptal' %}neutral{% else %}warning{% endif %}" style="font-size:12px;padding:4px 10px">
+        {{ advance.status_label }}
+      </span>
+    </div>
+    <div class="card-body">
+      <table style="width:100%">
+        {% macro row(label, value, cls='') %}
+        <tr>
+          <td style="color:var(--text-muted);font-size:12px;padding:6px 0;width:42%">{{ label }}</td>
+          <td style="font-size:13px" class="{{ cls }}">{{ value or '—' }}</td>
+        </tr>
+        {% endmacro %}
+        {{ row('Çalışan', advance.employee.full_name if advance.employee else None) }}
+        {{ row('Tür', advance.advance_type_label) }}
+        {{ row('Talep Tutarı', advance.amount | currency, 'font-mono') }}
+        {{ row('Talep Tarihi', advance.request_date | fmtdate) }}
+        {{ row('Gereksinim Tarihi', advance.needed_by | fmtdate if advance.needed_by else None) }}
+        {% if advance.reason %}
+        <tr>
+          <td style="color:var(--text-muted);font-size:12px;padding:6px 0;vertical-align:top">Gerekçe</td>
+          <td style="font-size:13px">{{ advance.reason }}</td>
+        </tr>
+        {% endif %}
+      </table>
+    </div>
+  </div>
+
+  <!-- İşlemler & Değerlendirme -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">Değerlendirme & İşlemler</span></div>
+    <div class="card-body">
+
+      {% if advance.reviewed_at %}
+      <table style="width:100%;margin-bottom:16px">
+        {% macro row(label, value) %}<tr><td style="color:var(--text-muted);font-size:12px;padding:4px 0;width:42%">{{ label }}</td><td style="font-size:13px">{{ value or '—' }}</td></tr>{% endmacro %}
+        {{ row('Değerlendiren', advance.reviewed_by) }}
+        {{ row('Tarih', advance.reviewed_at | fmtdate) }}
+        {{ row('Not', advance.reviewer_note) }}
+      </table>
+      <hr>
+      {% endif %}
+
+      {% if advance.payment_date %}
+      <table style="width:100%;margin-bottom:16px">
+        {% macro row(label, value) %}<tr><td style="color:var(--text-muted);font-size:12px;padding:4px 0;width:42%">{{ label }}</td><td style="font-size:13px">{{ value or '—' }}</td></tr>{% endmacro %}
+        {{ row('Ödeme Tarihi', advance.payment_date | fmtdate) }}
+      </table>
+      <hr>
+      {% endif %}
+
+      <!-- Onay/Red Butonu -->
+      {% if advance.status == 'beklemede' and user.role in ('hr_admin', 'hr_manager') %}
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <form method="post" action="/advances/{{ advance.id }}/approve">
+          <div class="form-group" style="margin-bottom:8px">
+            <label>Onay Notu (isteğe bağlı)</label>
+            <input type="text" name="reviewer_note">
+          </div>
+          <button type="submit" class="btn btn-success">✓ Onayla</button>
+        </form>
+        <form method="post" action="/advances/{{ advance.id }}/reject">
+          <div class="form-group" style="margin-bottom:8px">
+            <label>Red Gerekçesi</label>
+            <input type="text" name="reviewer_note" placeholder="Neden reddedildi?">
+          </div>
+          <button type="submit" class="btn btn-danger">✗ Reddet</button>
+        </form>
+      </div>
+      {% endif %}
+
+      <!-- Ödendi İşaretle -->
+      {% if advance.status == 'onaylandi' and user.role == 'hr_admin' %}
+      <form method="post" action="/advances/{{ advance.id }}/mark-paid">
+        <div class="form-group" style="margin-bottom:8px">
+          <label>Ödeme Tarihi *</label>
+          <input type="date" name="payment_date" id="payDate" required>
+        </div>
+        <button type="submit" class="btn btn-primary">💸 Ödendi Olarak İşaretle</button>
+      </form>
+      {% endif %}
+
+      <!-- İptal -->
+      {% if advance.status in ('beklemede', 'onaylandi') %}
+      <hr>
+      <form method="post" action="/advances/{{ advance.id }}/cancel"
+            onsubmit="return confirm('Talep iptal edilsin mi?')">
+        <button type="submit" class="btn btn-warning">İptal Et</button>
+      </form>
+      {% endif %}
+
+    </div>
+  </div>
+</div>
+
+<!-- MAAŞ AVANSI: Geri Ödeme Takibi -->
+{% if advance.advance_type == 'maas' and advance.status in ('odendi', 'kapandi') %}
+<div class="card mt-4">
+  <div class="card-header">
+    <span class="card-title">💳 Geri Ödeme Takibi</span>
+  </div>
+  <div class="card-body">
+    <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
+      <div class="stat-card">
+        <div class="stat-label">Avans Tutarı</div>
+        <div class="stat-value font-mono">{{ advance.amount | currency }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Geri Ödenen</div>
+        <div class="stat-value positive font-mono">{{ advance.repaid_amount | currency }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Kalan Borç</div>
+        <div class="stat-value {% if advance.remaining_repayment > 0 %}warning{% else %}positive{% endif %} font-mono">
+          {{ advance.remaining_repayment | currency }}
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Geri Ödeme Planı</div>
+        <div class="stat-value" style="font-size:14px">{{ advance.repayment_label }}</div>
+        {% if advance.repayment_months %}
+        <div class="stat-sub">Aylık: {{ advance.repayment_monthly | currency }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if advance.status == 'odendi' and advance.remaining_repayment > 0 and user.role == 'hr_admin' %}
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      <!-- Geri ödeme kaydet -->
+      <form method="post" action="/advances/{{ advance.id }}/repay" style="display:flex;gap:8px;align-items:flex-end">
+        <div class="form-group">
+          <label>Geri Ödeme Tutarı (₺)</label>
+          <input type="number" name="repayment_amount" step="0.01" min="0.01"
+                 max="{{ advance.remaining_repayment }}" style="width:180px"
+                 value="{{ advance.repayment_monthly or '' }}">
+        </div>
+        <button type="submit" class="btn btn-success">Ödeme Kaydet</button>
+      </form>
+
+      <!-- Geri ödeme planı güncelle -->
+      <button onclick="document.getElementById('repayPlanModal').classList.add('open')" class="btn btn-outline">
+        Planı Güncelle
+      </button>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Geri ödeme plan güncelleme modal -->
+{% if user.role == 'hr_admin' %}
+<div id="repayPlanModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title">Geri Ödeme Planını Güncelle</div>
+    <form method="post" action="/advances/{{ advance.id }}/update-repayment">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Ay Sayısı</label>
+          <select name="repayment_months">
+            {% for m in [1, 2, 3, 4, 6] %}
+            <option value="{{ m }}" {% if advance.repayment_months == m %}selected{% endif %}>{{ m }} ay</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Başlangıç Ay</label>
+          <select name="repayment_start_month">
+            {% for m in range(1, 13) %}
+            <option value="{{ m }}" {% if advance.repayment_start_month == m %}selected{% endif %}>{{ m | fmtmonth }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Başlangıç Yıl</label>
+          <input type="number" name="repayment_start_year" value="{{ advance.repayment_start_year or today.year }}">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button type="submit" class="btn btn-primary">Güncelle</button>
+        <button type="button" onclick="document.getElementById('repayPlanModal').classList.remove('open')" class="btn btn-secondary">İptal</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+
+<!-- İŞ AVANSI: Kapatma -->
+{% if advance.advance_type == 'is' and advance.status == 'odendi' and user.role == 'hr_admin' %}
+<div class="card mt-4">
+  <div class="card-header"><span class="card-title">📋 İş Avansını Kapat</span></div>
+  <div class="card-body">
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+      Çalışanın harcama belgeleri incelendi. Avansı kapatmak için aşağıdaki formu doldurun.
+    </p>
+    <form method="post" action="/advances/{{ advance.id }}/close">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>İade / Eksik Tutar (₺)</label>
+          <input type="number" name="remaining_amount" step="0.01" value="0"
+                 placeholder="Pozitif = iade, negatif = ek ödeme">
+          <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
+            0 girin: tüm tutar harcandı
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Kapatma Notu / Belge Referansı</label>
+          <input type="text" name="closing_notes" placeholder="Fiş/fatura numaraları vb.">
+        </div>
+      </div>
+      <button type="submit" class="btn btn-success" style="margin-top:8px">✓ Avansı Kapat</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- İş avansı kapatma bilgisi -->
+{% if advance.advance_type == 'is' and advance.status == 'kapandi' %}
+<div class="card mt-4">
+  <div class="card-header"><span class="card-title">✅ Kapatma Bilgisi</span></div>
+  <div class="card-body">
+    <table style="width:100%">
+      {% macro row(label, value) %}<tr><td style="color:var(--text-muted);font-size:12px;padding:6px 0;width:30%">{{ label }}</td><td style="font-size:13px">{{ value or '—' }}</td></tr>{% endmacro %}
+      {{ row('Kapatma Tarihi', advance.closed_at | fmtdate) }}
+      {{ row('İade / Eksik', advance.remaining_amount | currency) }}
+      {{ row('Not', advance.closing_notes) }}
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const el = document.getElementById('payDate');
+if (el) el.value = new Date().toISOString().split('T')[0];
+</script>
+{% endblock %}

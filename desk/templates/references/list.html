@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block page_title %}Referanslar{% endblock %}
+
+{% block topbar_actions %}
+{% if can_edit(request, 'references') %}
+<a href="/references/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Yeni Referans</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-transparent border-0">
+    <div class="d-flex align-items-center gap-3 mb-2">
+      <a href="/references" class="btn btn-sm {% if not show_archived %}btn-dark{% else %}btn-outline-secondary{% endif %}">Aktif</a>
+      <a href="/references?archived=1" class="btn btn-sm {% if show_archived %}btn-dark{% else %}btn-outline-secondary{% endif %}">
+        Arşiv {% if archived_count %}<span class="badge bg-secondary ms-1">{{ archived_count }}</span>{% endif %}
+      </a>
+    </div>
+    {% if not show_archived %}
+    <form class="row g-2 align-items-end" method="get">
+      <div class="col-auto">
+        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="Ara...">
+      </div>
+      <div class="col-auto">
+        <select name="status_filter" class="form-select form-select-sm">
+          <option value="">Tüm Durumlar</option>
+          <option value="aktif" {% if status_filter=='aktif' %}selected{% endif %}>Aktif</option>
+          <option value="tamamlandi" {% if status_filter=='tamamlandi' %}selected{% endif %}>Tamamlandı</option>
+          <option value="iptal" {% if status_filter=='iptal' %}selected{% endif %}>İptal</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-outline-secondary">Filtrele</button>
+        <a href="/references" class="btn btn-sm btn-link">Temizle</a>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0" id="refsTable">
+      <thead class="table-light">
+        <tr>
+          {% if not show_archived and current_user.has_role_min("mudur") %}
+          <th style="width:36px"><input type="checkbox" id="selectAll" class="form-check-input"></th>
+          {% endif %}
+          <th>Ref No</th>
+          <th>Başlık</th>
+          <th>Müşteri</th>
+          <th>Tarih</th>
+          <th>Durum</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in refs %}
+        <tr>
+          {% if not show_archived and current_user.has_role_min("mudur") %}
+          <td><input type="checkbox" class="form-check-input row-check" value="{{ r.id }}"></td>
+          {% endif %}
+          <td><a href="/references/{{ r.id }}" class="fw-semibold text-decoration-none">{{ r.ref_no }}</a></td>
+          <td>{{ r.title }}</td>
+          <td>{{ r.customer.name if r.customer else "—" }}</td>
+          <td>{{ r.check_in | date_tr }}</td>
+          <td>
+            {% if show_archived %}
+            <span class="badge bg-secondary">Arşiv</span>
+            {% else %}
+            <span class="badge {% if r.status == 'aktif' %}bg-success{% elif r.status == 'tamamlandi' %}bg-secondary{% else %}bg-danger{% endif %}">{{ r.status }}</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            {% if show_archived %}
+            {% if current_user.has_role_min("mudur") %}
+            <form method="post" action="/references/{{ r.id }}/unarchive" class="d-inline">
+              <button type="submit" class="btn btn-xs btn-outline-success btn-sm py-0">Geri Al</button>
+            </form>
+            {% endif %}
+            {% elif can_edit(request, 'references') %}
+            <a href="/references/{{ r.id }}/edit" class="btn btn-xs btn-outline-secondary btn-sm py-0">Düzenle</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-4">
+          {% if show_archived %}Arşivde referans yok.{% else %}Referans bulunamadı.{% endif %}
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if not show_archived and current_user.has_role_min("mudur") %}
+<div id="bulkBar" class="position-fixed bottom-0 start-50 translate-middle-x mb-3 d-none" style="z-index:1050">
+  <div class="card shadow border-0 px-3 py-2 d-flex flex-row align-items-center gap-3">
+    <span id="selectedCount" class="text-muted small"></span>
+    <button class="btn btn-sm btn-warning" id="archiveBtn">
+      <i class="bi bi-archive me-1"></i>Arşive Taşı
+    </button>
+    <button class="btn btn-sm btn-outline-secondary" id="cancelSelect">İptal</button>
+  </div>
+</div>
+
+<script>
+const selectAll = document.getElementById('selectAll');
+const bulkBar   = document.getElementById('bulkBar');
+const countEl   = document.getElementById('selectedCount');
+
+function getChecked() {
+  return [...document.querySelectorAll('.row-check:checked')].map(c => c.value);
+}
+function updateBar() {
+  const ids = getChecked();
+  if (ids.length > 0) {
+    bulkBar.classList.remove('d-none');
+    countEl.textContent = ids.length + ' referans seçildi';
+  } else {
+    bulkBar.classList.add('d-none');
+  }
+}
+selectAll.addEventListener('change', () => {
+  document.querySelectorAll('.row-check').forEach(c => c.checked = selectAll.checked);
+  updateBar();
+});
+document.querySelectorAll('.row-check').forEach(c => c.addEventListener('change', updateBar));
+
+document.getElementById('cancelSelect').addEventListener('click', () => {
+  document.querySelectorAll('.row-check').forEach(c => c.checked = false);
+  selectAll.checked = false;
+  updateBar();
+});
+
+document.getElementById('archiveBtn').addEventListener('click', () => {
+  const ids = getChecked();
+  if (!ids.length) return;
+  if (!confirm(ids.length + ' referansı arşive taşımak istediğinize emin misiniz?')) return;
+  const fd = new FormData();
+  fd.append('ids_json', JSON.stringify(ids));
+  fetch('/references/bulk-archive', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(d => {
+      if (!d.ok) { alert('Hata: ' + d.error); return; }
+      if (d.msg) alert(d.msg);
+      if (d.archived > 0) location.href = '/references?archived=1';
+      else location.reload();
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

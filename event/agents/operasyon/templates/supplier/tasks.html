@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ event.name }} — Görev Planı</title>
+  <link rel="stylesheet" href="{{ base_url }}/static/css/style.css">
+  <style>
+    body { background: #f1f5f9; }
+    .supplier-wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+    .supplier-header { background: linear-gradient(135deg,#1e3a5f,#1e5f8c); color: #fff;
+                        border-radius: 12px; padding: 20px 24px; margin-bottom: 20px; }
+    .supplier-header h1 { margin: 0 0 4px; font-size: 20px; }
+    .supplier-header .sub { font-size: 13px; opacity: .75; }
+    .stats-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .stat-card { background: #fff; border-radius: 10px; padding: 14px 20px;
+                  flex: 1; min-width: 120px; text-align: center; border: 1px solid #e2e8f0; }
+    .stat-card .num { font-size: 28px; font-weight: 700; color: #1e3a5f; }
+    .stat-card .lbl { font-size: 12px; color: #64748b; margin-top: 2px; }
+    .supplier-group { background: #fff; border-radius: 10px; margin-bottom: 16px;
+                       border: 1px solid #e2e8f0; overflow: hidden; }
+    .group-header { background: #f8fafc; padding: 12px 18px; font-weight: 700;
+                     font-size: 14px; border-bottom: 1px solid #e2e8f0; color: #1e3a5f; }
+    .task-row { display: flex; align-items: center; gap: 12px; padding: 12px 18px;
+                 border-bottom: 1px solid #f1f5f9; }
+    .task-row:last-child { border-bottom: none; }
+    .task-text { flex: 1; font-size: 14px; }
+    .task-meta { font-size: 11px; color: #94a3b8; margin-top: 3px; }
+    .task-notes { font-size: 12px; color: #64748b; margin-top: 3px; font-style: italic; }
+    .status-badge { display: inline-block; padding: 3px 10px; border-radius: 20px;
+                     font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .status-pending   { background: #fef3c7; color: #92400e; }
+    .status-confirmed { background: #d1fae5; color: #065f46; }
+    .status-done      { background: #dbeafe; color: #1e40af; }
+    .status-cancelled { background: #fee2e2; color: #991b1b; }
+    .status-select { font-size: 12px; border: 1px solid #e2e8f0; border-radius: 6px;
+                      padding: 4px 8px; background: #f8fafc; cursor: pointer; }
+    .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .filter-btn { padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+                   text-decoration: none; border: 1px solid #e2e8f0; background: #fff; color: #374151; }
+    .filter-btn.active { background: #1e3a5f; color: #fff; border-color: #1e3a5f; }
+  </style>
+</head>
+<body>
+<div class="supplier-wrap">
+  <div class="supplier-header">
+    <h1>📋 {{ event.name }}</h1>
+    <div class="sub">
+      {{ event.start_date.strftime('%d.%m.%Y') }}
+      {% if event.end_date != event.start_date %} — {{ event.end_date.strftime('%d.%m.%Y') }}{% endif %}
+      {% if event.venue %} · {{ event.venue }}{% endif %}
+      {% if event.city %} · {{ event.city }}{% endif %}
+    </div>
+    <div class="sub" style="margin-top:6px; font-size:12px; opacity:.65;">Tedarikçi Görev Portalı</div>
+  </div>
+
+  <!-- İstatistikler -->
+  <div class="stats-row">
+    {% for key, count in stats.items() %}
+    <div class="stat-card">
+      <div class="num">{{ count }}</div>
+      <div class="lbl">{{ key|title }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Filtre -->
+  <div class="filter-bar">
+    <a href="{{ base_url }}/supplier/{{ token }}/tasks"
+       class="filter-btn {% if not status_filter %}active{% endif %}">Tümü</a>
+    <a href="{{ base_url }}/supplier/{{ token }}/tasks?status=pending"
+       class="filter-btn {% if status_filter == 'pending' %}active{% endif %}">⏳ Bekliyor</a>
+    <a href="{{ base_url }}/supplier/{{ token }}/tasks?status=confirmed"
+       class="filter-btn {% if status_filter == 'confirmed' %}active{% endif %}">✅ Onaylandı</a>
+    <a href="{{ base_url }}/supplier/{{ token }}/tasks?status=done"
+       class="filter-btn {% if status_filter == 'done' %}active{% endif %}">🏁 Tamamlandı</a>
+  </div>
+
+  {% if not tasks %}
+  <div style="text-align:center; padding:40px; color:#94a3b8;">
+    <div style="font-size:40px; margin-bottom:12px;">📋</div>
+    <p>Henüz görev bulunmuyor.</p>
+  </div>
+  {% else %}
+  {% for supplier_name, supplier_tasks in by_supplier.items() %}
+  <div class="supplier-group">
+    <div class="group-header">🏢 {{ supplier_name }}</div>
+    {% for task in supplier_tasks %}
+    <div class="task-row">
+      <div style="flex:1;">
+        <div class="task-text">{{ task.task }}</div>
+        <div class="task-meta">
+          {% if task.task_date %}{{ task.task_date.strftime('%d.%m.%Y') }}{% endif %}
+          {% if task.task_time %} · {{ task.task_time }}{% endif %}
+          {% if task.supplier_type %} · {{ task.supplier_type }}{% endif %}
+        </div>
+        {% if task.notes %}
+        <div class="task-notes">{{ task.notes }}</div>
+        {% endif %}
+      </div>
+      <div>
+        <span class="status-badge status-{{ task.status }}">{{ task.status_label }}</span>
+      </div>
+      <!-- Durum güncelleme formu -->
+      <form method="post" action="{{ base_url }}/supplier/{{ token }}/tasks/{{ task.id }}/status">
+        <select name="status" class="status-select" onchange="this.form.submit()">
+          <option value="pending"   {% if task.status == 'pending'   %}selected{% endif %}>⏳ Bekliyor</option>
+          <option value="confirmed" {% if task.status == 'confirmed' %}selected{% endif %}>✅ Onaylandı</option>
+          <option value="done"      {% if task.status == 'done'      %}selected{% endif %}>🏁 Tamamlandı</option>
+          <option value="cancelled" {% if task.status == 'cancelled' %}selected{% endif %}>❌ İptal</option>
+        </select>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  <div style="text-align:center; margin-top:24px; font-size:12px; color:#94a3b8;">
+    Operasyon Portalı · {{ event.name }}
+  </div>
+</div>
+</body>
+</html>

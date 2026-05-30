@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Fazla Mesai — HR Ajanı{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Fazla Mesai</div>
+    <div class="page-subtitle">{{ records | length }} kayıt</div>
+  </div>
+  <button onclick="document.getElementById('newOTModal').classList.add('open')" class="btn btn-primary">+ Yeni Talep</button>
+</div>
+
+<div class="filters-bar">
+  <form method="get" style="display:contents">
+    <select name="status">
+      <option value="">Tüm Durumlar</option>
+      <option value="beklemede" {% if status_filter == 'beklemede' %}selected{% endif %}>Beklemede</option>
+      <option value="onaylandi" {% if status_filter == 'onaylandi' %}selected{% endif %}>Onaylandı</option>
+      <option value="reddedildi" {% if status_filter == 'reddedildi' %}selected{% endif %}>Reddedildi</option>
+    </select>
+    <button type="submit" class="btn btn-outline">Filtrele</button>
+    <a href="/payroll/overtime/list" class="btn btn-secondary">Temizle</a>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-body" style="padding:0">
+    {% if records %}
+    <table>
+      <thead>
+        <tr>
+          {% if user.role != 'employee' %}<th>Çalışan</th>{% endif %}
+          <th>Tarih</th><th>Süre</th><th>Çarpan</th><th>Gerekçe</th><th>Durum</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in records %}
+        <tr>
+          {% if user.role != 'employee' %}
+          <td>{{ r.employee.full_name if r.employee else '—' }}</td>
+          {% endif %}
+          <td class="nowrap">{{ r.work_date | fmtdate }}</td>
+          <td>{{ r.hours | fmthours }}</td>
+          <td>
+            {% if r.status == 'onaylandi' %}
+            <span class="badge badge-info">{{ r.rate_label }}</span>
+            {% else %}—{% endif %}
+          </td>
+          <td>{{ r.reason or '—' }}</td>
+          <td>
+            <span class="badge badge-{% if r.status == 'onaylandi' %}success{% elif r.status == 'reddedildi' %}danger{% else %}warning{% endif %}">
+              {{ r.status }}
+            </span>
+          </td>
+          <td>
+            {% if r.status == 'beklemede' and user.role in ('hr_admin', 'hr_manager') %}
+            <form method="post" action="/payroll/overtime/{{ r.id }}/approve" style="display:inline">
+              <select name="rate" style="width:auto;padding:4px;font-size:11px">
+                <option value="1.5">1.5x</option>
+                <option value="2.0">2.0x</option>
+              </select>
+              <button type="submit" class="btn btn-xs btn-success">Onayla</button>
+            </form>
+            <form method="post" action="/payroll/overtime/{{ r.id }}/reject" style="display:inline">
+              <button type="submit" class="btn btn-xs btn-danger">Reddet</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">⏰</div>
+      <div class="empty-state-text">Fazla mesai kaydı bulunamadı</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Yeni Overtime Modal -->
+<div id="newOTModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title">Yeni Fazla Mesai Talebi</div>
+    <form method="post" action="/payroll/overtime/new">
+      {% if user.role in ('hr_admin', 'hr_manager') %}
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Çalışan *</label>
+        <select name="employee_id" required>
+          <option value="">Seçin...</option>
+          {# Employee listesi için dashboard'dan context gelmez, URL tabanlı çözüm #}
+        </select>
+      </div>
+      {% endif %}
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Tarih *</label>
+        <input type="date" name="work_date" required>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Süre (saat) *</label>
+        <input type="number" name="hours" step="0.5" min="0.5" max="16" placeholder="Ör: 2.5" required>
+      </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label>Gerekçe</label>
+        <textarea name="reason" rows="2"></textarea>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button type="submit" class="btn btn-primary">Talep Gönder</button>
+        <button type="button" onclick="document.getElementById('newOTModal').classList.remove('open')" class="btn btn-secondary">İptal</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>document.querySelector('[name=work_date]').value = new Date().toISOString().split('T')[0];</script>
+{% endblock %}

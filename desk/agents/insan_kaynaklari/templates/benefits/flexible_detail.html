@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Esnek Yan Hak Detayı — HR Ajanı{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Esnek Yan Hak — {{ benefit.employee.full_name if benefit.employee else '' }}</div>
+    <div class="page-subtitle">{{ benefit.year }} yılı</div>
+  </div>
+  <a href="/benefits/flexible" class="btn btn-secondary">Geri</a>
+</div>
+
+<!-- Bakiye kartları -->
+<div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
+  <div class="stat-card">
+    <div class="stat-label">Toplam Puan</div>
+    <div class="stat-value">{{ benefit.total_points }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Kullanılan</div>
+    <div class="stat-value warning">{{ benefit.used_points }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Kalan</div>
+    <div class="stat-value positive">{{ benefit.remaining_points }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Kullanım Oranı</div>
+    <div class="stat-value">{{ benefit.usage_pct }}%</div>
+    <div class="stat-sub">
+      <div class="progress" style="margin-top:4px">
+        <div class="progress-bar" style="width:{{ benefit.usage_pct }}%"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <!-- Harcama listesi -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Harcamalar</span>
+    </div>
+    <div class="card-body" style="padding:0">
+      {% if benefit.spendings %}
+      <table>
+        <thead>
+          <tr><th>Tarih</th><th>Kategori</th><th>Açıklama</th><th class="text-right">Puan</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for s in benefit.spendings | sort(attribute='spend_date', reverse=True) %}
+          <tr>
+            <td class="nowrap">{{ s.spend_date | fmtdate }}</td>
+            <td><span class="badge badge-neutral">{{ s.category_label }}</span></td>
+            <td>{{ s.description }}</td>
+            <td class="text-right font-mono amount-negative">{{ s.points }}</td>
+            <td>
+              {% if user.role == 'hr_admin' %}
+              <form method="post" action="/benefits/flexible/{{ benefit.id }}/spendings/{{ s.id }}/delete"
+                    style="display:inline" onsubmit="return confirm('Harcama silinsin mi?')">
+                <button type="submit" class="btn btn-xs btn-danger">Sil</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty-state">
+        <div class="empty-state-icon">🎁</div>
+        <div class="empty-state-text">Henüz harcama yapılmamış</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Yeni Harcama Formu -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">Yeni Harcama Ekle</span></div>
+    <div class="card-body">
+      {% if benefit.remaining_points > 0 %}
+      <form method="post" action="/benefits/flexible/{{ benefit.id }}/spend">
+        <div class="form-group" style="margin-bottom:12px">
+          <label>Kategori</label>
+          <select name="category">
+            {% for c in categories %}
+            <option value="{{ c.value }}">{{ c.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label>Açıklama *</label>
+          <input type="text" name="description" required placeholder="Ör: Spor salonu üyeliği">
+        </div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label>Puan * (Kalan: {{ benefit.remaining_points }})</label>
+          <input type="number" name="points" min="1" max="{{ benefit.remaining_points }}" required>
+        </div>
+        <div class="form-group" style="margin-bottom:16px">
+          <label>Tarih *</label>
+          <input type="date" name="spend_date" id="spendDate" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Harcama Ekle</button>
+      </form>
+      {% else %}
+      <div class="empty-state">
+        <div class="empty-state-icon">⚠️</div>
+        <div class="empty-state-text">Puan bakiyeniz tükenmiş</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>document.getElementById('spendDate').value = new Date().toISOString().split('T')[0];</script>
+{% endblock %}

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Operasyon Ajanı{% endblock %}</title>
+  <link rel="stylesheet" href="{{ base_url }}/static/css/style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">OA</div>
+        <div class="sidebar-title">Operasyon<br>Ajanı</div>
+      </div>
+
+      {% if event %}
+      <div class="sidebar-event">
+        <div class="sidebar-event-label">Etkinlik</div>
+        <div class="sidebar-event-name">{{ event.name }}</div>
+        <div class="sidebar-event-date">
+          {{ event.start_date.strftime('%d.%m.%Y') }}
+          {% if event.end_date != event.start_date %}
+            — {{ event.end_date.strftime('%d.%m.%Y') }}
+          {% endif %}
+        </div>
+        <a href="{{ base_url }}/events" class="sidebar-change-event">Etkinlik Değiştir</a>
+        {% if event.edem_request_id %}
+        <a href="/requests/{{ event.edem_request_id }}"
+           style="display:block; margin-top:8px; font-size:11px; color:rgba(255,255,255,.5);
+                  text-decoration:none; padding:4px 0;"
+           title="E-dem referans sayfasına dön">
+          ← Referansa Dön
+        </a>
+        {% endif %}
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="{{ base_url }}/events/{{ event.id }}" class="nav-item {% if active == 'dashboard' %}active{% endif %}">
+          <span class="nav-icon">📊</span> Dashboard
+        </a>
+        <a href="{{ base_url }}/events/{{ event.id }}/participants" class="nav-item {% if active == 'participants' %}active{% endif %}">
+          <span class="nav-icon">👥</span> Katılımcılar
+        </a>
+        <a href="{{ base_url }}/events/{{ event.id }}/flights" class="nav-item {% if active == 'flights' %}active{% endif %}">
+          <span class="nav-icon">✈️</span> Uçuşlar
+        </a>
+        <a href="{{ base_url }}/events/{{ event.id }}/accommodations" class="nav-item {% if active == 'accommodations' %}active{% endif %}">
+          <span class="nav-icon">🏨</span> Konaklama
+        </a>
+        <a href="{{ base_url }}/events/{{ event.id }}/transfers" class="nav-item {% if active == 'transfers' %}active{% endif %}">
+          <span class="nav-icon">🚌</span> Transferler
+        </a>
+        <div class="nav-divider"></div>
+        <a href="{{ base_url }}/events/{{ event.id }}/agenda" class="nav-item {% if active == 'agenda' %}active{% endif %}">
+          <span class="nav-icon">📅</span> Günlük Program
+        </a>
+        <a href="{{ base_url }}/events/{{ event.id }}/tasks" class="nav-item {% if active == 'tasks' %}active{% endif %}">
+          <span class="nav-icon">📋</span> Görev Planı
+        </a>
+        <div class="nav-divider"></div>
+        <a href="{{ base_url }}/events/{{ event.id }}/notifications" class="nav-item {% if active == 'notifications' %}active{% endif %}"
+           id="nav-notifications">
+          <span class="nav-icon">🔔</span> Bildirimler
+          <span id="notif-badge" style="display:none; background:#dc2626; color:#fff;
+                border-radius:10px; font-size:10px; padding:1px 6px; margin-left:auto;">0</span>
+        </a>
+        <a href="{{ base_url }}/events/{{ event.id }}/import" class="nav-item {% if active == 'import' %}active{% endif %}">
+          <span class="nav-icon">📥</span> Excel Aktar
+        </a>
+      </nav>
+      {% else %}
+      <nav class="sidebar-nav">
+        <a href="{{ base_url }}/events" class="nav-item {% if active == 'events' %}active{% endif %}">
+          <span class="nav-icon">📅</span> Etkinlikler
+        </a>
+      </nav>
+      {% endif %}
+    </aside>
+
+    <!-- Ana içerik -->
+    <main class="main-content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <script src="{{ base_url }}/static/js/app.js"></script>
+  {% if event %}
+  <script>
+    // Okunmamış bildirim sayısını 30sn'de bir kontrol et
+    function checkNotifications() {
+      fetch('{{ base_url }}/events/{{ event.id }}/notifications/count')
+        .then(r => r.json())
+        .then(data => {
+          const badge = document.getElementById('notif-badge');
+          if (badge) {
+            if (data.count > 0) {
+              badge.textContent = data.count;
+              badge.style.display = 'inline';
+            } else {
+              badge.style.display = 'none';
+            }
+          }
+        }).catch(() => {});
+    }
+    checkNotifications();
+    setInterval(checkNotifications, 30000);
+  </script>
+  {% endif %}
+</body>
+</html>

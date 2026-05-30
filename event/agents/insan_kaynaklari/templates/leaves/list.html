@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}İzin Yönetimi — HR Ajanı{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">{% if user.role == 'employee' %}İzin Taleplerim{% else %}İzin Yönetimi{% endif %}</div>
+    {% if leave_balance %}
+    <div class="page-subtitle">
+      Kalan izin: <strong>{{ leave_balance.remaining_days }} gün</strong>
+      ({{ leave_balance.used_days }} kullanıldı, {{ leave_balance.pending_days }} beklemede)
+    </div>
+    {% endif %}
+  </div>
+  <a href="/leaves/new" class="btn btn-primary">+ Yeni İzin Talebi</a>
+</div>
+
+<div class="filters-bar">
+  <form method="get" style="display:contents">
+    <select name="status">
+      <option value="">Tüm Durumlar</option>
+      {% for s in leave_statuses %}
+      <option value="{{ s.value }}" {% if status_filter == s.value %}selected{% endif %}>{{ s.label }}</option>
+      {% endfor %}
+    </select>
+    <select name="leave_type">
+      <option value="">Tüm Türler</option>
+      {% for t in leave_types %}
+      <option value="{{ t.value }}" {% if leave_type_filter == t.value %}selected{% endif %}>{{ t.label }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-outline">Filtrele</button>
+    <a href="/leaves" class="btn btn-secondary">Temizle</a>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-body" style="padding:0">
+    {% if leaves %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            {% if user.role != 'employee' %}<th>Çalışan</th>{% endif %}
+            <th>Tür</th>
+            <th>Başlangıç</th>
+            <th>Bitiş</th>
+            <th>Gün</th>
+            <th>Durum</th>
+            <th>Talep Tarihi</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for lr in leaves %}
+          <tr>
+            {% if user.role != 'employee' %}
+            <td>
+              <a href="/employees/{{ lr.employee_id }}" style="color:var(--accent)">
+                {{ lr.employee.full_name if lr.employee else '—' }}
+              </a>
+            </td>
+            {% endif %}
+            <td><span class="badge badge-info">{{ lr.leave_type_label }}</span></td>
+            <td class="nowrap">{{ lr.start_date | fmtdate }}</td>
+            <td class="nowrap">{{ lr.end_date | fmtdate }}</td>
+            <td>{{ lr.days }}</td>
+            <td>
+              <span class="badge badge-{% if lr.status == 'onaylandi' %}success{% elif lr.status == 'reddedildi' %}danger{% elif lr.status == 'beklemede' %}warning{% else %}neutral{% endif %}">
+                {{ lr.status_label }}
+              </span>
+            </td>
+            <td class="nowrap">{{ lr.created_at | fmtdate }}</td>
+            <td>
+              <a href="/leaves/{{ lr.id }}" class="btn btn-xs btn-outline">Detay</a>
+              {% if lr.status in ('beklemede', 'onaylandi') %}
+              <form method="post" action="/leaves/{{ lr.id }}/cancel" style="display:inline" onsubmit="return confirm('İzin iptal edilsin mi?')">
+                <button type="submit" class="btn btn-xs btn-danger">İptal</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-state-icon">🏖️</div>
+      <div class="empty-state-text">İzin talebi bulunamadı</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

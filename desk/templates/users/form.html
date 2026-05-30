@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header" style="background:linear-gradient(135deg,#1a3a5c,#1e5f8c);color:#fff;border-radius:8px 8px 0 0">
+        <h6 class="mb-0"><i class="bi bi-person-fill me-2"></i>{{ page_title }}</h6>
+      </div>
+      <div class="card-body p-4">
+        {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+        <form method="post">
+          <div class="row g-3">
+
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Ad <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="form-control" required value="{{ user.name if user else '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Soyad</label>
+              <input type="text" name="surname" class="form-control" value="{{ user.surname if user else '' }}">
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Ünvan</label>
+              <input type="text" name="title" class="form-control" value="{{ user.title if user else '' }}" placeholder="ör. Finansman Müdürü">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Telefon</label>
+              <input type="text" name="phone" class="form-control" value="{{ user.phone if user else '' }}" placeholder="0 5XX XXX XX XX">
+            </div>
+
+            <div class="col-12">
+              <label class="form-label fw-semibold">E-posta <span class="text-danger">*</span></label>
+              <input type="email" name="email" class="form-control" required value="{{ user.email if user else '' }}">
+            </div>
+
+            <div class="col-12">
+              <label class="form-label fw-semibold">
+                Şifre {% if user %}<span class="text-muted small">(boş bırakılırsa değişmez)</span>{% else %}<span class="text-danger">*</span>{% endif %}
+              </label>
+              <input type="password" name="password" class="form-control" {% if not user %}required{% endif %}>
+            </div>
+
+            <!-- Rol -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Rol <span class="text-danger">*</span></label>
+              <select name="role" class="form-select">
+                {% for r in roles %}
+                {% if r != 'super_admin' or current_user.role == 'super_admin' %}
+                <option value="{{ r }}" {% if user and user.role == r %}selected{% elif not user and r == 'kullanici' %}selected{% endif %}>
+                  {{ role_labels[r] }}
+                </option>
+                {% endif %}
+                {% endfor %}
+              </select>
+              <div class="form-text">Üst roller, alt rollerin tüm yetkilerini içerir.</div>
+            </div>
+
+            <!-- Müdür (bağlı yönetici) -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Bağlı Müdür</label>
+              <select name="manager_id" class="form-select">
+                <option value="">— Yok (doğrudan GM'e bağlı) —</option>
+                {% for m in managers %}
+                <option value="{{ m.id }}" {% if user and user.manager_id == m.id %}selected{% endif %}>
+                  {{ m.name }}{% if m.title %} — {{ m.title }}{% endif %} ({{ role_labels[m.role] }})
+                </option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Avans/HBF onayı bu kişiden geçer.</div>
+            </div>
+
+            <!-- Çalışan profil bağlantısı -->
+            <div class="col-12">
+              <label class="form-label fw-semibold">Çalışan Profili Bağla</label>
+              <select name="employee_id" class="form-select">
+                <option value="">— Bağlı değil —</option>
+                {% for emp in employees %}
+                <option value="{{ emp.id }}"
+                  {% if linked_employee and linked_employee.id == emp.id %}selected{% endif %}>
+                  {{ emp.name }}{% if emp.title %} — {{ emp.title }}{% endif %}
+                </option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Kullanıcı bu çalışan adına avans talebinde bulunabilir.</div>
+            </div>
+
+            {% if current_user.role == 'super_admin' and companies %}
+            <div class="col-md-8">
+              <label class="form-label fw-semibold">Şirket <span class="text-danger">*</span></label>
+              <select name="company_id" class="form-select">
+                <option value="">— Şirket Seç —</option>
+                {% for c in companies %}
+                <option value="{{ c.id }}" {% if selected_company_id == c.id %}selected{% endif %}>
+                  {{ c.name }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            {% endif %}
+
+            {% if user %}
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Durum</label>
+              <select name="active" class="form-select">
+                <option value="1" {% if user.active %}selected{% endif %}>Aktif</option>
+                <option value="0" {% if not user.active %}selected{% endif %}>Pasif</option>
+              </select>
+            </div>
+            {% endif %}
+
+            <!-- Departman atamaları (RBAC v2) -->
+            {% if all_departments %}
+            <div class="col-12">
+              <label class="form-label fw-semibold">
+                Departmanlar
+                <small class="text-muted fw-normal ms-1">— hangi sayfaları görür belirler</small>
+              </label>
+              <div class="border rounded p-3" style="background:#f8fafc;">
+                {% for d in all_departments %}
+                <div class="d-flex align-items-center gap-3 mb-2">
+                  <div class="form-check flex-grow-1">
+                    <input type="checkbox" class="form-check-input"
+                           id="dept_{{ d.id }}" name="department_ids" value="{{ d.id }}"
+                           {% if d.id in user_dept_ids %}checked{% endif %}>
+                    <label class="form-check-label" for="dept_{{ d.id }}">
+                      <i class="bi {{ d.icon }} me-1" style="color:{{ d.color }};"></i>
+                      {{ d.name }}
+                      {% if not d.active %}<small class="badge bg-secondary ms-1">Pasif</small>{% endif %}
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input type="checkbox" class="form-check-input"
+                           id="head_{{ d.id }}" name="head_dept_ids" value="{{ d.id }}"
+                           {% if d.id in head_dept_ids %}checked{% endif %}>
+                    <label class="form-check-label small text-muted" for="head_{{ d.id }}">
+                      Departman müdürü
+                    </label>
+                  </div>
+                </div>
+                {% endfor %}
+                <small class="text-muted d-block mt-2">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Bir kullanıcı birden fazla departmanda olabilir. Admin / Genel Müdür her zaman tüm modülleri görür.
+                </small>
+              </div>
+            </div>
+            {% endif %}
+
+          </div>
+
+          <div class="d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-primary px-4">
+              <i class="bi bi-check-lg me-1"></i>Kaydet
+            </button>
+            <a href="/users" class="btn btn-outline-secondary">İptal</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

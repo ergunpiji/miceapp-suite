@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Hesabım — HR Ajanı{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Hesabım</div>
+    <div class="page-subtitle">{{ user.email }}</div>
+  </div>
+</div>
+
+<div class="card" style="max-width:480px">
+  <div class="card-body">
+    <div class="form-grid">
+      <div class="form-group">
+        <label>E-posta</label>
+        <div style="padding:8px 0;font-size:14px">{{ user.email }}</div>
+      </div>
+      <div class="form-group">
+        <label>Rol</label>
+        <div style="padding:8px 0">
+          <span class="badge badge-primary">{{ user.role_label }}</span>
+        </div>
+      </div>
+      {% if user.employee %}
+      <div class="form-group">
+        <label>Ad Soyad</label>
+        <div style="padding:8px 0;font-size:14px">{{ user.employee.full_name }}</div>
+      </div>
+      <div class="form-group">
+        <label>Ünvan</label>
+        <div style="padding:8px 0;font-size:14px">{{ user.employee.title or '—' }}</div>
+      </div>
+      {% endif %}
+    </div>
+    {% if user.employee %}
+    <div style="margin-top:16px">
+      <a href="/employees/{{ user.employee.id }}" class="btn btn-outline">Özlük Dosyam</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

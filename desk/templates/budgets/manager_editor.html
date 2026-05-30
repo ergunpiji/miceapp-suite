@@ -1,0 +1,1750 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .budget-table th { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: #64748b; background: #f8fafc; white-space: nowrap; }
+  .budget-table td { vertical-align: middle; padding: 5px 7px; }
+  .budget-table input, .budget-table select { font-size: 12px; padding: 4px 6px; }
+  .section-header-row { background: #1e293b; color: white; }
+  .section-header-row td { padding: 7px 12px !important; }
+  .date-subrow td { background: #f0f9ff; font-size: 12px; }
+  .vat-fixed { font-size: 12px; color: #64748b; font-weight: 600; padding: 4px 6px; }
+  .price-warn { color: #dc2626; font-size: 11px; display: none; }
+  .price-warn.show { display: block; }
+  .service-fee-row td { background: #fefce8; }
+  .cost-cell { background: #f8fafc; color: #94a3b8; }
+  .flag-btn { background: none; border: none; cursor: pointer; font-size: 14px; padding: 2px 4px; opacity: 0.3; transition: opacity .15s; }
+  .flag-btn:hover { opacity: 0.7; }
+  .flag-btn.active { opacity: 1; }
+  .row-note-tr { display: none; }
+  .row-note-tr.show { display: table-row; }
+  .row-note-tr td { background: #fff7ed; border-left: 3px solid #f97316; padding: 6px 12px !important; }
+  /* Preview modal */
+  .preview-section-title { background:#1e293b; color:#fff; font-size:12px; font-weight:700;
+    letter-spacing:.5px; padding:6px 14px; text-transform:uppercase; }
+  .preview-table th { font-size:11px; background:#f1f5f9; }
+  .preview-table td { font-size:12px; }
+  .preview-subtotal td { font-weight:700; background:#f8fafc; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="mb-3">
+  {% if statement_mode %}
+  <a href="/requests/{{ budget.request_id }}#tab-summary" class="text-muted text-decoration-none" style="font-size:13px;">
+    <i class="bi bi-arrow-left me-1"></i> Referansa Dön
+  </a>
+  {% else %}
+  <a href="/budgets/{{ budget.id }}" class="text-muted text-decoration-none" style="font-size:13px;">
+    <i class="bi bi-arrow-left me-1"></i> Bütçe Detayına Dön
+  </a>
+  {% endif %}
+</div>
+
+{% if statement_mode %}
+{% if statement_status == 'customer_approved' %}
+<div class="alert mb-3 d-flex align-items-center gap-3"
+     style="background:#f0fdf4; border:1px solid #86efac; border-radius:8px;">
+  <i class="bi bi-check2-circle text-success fs-4"></i>
+  <div class="flex-grow-1">
+    <div class="fw-bold text-success" style="font-size:15px;">Müşteri Hesap Dökümünü Onayladı</div>
+    <div class="text-muted" style="font-size:12px;">
+      Artık muhasebe yetkilisi fatura oluşturabilir.
+      {% if req %}<a href="/requests/{{ req.id }}#tab-financial" class="alert-link">→ Referans sayfasına git ve "Fatura Oluştur" butonunu tıkla</a>{% endif %}
+    </div>
+  </div>
+</div>
+{% elif statement_status == 'sent' %}
+<div class="alert mb-3 d-flex align-items-center gap-3"
+     style="background:#f0fdfa; border:1px solid #99f6e4; border-radius:8px;">
+  <i class="bi bi-send-check" style="color:#0d9488; font-size:22px;"></i>
+  <div>
+    <div class="fw-bold" style="font-size:14px; color:#0d9488;">Gönderildi — {{ statement_sent_label }}</div>
+    <div style="font-size:12px; color:#64748b;">Müşteri onayı bekleniyor. Değişiklik yapmak için kaydedin.</div>
+  </div>
+</div>
+{% else %}
+<div class="alert mb-3 d-flex align-items-center gap-3"
+     style="background:#1a3a5c; color:#ffffff; border:none; border-radius:8px;">
+  <i class="bi bi-receipt fs-4"></i>
+  <div>
+    <div class="fw-bold" style="font-size:15px;">Hesap Dökümü</div>
+    <div style="font-size:12px; opacity:.85;">
+      Satış miktarını ve maliyet miktarını ayrı girebilirsiniz (mavi = maliyet, beyaz = satış).
+      Hazır olduğunda "Müşteriye Hesap Dökümü Gönder" butonunu tıklayın.
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+
+{# ─── BÜTÇE SEKMELERİ ─── #}
+{% if all_request_budgets and all_request_budgets | length > 0 %}
+<div id="budgetTabBar" class="d-flex align-items-center gap-0 mb-3 flex-wrap"
+     style="border-bottom: 2px solid #e2e8f0; padding-bottom: 0;">
+  {% for b in all_request_budgets %}
+  {% set is_active = b.id == budget.id %}
+  {% set sc = status_colors.get(b.budget_status, 'secondary') %}
+  <a href="javascript:void(0)"
+     onclick="switchBudget('{{ b.id }}')"
+     id="tab-{{ b.id }}"
+     class="text-decoration-none budget-tab {{ 'budget-tab-active' if is_active else '' }}"
+     style="display:inline-flex; align-items:center; gap:6px; padding:7px 16px 9px;
+            font-size:13px; font-weight:{{ '700' if is_active else '500' }};
+            color:{{ '#1e293b' if is_active else '#64748b' }};
+            background:{{ '#ffffff' if is_active else '#f8fafc' }};
+            border:1px solid {{ '#e2e8f0' if is_active else 'transparent' }};
+            border-bottom:{{ '2px solid #ffffff' if is_active else '1px solid transparent' }};
+            border-radius:6px 6px 0 0;
+            margin-bottom:-2px;
+            white-space:nowrap; cursor:pointer;">
+    <span class="badge bg-{{ sc }} bg-opacity-{{ '25' if is_active else '15' }} tab-status-badge"
+          style="font-size:9px; padding:2px 5px; color:inherit;">
+      {{ status_labels.get(b.budget_status, b.budget_status) }}
+    </span>
+    <span class="tab-venue-name">{{ b.venue_name or 'Yeni Bütçe' }}</span>
+  </a>
+  {% endfor %}
+  {# Kopya Oluştur butonu #}
+  <button type="button"
+          onclick="copyAndOpen()"
+          title="Kopyala ve yeni sekme aç"
+          style="display:inline-flex; align-items:center; gap:5px; padding:7px 14px 9px;
+                 font-size:13px; font-weight:500; color:#64748b;
+                 background:#f1f5f9; border:1px dashed #cbd5e1;
+                 border-bottom:1px solid transparent;
+                 border-radius:6px 6px 0 0; cursor:pointer;
+                 white-space:nowrap; margin-left:4px;">
+    <i class="bi bi-plus-lg"></i> Kopyala
+  </button>
+</div>
+{% endif %}
+
+{# ─── DURUM BANDİ ─── #}
+<div class="alert alert-{{ status_color }} d-flex align-items-center gap-2 mb-3 py-2">
+  <i class="bi bi-info-circle-fill"></i>
+  <span><strong>Durum:</strong> {{ status_label }}</span>
+</div>
+
+{% if budget.revision_notes %}
+<div class="alert alert-warning mb-3">
+  <i class="bi bi-exclamation-triangle me-2"></i>
+  <strong>Önceki Revizyon Notu:</strong> {{ budget.revision_notes }}
+</div>
+{% endif %}
+
+{# ─── TALEP BİLGİSİ ─── #}
+{% if req %}
+<div class="card mb-3">
+  <div class="card-body py-3">
+    <div class="d-flex flex-wrap gap-4 align-items-center">
+      <div>
+        <span class="text-muted" style="font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;">Referans No</span>
+        <div class="fw-bold text-primary">{{ req.request_no }}</div>
+      </div>
+      <div>
+        <span class="text-muted" style="font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;">Etkinlik</span>
+        <div class="fw-semibold">{{ req.event_name }}</div>
+      </div>
+      <div>
+        <span class="text-muted" style="font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;">Müşteri</span>
+        <div style="font-size:13px;">{{ req.client_name }}</div>
+      </div>
+      <div>
+        <span class="text-muted" style="font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;">Etkinlik Tarihi</span>
+        <div style="font-size:13px;">
+          {% if req.check_in %}{{ req.check_in | date_tr }}{% else %}—{% endif %}
+          {% if req.check_out %} → {{ req.check_out | date_tr }}{% endif %}
+        </div>
+      </div>
+      <div>
+        <span class="text-muted" style="font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;">Konaklama</span>
+        <div style="font-size:13px;">
+          {% if req.accom_check_in %}{{ req.accom_check_in | date_tr }}{% elif req.check_in %}{{ req.check_in | date_tr }}{% else %}—{% endif %}
+          {% if req.accom_check_out %} → {{ req.accom_check_out | date_tr }}{% elif req.check_out %} → {{ req.check_out | date_tr }}{% endif %}
+        </div>
+      </div>
+      <div class="flex-grow-1" style="min-width:200px;">
+        <span class="text-muted" style="font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;">Mekan / Tedarikçi</span>
+        {% if preferred_venues %}
+        <select class="form-select form-select-sm mt-1"
+                style="font-size:13px; max-width:280px;"
+                onchange="onVenueSelect(this.value)">
+          <option value="">— Seçiniz —</option>
+          {% for v in preferred_venues %}
+          <option value="{{ v.name }}"
+                  {% if v.name == budget.venue_name or budget.venue_name and budget.venue_name.startswith(v.name) %}selected{% endif %}>
+            {{ v.name }}{% if v.city %} · {{ v.city }}{% endif %}
+          </option>
+          {% endfor %}
+          <option value="__manual__">✏️ Manuel gir...</option>
+        </select>
+        <input type="text" id="venueNameManual" class="form-control form-control-sm mt-1"
+               placeholder="Mekan adı yazın..."
+               style="font-size:13px; max-width:280px; display:none;"
+               oninput="document.getElementById('venueNameHidden').value=this.value; updateActiveTab(this.value)">
+        {% else %}
+        <input type="text" class="form-control form-control-sm mt-1"
+               value="{{ budget.venue_name or '' }}"
+               placeholder="Mekan / tedarikçi adı..."
+               style="font-size:13px; max-width:280px;"
+               oninput="document.getElementById('venueNameHidden').value=this.value; updateActiveTab(this.value)">
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<form method="post" action="/budgets/{{ budget.id }}/{% if statement_mode %}statement{% elif revise_mode %}revise-price{% else %}price{% endif %}" id="managerForm">
+  <input type="hidden" name="venue_name" id="venueNameHidden" value="{{ budget.venue_name or '' }}">
+  <input type="hidden" name="exchange_rates_json" id="exchangeRatesJson" value="{{ exchange_rates | tojson }}">
+
+  {# ─── KUR BİLGİLERİ PANELİ ─── #}
+  <div class="card mb-3" style="border-color:#fde68a; background:#fffbeb;">
+    <div class="card-body py-3">
+      <div class="d-flex flex-wrap gap-4 align-items-end">
+        <div>
+          <label class="fw-semibold mb-1" style="font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:#92400e;">
+            <i class="bi bi-currency-exchange me-1"></i>Teklif Para Birimi
+          </label>
+          <select id="offerCurrencySelect" class="form-select fw-bold" style="font-size:13px; color:#1a3a5c; min-width:160px; background:#fff;"
+                  onchange="onOfferCurrencyChange(this.value)">
+            <option value="TRY" {% if offer_currency == 'TRY' %}selected{% endif %}>₺ Türk Lirası</option>
+            <option value="EUR" {% if offer_currency == 'EUR' %}selected{% endif %}>€ Euro</option>
+            <option value="USD" {% if offer_currency == 'USD' %}selected{% endif %}>$ US Dolar</option>
+          </select>
+          <input type="hidden" name="offer_currency" id="offerCurrencyHidden" value="{{ offer_currency }}">
+        </div>
+        <div>
+          <label class="fw-semibold mb-1" style="font-size:12px; color:#64748b;">1 EUR =</label>
+          <div class="input-group input-group-sm" style="width:160px;">
+            <input type="number" id="eurRate" class="form-control" min="0" step="0.01" placeholder="0,00"
+                   value="{{ (exchange_rates | fromjson).get('EUR', '') if exchange_rates else '' }}"
+                   oninput="onRateChange()">
+            <span class="input-group-text">₺</span>
+          </div>
+        </div>
+        <div>
+          <label class="fw-semibold mb-1" style="font-size:12px; color:#64748b;">1 USD =</label>
+          <div class="input-group input-group-sm" style="width:160px;">
+            <input type="number" id="usdRate" class="form-control" min="0" step="0.01" placeholder="0,00"
+                   value="{{ (exchange_rates | fromjson).get('USD', '') if exchange_rates else '' }}"
+                   oninput="onRateChange()">
+            <span class="input-group-text">₺</span>
+          </div>
+        </div>
+        <div class="text-muted" style="font-size:11px; max-width:260px; line-height:1.4;">
+          Kur bilgilerini girerek maliyet ve satış toplamlarının TL karşılığını hesaplayın.
+          Edem farklı para birimleriyle fiyat girmiş olabilir.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ─── BÜTÇE TABLOSU ─── #}
+  <div class="card mb-4">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table budget-table mb-0" id="budgetTable">
+          <thead>
+            <tr>
+              <th class="ps-3" style="min-width:150px;">Hizmet</th>
+              <th style="width:60px;">Birim</th>
+              {% if not statement_mode %}<th style="width:45px;">Miktar</th>{% endif %}
+              <th style="width:110px;">Başlangıç</th>
+              <th style="width:110px;">Bitiş</th>
+              <th style="width:45px;">Gece</th>
+              <th style="width:140px; color:#94a3b8; white-space:normal; line-height:1.3;">
+                {% if statement_mode %}Maliyet<br>Toplamı{% else %}Birim<br>Maliyet{% endif %}
+              </th>
+              <th style="width:110px; color:#94a3b8; white-space:normal; line-height:1.3;">Maliyet<br>Toplam</th>
+              <th style="width:145px; white-space:normal; line-height:1.3;">Birim Satış<br>(KDV hariç)</th>
+              <th style="width:110px; white-space:normal; line-height:1.3;">Satış<br>Toplam</th>
+              <th style="width:36px;" title="Revizyon Bayrağı"></th>
+            </tr>
+          </thead>
+          <tbody id="budgetTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# ─── HİZMET BEDELİ ─── #}
+  <div class="card mb-4">
+    <div class="card-header" style="font-size:13px; font-weight:600;">
+      <i class="bi bi-briefcase me-2"></i>Hizmet Bedeli
+    </div>
+    <div class="card-body">
+      <div class="row g-3 align-items-center">
+        <div class="col-md-3">
+          <label class="form-label fw-semibold" style="font-size:13px;">Hizmet Bedeli %</label>
+          <div class="input-group">
+            <input type="number" id="serviceFeePercent" class="form-control" min="0" max="100" step="0.5"
+                   value="{{ budget.service_fee_pct or '' }}" placeholder="0"
+                   oninput="calcServiceFee()">
+            <span class="input-group-text fw-bold">%</span>
+          </div>
+          <div class="text-muted mt-1" style="font-size:11px;">KDV hariç satışlar üzerinden</div>
+        </div>
+        <div class="col-md-3">
+          <div class="text-muted" style="font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;">Tutar (KDV hariç)</div>
+          <div class="fw-bold text-warning" style="font-size:18px;" id="sfAmount">₺0,00</div>
+        </div>
+        <div class="col-md-3">
+          <div class="text-muted" style="font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;">KDV (%20)</div>
+          <div class="fw-bold text-secondary" style="font-size:18px;" id="sfVatAmt">₺0,00</div>
+        </div>
+        <div class="col-md-3">
+          <div class="text-muted" style="font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;">Hizmet Bedeli (KDV dahil)</div>
+          <div class="fw-bold text-warning" style="font-size:18px;" id="sfTotal">₺0,00</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ─── ÖZET TOTALLER ─── #}
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="row g-3">
+
+        {# Sol: Maliyet & Satış #}
+        <div class="col-md-3">
+          <div class="border rounded p-3 h-100">
+            <div class="text-muted mb-2" style="font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;">Maliyet & Satış</div>
+            <div class="d-flex justify-content-between border-bottom pb-2 mb-2">
+              <span class="text-muted" style="font-size:12px;">Toplam Maliyet</span>
+              <span class="fw-bold text-secondary" id="totalCostExVat">₺0,00</span>
+            </div>
+            <div class="d-flex justify-content-between border-bottom pb-2 mb-2">
+              <span class="text-muted" style="font-size:12px;">Toplam Satış (KDV hariç)</span>
+              <span class="fw-bold text-primary" id="totalSaleExVat">₺0,00</span>
+            </div>
+            <div class="d-flex justify-content-between">
+              <span class="text-muted" style="font-size:12px;">Hizmet Bedeli (KDV hariç)</span>
+              <span class="fw-semibold text-warning" id="totalSfIncVat">₺0,00</span>
+            </div>
+          </div>
+        </div>
+
+        {# Orta: Fiyat Dökümü #}
+        <div class="col-md-5">
+          <div class="border rounded p-3 h-100">
+            <div class="text-muted mb-2" style="font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;">Fiyat Dökümü</div>
+            <div class="d-flex justify-content-between border-bottom pb-2 mb-1">
+              <span style="font-size:13px; font-weight:600;">Genel Toplam (KDV hariç)</span>
+              <span class="fw-bold text-primary" id="totalSaleExVatDup">₺0,00</span>
+            </div>
+            <div class="d-flex justify-content-between border-bottom py-1">
+              <span class="text-muted" style="font-size:13px;">Hizmet Bedeli (KDV hariç)</span>
+              <span class="fw-semibold text-warning" id="totalSfExVat">₺0,00</span>
+            </div>
+
+            <div id="vatBreakdown"></div>
+            <div class="d-flex justify-content-between pt-2 mt-1" style="border-top:2px solid #93c5fd;">
+              <span style="font-size:13px; font-weight:700;">Genel Toplam (KDV dahil)</span>
+              <span class="fw-bold text-success" style="font-size:15px;" id="totalSaleIncVatDup">₺0,00</span>
+            </div>
+          </div>
+        </div>
+
+        {# Sağ: Toplam #}
+        <div class="col-md-4">
+          <div class="border rounded p-3 bg-success bg-opacity-10 h-100 d-flex flex-column justify-content-center gap-3">
+            <div class="text-center">
+              <div class="text-muted" style="font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;">GENEL TOPLAM (KDV dahil) — TL</div>
+              <div class="fw-bold text-success" style="font-size:24px;" id="totalSaleIncVat">₺0,00</div>
+            </div>
+            <div class="text-center" id="totalOfferBlock" style="display:none;">
+              <div class="text-muted" style="font-size:11px; text-transform:uppercase; font-weight:700; letter-spacing:.5px;" id="totalOfferLabel">TOPLAM — OFFER</div>
+              <div class="fw-bold text-primary" style="font-size:20px;" id="totalSaleOffer">—</div>
+            </div>
+            <hr class="my-1">
+            <div class="d-flex justify-content-between align-items-center px-1">
+              <span style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#475569;">Kâr Marjı</span>
+              <span class="fw-bold" style="font-size:22px;" id="karMarji">%0,0</span>
+            </div>
+            <div class="d-flex justify-content-between px-1">
+              <span class="text-muted" style="font-size:12px;">Kâr Tutarı</span>
+              <span class="fw-bold" id="karTutari">₺0,00</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  {# ─── MANAGER NOTLARI ─── #}
+  <div class="card mb-4">
+    <div class="card-header" style="font-size:13px; font-weight:600;">
+      <i class="bi bi-sticky me-2"></i>Manager Notları (iç kullanım)
+    </div>
+    <div class="card-body">
+      <textarea name="manager_notes" class="form-control" rows="3"
+                placeholder="İç notlar, müşteriye gösterilmez...">{{ budget.manager_notes or '' }}</textarea>
+    </div>
+  </div>
+
+  <input type="hidden" name="rows_json" id="rowsJson" value="{{ budget.rows_json }}">
+  <input type="hidden" name="service_fee_pct" id="serviceFeePctInput" value="{{ budget.service_fee_pct or 0 }}">
+
+  {# ─── BUTONLAR ─── #}
+  <div class="d-flex gap-2 flex-wrap align-items-center mb-5">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-save me-1"></i> Kaydet
+    </button>
+
+    {% if statement_mode %}
+
+    {% if statement_status == 'customer_approved' %}
+    <span class="badge bg-success px-3 py-2" style="font-size:13px;">
+      <i class="bi bi-check2-circle me-1"></i> Müşteri Onayladı
+    </span>
+    {% elif statement_status == 'sent' %}
+    <span class="badge bg-teal px-3 py-2" style="font-size:13px; background:#0d9488!important;">
+      <i class="bi bi-send-check me-1"></i> Gönderildi — {{ statement_sent_label }}
+    </span>
+    <button type="button" class="btn btn-outline-secondary btn-sm"
+            onclick="sendStatementEmail()">
+      <i class="bi bi-arrow-repeat me-1"></i> Yeniden Gönder
+    </button>
+    <button type="button" class="btn btn-success"
+            onclick="submitApproveStatement()">
+      <i class="bi bi-check2-circle me-1"></i> Müşteri Onayladı
+    </button>
+    {% else %}
+    <button type="button" class="btn btn-success"
+            onclick="sendStatementEmail()">
+      <i class="bi bi-envelope-arrow-up me-1"></i> Müşteriye Hesap Dökümü Gönder
+    </button>
+    {% endif %}
+
+    <button type="button" class="btn btn-outline-primary" onclick="openPreview()">
+      <i class="bi bi-eye me-1"></i> Önizleme
+    </button>
+
+    {% else %}
+    <button type="button" class="btn btn-success"
+            onclick="submitSaveAndApprove()">
+      <i class="bi bi-check-circle me-1"></i> Kaydet & Onayla
+    </button>
+
+    <button type="button" class="btn btn-outline-primary" onclick="openPreview()">
+      <i class="bi bi-eye me-1"></i> Önizleme
+    </button>
+
+    <button type="button" class="btn btn-warning"
+            data-bs-toggle="modal" data-bs-target="#revisionModal"
+            {% if budget.budget_status not in ('pending_manager', 'draft_manager', 'approved') %}disabled{% endif %}>
+      <i class="bi bi-arrow-counterclockwise me-1"></i> Revizyon İste
+    </button>
+
+    <button type="button" class="btn btn-outline-danger"
+            onclick="submitCancel()"
+            {% if budget.budget_status == 'cancelled' %}disabled{% endif %}>
+      <i class="bi bi-x-circle me-1"></i> İptal Et
+    </button>
+
+    <div class="btn-group" id="excelExportGroup">
+      <a id="excelExportLink" href="/budgets/{{ budget.id }}/export?currency={{ offer_currency }}"
+         class="btn btn-outline-success">
+        <i class="bi bi-file-earmark-excel me-1"></i> Excel İndir
+      </a>
+      <button type="button" class="btn btn-outline-success dropdown-toggle dropdown-toggle-split"
+              data-bs-toggle="dropdown" aria-expanded="false">
+        <span class="visually-hidden">Seçenekler</span>
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li>
+          <a id="excelExportExclusive" class="dropdown-item"
+             href="/budgets/{{ budget.id }}/export?currency={{ offer_currency }}&vat=exclusive">
+            <i class="bi bi-file-earmark-excel me-1 text-success"></i>
+            KDV Hariç (standart)
+          </a>
+        </li>
+        <li>
+          <a id="excelExportInclusive" class="dropdown-item"
+             href="/budgets/{{ budget.id }}/export?currency={{ offer_currency }}&vat=inclusive">
+            <i class="bi bi-file-earmark-excel me-1 text-success"></i>
+            KDV Dahil
+          </a>
+        </li>
+        {% if offer_currency != 'TRY' %}
+        <li><hr class="dropdown-divider"></li>
+        <li>
+          <a id="excelExportMixed" class="dropdown-item"
+             href="/budgets/{{ budget.id }}/export?currency={{ offer_currency }}&vat=mixed">
+            <i class="bi bi-currency-exchange me-1 text-primary"></i>
+            Birim {{ offer_currency }} / Toplam ₺
+          </a>
+        </li>
+        {% endif %}
+        <li><hr class="dropdown-divider"></li>
+        <li>
+          <a class="dropdown-item" href="#" onclick="markOfferSent(event)">
+            <i class="bi bi-send-check me-1 text-warning"></i>
+            Teklif Müşteriye Gönderildi
+          </a>
+        </li>
+      </ul>
+    </div>
+
+    <button type="button" class="btn btn-outline-secondary" onclick="submitCopy()">
+      <i class="bi bi-copy me-1"></i> Kopyala & Yeni Bütçe Oluştur
+    </button>
+    {% endif %}
+  </div>
+
+</form>
+
+{# ─── Onay / İptal / Kopyala formları (hidden) ─── #}
+<form method="post" action="/budgets/{{ budget.id }}/approve" id="approveForm"></form>
+<form method="post" action="/budgets/{{ budget.id }}/cancel" id="cancelForm"></form>
+<form method="post" action="/budgets/{{ budget.id }}/copy" id="copyForm">
+  <input type="hidden" name="rows_json" id="rowsJsonCopy">
+  <input type="hidden" name="service_fee_pct" id="sfPctCopy">
+</form>
+{% if statement_mode %}
+<form method="post" action="/budgets/{{ budget.id }}/send-statement" id="sendStatementForm"></form>
+<form method="post" action="/budgets/{{ budget.id }}/approve-statement" id="approveStatementForm"></form>
+{% endif %}
+
+{# ─── Revizyon Modal ─── #}
+<div class="modal fade" id="revisionModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="/budgets/{{ budget.id }}/request-revision">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-arrow-counterclockwise me-2 text-warning"></i>Revizyon Talebi</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted" style="font-size:13px;">E-dem'e gönderilecek revizyon notunu girin.</p>
+          <textarea name="revision_notes" class="form-control" rows="4" required
+                    placeholder="Hangi kalemlerin değiştirilmesi gerekiyor?"></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+          <button type="submit" class="btn btn-warning"><i class="bi bi-send me-1"></i>Revizyon İste</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# ─── Önizleme Modal ─── #}
+<div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Teklif Önizleme — {{ budget.venue_name }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0" id="previewContent"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Toast #}
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:9999;">
+  <div id="editorToast" class="toast align-items-center text-bg-success border-0" role="alert">
+    <div class="d-flex">
+      <div class="toast-body fw-semibold"></div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const SECTION_LABELS = {
+  accommodation: '🛏 Konaklama',
+  meeting:       '🏛 Toplantı / Salon',
+  fb:            '🍽 F&B (Yiyecek & İçecek)',
+  teknik:        '🔧 Teknik Ekipman',
+  dekor:         '🎨 Dekor',
+  transfer:      '🚌 Transfer',
+  tasarim:       '🖨 Tasarım & Baskı',
+  other:         '📦 Diğer',
+};
+const SECTIONS = ['accommodation', 'meeting', 'fb', 'teknik', 'dekor', 'transfer', 'tasarim', 'other'];
+
+// ─── Para Birimi ───
+const CURRENCIES = { TRY:{symbol:'₺',name:'Türk Lirası'}, EUR:{symbol:'€',name:'Euro'}, USD:{symbol:'$',name:'US Dolar'} };
+const STATEMENT_MODE = {{ 'true' if statement_mode else 'false' }};
+let offerCurrency = '{{ offer_currency | default("TRY") }}';
+
+function onOfferCurrencyChange(val) {
+  offerCurrency = val;
+  document.getElementById('offerCurrencyHidden').value = val;
+  updateTotals();
+  // Excel export linklerini güncel para birimiyle güncelle
+  const bid = '{{ budget.id }}';
+  const el = document.getElementById('excelExportLink');
+  if (el) el.href = `/budgets/${bid}/export?currency=${val}`;
+  const ex = document.getElementById('excelExportExclusive');
+  if (ex) ex.href = `/budgets/${bid}/export?currency=${val}&vat=exclusive`;
+  const inc = document.getElementById('excelExportInclusive');
+  if (inc) inc.href = `/budgets/${bid}/export?currency=${val}&vat=inclusive`;
+  const mix = document.getElementById('excelExportMixed');
+  if (mix) {
+    mix.href = `/budgets/${bid}/export?currency=${val}&vat=mixed`;
+    // TRY seçilince mixed opsiyonu gizle
+    mix.closest('li').style.display = val === 'TRY' ? 'none' : '';
+    const divider = mix.closest('li').previousElementSibling;
+    if (divider) divider.style.display = val === 'TRY' ? 'none' : '';
+  }
+}
+let exchangeRates = {{ exchange_rates | tojson }};
+
+function rateToTry(currency) {
+  if (!currency || currency === 'TRY') return 1.0;
+  const r = parseFloat(exchangeRates[currency]);
+  return (r && r > 0) ? r : 1;
+}
+function amountToTry(amount, currency) { return amount * rateToTry(currency); }
+function amountToOffer(amountTry) {
+  if (!offerCurrency || offerCurrency === 'TRY') return amountTry;
+  const r = rateToTry(offerCurrency);
+  return r ? amountTry / r : amountTry;
+}
+function currSymbol(c) { return (CURRENCIES[c] || {symbol:c}).symbol; }
+function fmtCurrency(n, currency) {
+  const sym = currSymbol(currency || 'TRY');
+  return sym + (n||0).toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+let _rateChangeTimer = null;
+function onRateChange() {
+  const eurEl = document.getElementById('eurRate');
+  const usdEl = document.getElementById('usdRate');
+  if (eurEl && eurEl.value) exchangeRates['EUR'] = parseFloat(eurEl.value) || 0;
+  if (usdEl && usdEl.value) exchangeRates['USD'] = parseFloat(usdEl.value) || 0;
+  document.getElementById('exchangeRatesJson').value = JSON.stringify(exchangeRates);
+  clearTimeout(_rateChangeTimer);
+  _rateChangeTimer = setTimeout(() => { renderTable(); calcServiceFee(); }, 400);
+}
+
+// Sayfa yüklenince input değerlerinden exchangeRates'i senkronize et
+// (eski kayıtlarda exchange_rates_json boş olabilir ama input'lar dolu olabilir)
+(function syncRatesFromInputs() {
+  const eurEl = document.getElementById('eurRate');
+  const usdEl = document.getElementById('usdRate');
+  const eurVal = parseFloat(eurEl?.value);
+  const usdVal = parseFloat(usdEl?.value);
+  let changed = false;
+  if (eurVal > 0 && !(exchangeRates['EUR'] > 0)) { exchangeRates['EUR'] = eurVal; changed = true; }
+  if (usdVal > 0 && !(exchangeRates['USD'] > 0)) { exchangeRates['USD'] = usdVal; changed = true; }
+  if (changed) document.getElementById('exchangeRatesJson').value = JSON.stringify(exchangeRates);
+})();
+
+// Talepten gelen default tarihler
+const REQ_ACCOM_IN  = '{{ req.accom_check_in  or req.check_in  or "" }}';
+const REQ_ACCOM_OUT = '{{ req.accom_check_out or req.check_out or "" }}';
+const REQ_MTG_IN    = '{{ req.check_in  or "" }}';
+const REQ_MTG_OUT   = '{{ req.check_out or "" }}';
+
+const GROUPED_SERVICES = {{ grouped_services | safe }};
+
+function getVatOptions(section) {
+  if (section === 'accommodation') return null;  // sabit %10
+  if (section === 'meeting' || section === 'fb') return [10, 20];
+  return null;  // sabit %20
+}
+function defaultVat(section) {
+  if (section === 'accommodation') return 10;
+  return 20;
+}
+
+// ─── Veri ───
+let rows = [];
+try { rows = JSON.parse(document.getElementById('rowsJson').value || '[]'); } catch(e) {}
+
+// Section bazında tarih bilgisi (rows'tan veya req'den)
+function getSectionDates(sec) {
+  // Önce rows'ta bu section için tarih var mı bak
+  const secRow = rows.find(r => r.section === sec && !r.is_service_fee);
+  if (sec === 'accommodation') {
+    return {
+      date_from: secRow?.accom_in  || REQ_ACCOM_IN,
+      date_to:   secRow?.accom_out || REQ_ACCOM_OUT,
+    };
+  }
+  if (sec === 'meeting') {
+    return {
+      date_from: secRow?.meeting_in  || REQ_MTG_IN,
+      date_to:   secRow?.meeting_out || REQ_MTG_OUT,
+    };
+  }
+  return { date_from: '', date_to: '' };
+}
+
+// Section tarihlerini güncelle (tüm o section satırlarına yaz)
+function updateSectionDates(sec, dateFrom, dateTo) {
+  rows.forEach((r, i) => {
+    if (r.section === sec && !r.is_service_fee) {
+      if (sec === 'accommodation') {
+        rows[i].accom_in  = dateFrom;
+        rows[i].accom_out = dateTo;
+      } else if (sec === 'meeting') {
+        rows[i].meeting_in  = dateFrom;
+        rows[i].meeting_out = dateTo;
+      }
+    }
+  });
+  saveRows();
+}
+
+renderTable();
+calcServiceFee();   // updateTotals() + saveRows() zincirini de başlatır
+
+// ─── Konaklama Vergisi yardımcıları ───
+function isAccomTaxEnabled() {
+  return rows.some(r => r.is_accommodation_tax);
+}
+
+function toggleAccomTax(checked) {
+  if (checked) {
+    if (!rows.some(r => r.is_accommodation_tax)) {
+      rows.push({ is_accommodation_tax: true, service_name: 'Konaklama Vergisi',
+        section: 'accommodation', sale_price: 0, cost_price: 0,
+        qty: 1, nights: 1, vat_rate: 0, unit: 'Hizmet' });
+    }
+  } else {
+    const idx = rows.findIndex(r => r.is_accommodation_tax);
+    if (idx >= 0) rows.splice(idx, 1);
+  }
+  renderTable();
+  calcServiceFee();
+}
+
+function addRow(section) {
+  const sd = getSectionDates(section);
+  const hasDates = (section === 'accommodation' || section === 'meeting');
+  const nights = (hasDates && sd.date_from && sd.date_to) ? Math.max(1, calcNights(sd.date_from, sd.date_to)) : 1;
+  rows.push({ section, service_name: '', unit: 'Adet', qty: 1, nights,
+    date_from: hasDates ? (sd.date_from||'') : '',
+    date_to:   hasDates ? (sd.date_to||'')   : '',
+    cost_price: 0, sale_price: 0, vat_rate: defaultVat(section), _manager_row: true });
+  renderTable(); calcServiceFee();
+}
+
+function addFromCatalog(section, svcName, svcUnit) {
+  const sd = getSectionDates(section);
+  const hasDates = (section === 'accommodation' || section === 'meeting');
+  const nights = (hasDates && sd.date_from && sd.date_to) ? Math.max(1, calcNights(sd.date_from, sd.date_to)) : 1;
+  rows.push({ section, service_name: svcName || '', unit: svcUnit || 'Adet', qty: 1, nights,
+    date_from: hasDates ? (sd.date_from||'') : '',
+    date_to:   hasDates ? (sd.date_to||'')   : '',
+    cost_price: 0, sale_price: 0, vat_rate: defaultVat(section), _manager_row: true });
+  renderTable(); calcServiceFee();
+}
+
+function updateRowDates(rowIdx, field, val) {
+  rows[rowIdx][field] = val;
+  const df = rows[rowIdx].date_from || '';
+  const dt = rows[rowIdx].date_to   || '';
+  if (df && dt) {
+    const n = calcNights(df, dt);
+    rows[rowIdx].nights = n > 0 ? n : 1;
+  }
+  renderTable(); updateTotals(); saveRows();
+}
+
+// ─── Tablo render ───
+function renderTable() {
+  const tbody = document.getElementById('budgetTbody');
+  const bySec = {};
+  SECTIONS.forEach(s => bySec[s] = []);
+  rows.forEach((row, i) => {
+    if (!row.is_service_fee && !row.is_accommodation_tax) {
+      const sec = row.section || 'other';
+      if (!bySec[sec]) bySec[sec] = [];
+      bySec[sec].push({...row, _idx: i});
+    }
+  });
+
+  const accomTaxEnabled = isAccomTaxEnabled();
+  let html = '';
+  let grandCostEx = 0, grandSaleEx = 0;
+
+  SECTIONS.forEach(sec => {
+    const secRows  = bySec[sec] || [];
+    const hasAccomTax = sec === 'accommodation' && accomTaxEnabled;
+
+    const hasDates = (sec === 'accommodation' || sec === 'meeting');
+    const dates    = getSectionDates(sec);
+
+    // Bölüm başlığı
+    const accomTaxToggle = (sec === 'accommodation')
+      ? `<label class="d-flex align-items-center gap-1 ms-3" style="cursor:pointer; font-size:11px; font-weight:400; opacity:.85;" title="Konaklama Vergisi (%2)">
+           <input type="checkbox" id="accomTaxCheck" ${accomTaxEnabled ? 'checked' : ''}
+                  onchange="toggleAccomTax(this.checked)" style="width:14px;height:14px; cursor:pointer;">
+           Konaklama Vergisi %2
+         </label>`
+      : '';
+    const secSvcs = GROUPED_SERVICES[sec] || [];
+    const dropdownItems = secSvcs.length
+      ? secSvcs.map(s => `<li><a class="dropdown-item" style="font-size:12px;" href="#"
+           onclick="addFromCatalog('${sec}','${escHtml(s.name)}','${escHtml(s.unit||'Adet')}');return false;">${escHtml(s.name)} <span class="text-muted">(${escHtml(s.unit||'Adet')})</span></a></li>`).join('')
+      : '<li><span class="dropdown-item text-muted" style="font-size:12px;">Katalogda kalem yok</span></li>';
+    html += `<tr class="section-header-row">
+      <td colspan="11">
+        <div class="d-flex align-items-center justify-content-between px-2">
+          <div class="d-flex align-items-center">${SECTION_LABELS[sec] || sec}${accomTaxToggle}</div>
+          <div class="d-flex gap-1">
+            <div class="dropdown">
+              <button type="button" class="btn btn-sm btn-light text-dark"
+                      style="font-size:11px; padding:2px 10px;"
+                      data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-grid me-1"></i>Katalogdan Ekle
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end">${dropdownItems}</ul>
+            </div>
+            <button type="button" class="btn btn-sm btn-light text-dark"
+                    style="font-size:11px; padding:2px 10px;"
+                    onclick="addRow('${sec}')">
+              <i class="bi bi-plus me-1"></i>Boş Satır
+            </button>
+          </div>
+        </div>
+      </td>
+    </tr>`;
+
+    // Boş section placeholder
+    if (secRows.length === 0 && !hasAccomTax) {
+      html += `<tr><td colspan="11" class="text-center text-muted py-2" style="font-size:12px; background:#fafafa;">
+        <em>Boş — katalogdan veya boş satır ekleyin</em></td></tr>`;
+    }
+
+    // Satırlar (tarihler artık her satırda ayrı sütun)
+    let secCostEx = 0, secSaleEx = 0;
+    secRows.forEach(row => {
+      const i        = row._idx;
+      // Tarih başlatma — ilk yüklemede section defaults'tan al
+      if (hasDates && !rows[i].date_from) {
+        rows[i].date_from = dates.date_from || '';
+        rows[i].date_to   = dates.date_to   || '';
+        if (rows[i].date_from && rows[i].date_to && !rows[i].nights) {
+          const n = calcNights(rows[i].date_from, rows[i].date_to);
+          rows[i].nights = n > 0 ? n : 1;
+        }
+      }
+      const df       = rows[i].date_from || '';
+      const dt       = rows[i].date_to   || '';
+      const qty      = parseFloat(rows[i].qty)        || 1;
+      const nights   = parseFloat(rows[i].nights)     || 1;
+      const cost     = parseFloat(rows[i].cost_price) || 0;
+      const sale     = parseFloat(rows[i].sale_price) || 0;
+      const vat      = parseFloat(rows[i].vat_rate)   || defaultVat(sec);
+      const rowCur   = rows[i].currency || 'TRY';
+      // Statement modunda maliyet: cost_qty × cost_price (nights ayrı, qty satış için)
+      const cQty       = STATEMENT_MODE ? (parseFloat(rows[i].cost_qty != null ? rows[i].cost_qty : qty) || qty) : qty;
+      const costSub    = STATEMENT_MODE ? cost * cQty * nights : cost * qty * nights;
+      const costSubTry = amountToTry(costSub, rowCur);   // TRY cinsinden
+      const saleSub    = sale * qty * nights;
+      const saleSubTry = amountToTry(saleSub, rowCur);   // TRY cinsinden
+      secCostEx += costSubTry;
+      secSaleEx += saleSubTry;
+
+      const dateCells = hasDates
+        ? `<td style="padding:3px 4px;">
+             <input type="date" class="form-control form-control-sm" style="font-size:11px;"
+                    value="${df}" oninput="updateRowDates(${i},'date_from',this.value)">
+           </td>
+           <td style="padding:3px 4px;">
+             <input type="date" class="form-control form-control-sm" style="font-size:11px;"
+                    value="${dt}" oninput="updateRowDates(${i},'date_to',this.value)">
+           </td>`
+        : `<td class="text-center text-muted" style="font-size:11px;">—</td>
+           <td class="text-center text-muted" style="font-size:11px;">—</td>`;
+
+      const isFlagged    = !!rows[i].revision_flag;
+      const isManagerRow = !!rows[i]._manager_row;
+      const noteVal      = escHtml(rows[i].revision_note || '');
+      const nameCellHtml = isManagerRow
+        ? `<input type="text" class="form-control form-control-sm" value="${escHtml(rows[i].service_name||'')}" placeholder="Hizmet adı" style="min-width:120px;" oninput="rows[${i}].service_name=this.value;saveRows()">`
+        : escHtml(rows[i].service_name || '—');
+      const unitCellHtml = isManagerRow
+        ? `<input type="text" class="form-control form-control-sm" value="${escHtml(rows[i].unit||'Adet')}" style="width:65px;" oninput="rows[${i}].unit=this.value;saveRows()">`
+        : escHtml(rows[i].unit || 'Adet');
+      const costQty = parseFloat(rows[i].cost_qty != null ? rows[i].cost_qty : qty) || qty;
+      // Statement modunda: miktar td'si yok, fiyat hücrelerine inline eklenecek
+      const qtyTd = STATEMENT_MODE
+        ? ''  // ayrı sütun yok
+        : `<td class="text-center" style="font-size:12px;">
+             <input type="number" class="form-control form-control-sm text-center" style="width:55px;" min="1" value="${qty}"
+                    oninput="rows[${i}].qty=parseFloat(this.value)||1;calcServiceFee();updateRowSaleSub(${i})">
+           </td>`;
+      html += `<tr style="${isFlagged ? 'background:#fff7ed;' : ''}">
+        <td class="ps-3 ${isManagerRow ? '' : 'fw-semibold'}" style="font-size:13px;">${nameCellHtml}</td>
+        <td style="color:#64748b; font-size:12px;">${unitCellHtml}</td>
+        ${qtyTd}
+        ${dateCells}
+        <td style="padding:3px 4px;">
+          <input type="number" class="form-control form-control-sm text-center" style="font-size:11px; width:50px;"
+                 min="1" value="${nights}"
+                 oninput="rows[${i}].nights=parseInt(this.value)||1;calcServiceFee();updateRowSaleSub(${i})">
+        </td>
+        <td class="${isManagerRow ? '' : 'cost-cell'}">
+          <div class="input-group input-group-sm">
+            ${isManagerRow
+              ? `<select class="input-group-text p-0" style="font-size:10px;font-weight:700;color:#1d4ed8;background:#dbeafe;border:none;cursor:pointer;width:46px;"
+                         onchange="rows[${i}].currency=this.value;renderTable();calcServiceFee();">
+                   <option value="TRY" ${rowCur==='TRY'?'selected':''}>₺TRY</option>
+                   <option value="EUR" ${rowCur==='EUR'?'selected':''}>€EUR</option>
+                   <option value="USD" ${rowCur==='USD'?'selected':''}>$USD</option>
+                 </select>`
+              : (rowCur !== 'TRY' ? `<span class="input-group-text" style="font-size:10px;padding:2px 5px;background:#dbeafe;color:#1d4ed8;font-weight:700;">${rowCur}</span>` : '')}
+            <input type="number" class="form-control form-control-sm" min="0" step="0.01"
+                   value="${cost || ''}" placeholder="0,00" style="${isManagerRow ? '' : 'background:#f8fafc;'}"
+                   oninput="rows[${i}].cost_price=parseFloat(this.value)||0;calcServiceFee();updateRowSaleSub(${i})">
+          </div>
+          ${STATEMENT_MODE ? `<div class="mt-1 d-flex align-items-center gap-1" style="font-size:10px;color:#0369a1;">
+            <span>× adet:</span>
+            <input type="number" class="form-control form-control-sm text-center" min="0" step="0.1"
+                   value="${costQty || ''}" placeholder="1"
+                   style="width:52px;height:20px;font-size:10px;padding:1px 4px;background:#f0f9ff;color:#0369a1;border-color:#bae6fd;"
+                   title="Maliyet miktarı"
+                   oninput="rows[${i}].cost_qty=parseFloat(this.value)||1;calcServiceFee();updateRowSaleSub(${i})">
+          </div>` : ''}
+          ${(rows[i].commission_pct > 0) ? `<div class="mt-1" style="font-size:10px;color:#6366f1;">
+            Kom. %${rows[i].commission_pct} = −${fmtCurrency(cost*rows[i].commission_pct/100, rowCur)}
+          </div>` : ''}
+        </td>
+        <td class="${isManagerRow ? '' : 'cost-cell'}" style="font-size:12px; font-weight:600; white-space:nowrap;" id="costSub-${i}">
+          ${cost > 0
+            ? (() => {
+                const netCost = cost * (1 - (rows[i].commission_pct||0)/100);
+                const _cq     = STATEMENT_MODE ? (parseFloat(rows[i].cost_qty != null ? rows[i].cost_qty : rows[i].qty) || parseFloat(rows[i].qty)||1) : (parseFloat(rows[i].qty)||1);
+                const netSub  = netCost * _cq * (parseFloat(rows[i].nights)||1);
+                const netSubTry = rowCur !== 'TRY' ? amountToTry(netSub, rowCur) : netSub;
+                return (rowCur !== 'TRY'
+                  ? `<div>${fmtCurrency(netSub, rowCur)}</div><div style="font-size:10px;color:#94a3b8;">${fmtMoney(netSubTry)}</div>`
+                  : fmtMoney(netSub))
+                + ((rows[i].commission_pct > 0) ? `<div style="font-size:10px;color:#6366f1;">net (kom. düş.)</div>` : '');
+              })()
+            : '<span class="text-muted">—</span>'}
+        </td>
+        <td>
+          <div class="d-flex align-items-center gap-1">
+            <input type="number" class="form-control form-control-sm"
+                   min="0" step="0.01" value="${sale || ''}" placeholder="0,00"
+                   oninput="blockBelowCost(this,${i})">
+            <span class="badge bg-secondary bg-opacity-10 text-secondary flex-shrink-0" style="font-size:10px;">%${vat}</span>
+          </div>
+          ${STATEMENT_MODE ? `<div class="mt-1 d-flex align-items-center gap-1" style="font-size:10px;color:#475569;">
+            <span>× adet:</span>
+            <input type="number" class="form-control form-control-sm text-center" min="0" step="0.1"
+                   value="${qty || ''}" placeholder="1"
+                   style="width:52px;height:20px;font-size:10px;padding:1px 4px;"
+                   title="Satış miktarı"
+                   oninput="rows[${i}].qty=parseFloat(this.value)||1;calcServiceFee();updateRowSaleSub(${i})">
+          </div>` : ''}
+        </td>
+        <td style="font-size:12px; font-weight:600; white-space:nowrap;" id="saleSub-${i}">
+          ${saleSubTry > 0 ? fmtMoney(saleSubTry) : '<span class="text-muted">—</span>'}
+        </td>
+        <td>
+          <button type="button" class="flag-btn ${isFlagged ? 'active' : ''}"
+                  title="${isFlagged ? 'Bayrağı kaldır' : 'Revizyon bayrağı ekle'}"
+                  onclick="toggleFlag(${i})">🚩</button>
+        </td>
+      </tr>
+      <tr class="row-note-tr ${isFlagged ? 'show' : ''}" id="noteRow-${i}">
+        <td colspan="11">
+          <div class="d-flex align-items-center gap-2">
+            <span style="font-size:11px; font-weight:700; color:#ea580c; white-space:nowrap;">Revizyon Notu:</span>
+            <input type="text" class="form-control form-control-sm" style="max-width:440px;"
+                   placeholder="Bu kalemde neyin değişmesi gerekiyor?"
+                   value="${noteVal}"
+                   oninput="rows[${i}].revision_note=this.value;saveRows()">
+            <button type="button" class="btn btn-sm btn-link text-muted p-0"
+                    style="font-size:11px; white-space:nowrap;"
+                    onclick="toggleFlag(${i})">Bayrağı Kaldır</button>
+          </div>
+        </td>
+      </tr>`;
+    });
+
+    // Konaklama vergisi satırı (alt toplamdan ÖNCE)
+    let accomTaxAmt = 0;
+    if (hasAccomTax) {
+      accomTaxAmt = Math.round(secSaleEx * 0.02 * 100) / 100;
+      const taxIdx = rows.findIndex(r => r.is_accommodation_tax);
+      if (taxIdx >= 0) {
+        rows[taxIdx].sale_price = accomTaxAmt;
+        rows[taxIdx].cost_price = accomTaxAmt;
+      }
+      html += `<tr style="background:#fffbeb;">
+        <td class="ps-3 fw-semibold" colspan="6" style="font-size:12px; color:#92400e;">
+          🏨 Konaklama Vergisi (%2)
+        </td>
+        <td></td>
+        <td data-accom-tax-cost style="font-size:12px; font-weight:600; color:#92400e;">${fmtMoney(accomTaxAmt)}</td>
+        <td></td>
+        <td data-accom-tax-sale style="font-size:12px; font-weight:700; color:#92400e;">${fmtMoney(accomTaxAmt)}</td>
+        <td></td>
+      </tr>`;
+    }
+
+    // Bölüm alt toplamı (konaklama vergisi dahil)
+    const secCostTotal = secCostEx + accomTaxAmt;
+    const secSaleTotal = secSaleEx + accomTaxAmt;
+    grandCostEx += secCostEx + accomTaxAmt;
+    grandSaleEx += secSaleEx + accomTaxAmt;
+
+    if (secRows.length > 0 || hasAccomTax) {
+      html += `<tr style="background:#f1f5f9; font-size:12px; color:#475569;">
+        <td class="ps-3" colspan="7" style="font-weight:600;">Alt Toplam</td>
+        <td style="font-weight:700;" id="secCostTot-${sec}">${fmtMoney(secCostTotal)}</td>
+        <td></td>
+        <td style="font-weight:700;" id="secSaleTot-${sec}">${fmtMoney(secSaleTotal)}</td>
+        <td></td>
+      </tr>`;
+    }
+  });
+
+  // Genel toplam satırı
+  html += `<tr style="background:#1e293b; color:white; font-size:12px; font-weight:700;">
+    <td class="ps-3" colspan="7">TOPLAM (KDV hariç)</td>
+    <td id="grandCostTot">${fmtMoney(grandCostEx)}</td>
+    <td></td>
+    <td id="grandSaleTot">${fmtMoney(grandSaleEx)}</td>
+    <td></td>
+  </tr>`;
+
+  tbody.innerHTML = html;
+}
+
+// Giriş/çıkış tarihinden gece/gün sayısını hesapla ve rows'a yaz
+function updateNightsFromDates(sec) {
+  const dfEl = document.getElementById(`sec_date_from_${sec}`);
+  const dtEl = document.getElementById(`sec_date_to_${sec}`);
+  if (!dfEl || !dtEl || !dfEl.value || !dtEl.value) return;
+  const n = calcNights(dfEl.value, dtEl.value);
+  const label = document.getElementById(`nights_label_${sec}`);
+  if (label) label.textContent = n + (sec === 'accommodation' ? ' gece' : ' gün');
+  // İlgili section satırlarının nights değerini güncelle
+  rows.forEach((r, i) => {
+    if (r.section === sec && !r.is_service_fee) {
+      rows[i].nights = n > 0 ? n : 1;
+    }
+  });
+  renderTable();
+  calcServiceFee();
+}
+
+function calcNights(from, to) {
+  if (!from || !to) return 0;
+  const d1 = new Date(from), d2 = new Date(to);
+  return Math.max(0, Math.round((d2 - d1) / 86400000));
+}
+
+// Anlık satır toplamı güncelle (full re-render olmadan)
+function updateRowSaleSub(rowIdx) {
+  const row    = rows[rowIdx];
+  if (!row || row.is_service_fee || row.is_accommodation_tax) return;
+  const qty    = parseFloat(row.qty)        || 1;
+  const nights = parseFloat(row.nights)     || 1;
+  const cost   = parseFloat(row.cost_price) || 0;
+  const sale   = parseFloat(row.sale_price) || 0;
+  const rowCur     = row.currency || 'TRY';
+  const cqty2      = STATEMENT_MODE ? (parseFloat(row.cost_qty != null ? row.cost_qty : row.qty) || qty) : qty;
+  const costSub    = cost * cqty2 * nights;
+  const costSubTry = amountToTry(costSub, rowCur);
+  const saleSub    = sale * qty * nights;
+  const saleSubTry = amountToTry(saleSub, rowCur);
+  const costEl = document.getElementById(`costSub-${rowIdx}`);
+  if (costEl) {
+    if (cost > 0) {
+      costEl.innerHTML = rowCur !== 'TRY'
+        ? `<div>${fmtCurrency(costSub, rowCur)}</div><div style="font-size:10px;color:#94a3b8;">${fmtMoney(costSubTry)}</div>`
+        : fmtMoney(costSub);
+    } else {
+      costEl.innerHTML = '<span class="text-muted">—</span>';
+    }
+  }
+  const saleEl = document.getElementById(`saleSub-${rowIdx}`);
+  if (saleEl) saleEl.innerHTML = saleSubTry > 0 ? fmtMoney(saleSubTry) : '<span class="text-muted">—</span>';
+}
+
+function blockBelowCost(input, rowIdx) {
+  const entered = parseFloat(input.value) || 0;
+  const cost    = parseFloat(rows[rowIdx]?.cost_price) || 0;
+  const minSale = cost * 0.95;
+  const isBelowMin = cost > 0 && entered > 0 && entered < minSale;
+  input.classList.toggle('border-danger', isBelowMin);
+  if (isBelowMin) return;
+  rows[rowIdx].sale_price = entered;
+  calcServiceFee();   // servis bedeli + updateTotals() + saveRows() zinciri
+  updateRowSaleSub(rowIdx);
+}
+
+// ─── Hizmet Bedeli ───
+function calcServiceFee() {
+  const pct = parseFloat(document.getElementById('serviceFeePercent').value) || 0;
+  document.getElementById('serviceFeePctInput').value = pct;
+  let saleEx = 0;
+  rows.forEach(row => {
+    if (!row.is_service_fee && !row.is_accommodation_tax) {
+      const cur = row.currency || 'TRY';
+      saleEx += amountToTry((parseFloat(row.sale_price)||0) * (parseFloat(row.qty)||1) * (parseFloat(row.nights)||1), cur);
+    }
+  });
+  const sfAmount = Math.round(saleEx * (pct / 100) * 100) / 100;
+  const sfVat    = Math.round(sfAmount * 0.20 * 100) / 100;
+  const sfTotal  = sfAmount + sfVat;
+  document.getElementById('sfAmount').textContent = fmtMoney(sfAmount);
+  document.getElementById('sfVatAmt').textContent = fmtMoney(sfVat);
+  document.getElementById('sfTotal').textContent  = fmtMoney(sfTotal);
+  const sfIdx = rows.findIndex(r => r.is_service_fee);
+  if (sfIdx >= 0) {
+    rows[sfIdx].sale_price = sfAmount;
+    rows[sfIdx].vat_rate   = 20;
+    rows[sfIdx].sf_percent = pct;
+  } else if (sfAmount > 0) {
+    rows.push({ is_service_fee:true, service_name:'Hizmet Bedeli', section:'service_fee',
+      sale_price:sfAmount, cost_price:0, qty:1, nights:1, vat_rate:20, unit:'Hizmet', sf_percent:pct });
+  }
+  updateTotals();
+  saveRows();
+}
+
+// ─── Toplamlar ───
+function updateTotals() {
+  // Geçiş 1: Konaklama satış toplamını hesapla → konaklama vergisi (TRY bazlı)
+  let accomSaleEx = 0;
+  const hasAccomTax = rows.some(r => r.is_accommodation_tax);
+  rows.forEach(row => {
+    if (row.section === 'accommodation' && !row.is_service_fee && !row.is_accommodation_tax) {
+      const qty  = parseFloat(row.qty)    || 1;
+      const n    = parseFloat(row.nights) || 1;
+      const sale = parseFloat(row.sale_price) || 0;
+      const cur  = row.currency || 'TRY';
+      accomSaleEx += amountToTry(sale * qty * n, cur);
+    }
+  });
+  const accomTaxAmt = hasAccomTax ? Math.round(accomSaleEx * 0.02 * 100) / 100 : 0;
+  if (hasAccomTax) {
+    const taxIdx = rows.findIndex(r => r.is_accommodation_tax);
+    if (taxIdx >= 0) { rows[taxIdx].sale_price = accomTaxAmt; rows[taxIdx].cost_price = accomTaxAmt; }
+  }
+
+  // Geçiş 2: Tüm toplamlar (TRY bazlı)
+  let costEx = 0, saleEx = 0, sfSale = 0, sfVatAmt = 0;
+  const vatByRate = {};
+  const secTotals = {};
+  SECTIONS.forEach(s => secTotals[s] = {cost: 0, sale: 0});
+
+  rows.forEach(row => {
+    const qty  = parseFloat(row.qty)        || 1;
+    const n    = parseFloat(row.nights)     || 1;
+    const cost = parseFloat(row.cost_price) || 0;
+    const sale = parseFloat(row.sale_price) || 0;
+    const vat  = parseFloat(row.vat_rate)   || 0;
+    const cur  = row.currency || 'TRY';
+    if (row.is_accommodation_tax) {
+      costEx += sale;  // already in TRY
+      saleEx += sale;
+      secTotals['accommodation'].cost += sale;
+      secTotals['accommodation'].sale += sale;
+    } else if (row.is_service_fee) {
+      sfSale   = amountToTry(sale, cur);
+      sfVatAmt = sfSale * (vat / 100);
+      if (vat > 0 && sfVatAmt > 0) vatByRate[vat] = (vatByRate[vat] || 0) + sfVatAmt;
+    } else {
+      const sec      = row.section || 'other';
+      const cqty     = STATEMENT_MODE ? (parseFloat(row.cost_qty != null ? row.cost_qty : row.qty) || qty) : qty;
+      const costSub  = amountToTry(cost * cqty * n, cur);
+      const saleSub  = amountToTry(sale * qty * n, cur);
+      const vatAmt   = saleSub * (vat / 100);
+      costEx += costSub;
+      saleEx += saleSub;
+      if (sec in secTotals) { secTotals[sec].cost += costSub; secTotals[sec].sale += saleSub; }
+      if (vat > 0 && vatAmt > 0) vatByRate[vat] = (vatByRate[vat] || 0) + vatAmt;
+    }
+  });
+
+  // Bölüm alt toplam hücrelerini güncelle (renderTable'dan sonra varsa)
+  SECTIONS.forEach(s => {
+    const cEl = document.getElementById(`secCostTot-${s}`);
+    const sEl = document.getElementById(`secSaleTot-${s}`);
+    if (cEl) cEl.textContent = fmtMoney(secTotals[s].cost);
+    if (sEl) sEl.textContent = fmtMoney(secTotals[s].sale);
+  });
+  const gcEl = document.getElementById('grandCostTot');
+  const gsEl = document.getElementById('grandSaleTot');
+  if (gcEl) gcEl.textContent = fmtMoney(costEx);
+  if (gsEl) gsEl.textContent = fmtMoney(saleEx);
+  // Konaklama vergisi satır hücrelerini de güncelle
+  const atcEl = document.querySelector('[data-accom-tax-cost]');
+  const atsEl = document.querySelector('[data-accom-tax-sale]');
+  if (atcEl) atcEl.textContent = fmtMoney(accomTaxAmt);
+  if (atsEl) atsEl.textContent = fmtMoney(accomTaxAmt);
+
+  const totalVat = Object.values(vatByRate).reduce((a, b) => a + b, 0);
+  // totalVat zaten sfVatAmt içeriyor (vatByRate'e eklendi), sfSale ayrıca eklenir
+  const saleInc  = saleEx + totalVat + sfSale;
+
+  // KDV dökümü (%0 satırı yok — vatByRate'e eklenmedi; hizmet bedeli KDV'si %20'ye dahil)
+  const vatEl = document.getElementById('vatBreakdown');
+  if (vatEl) {
+    const rates = Object.keys(vatByRate).map(Number).sort((a, b) => a - b);
+    vatEl.innerHTML = rates.map(r =>
+      `<div class="d-flex justify-content-between border-bottom py-1">
+        <span class="text-muted" style="font-size:13px;">KDV - %${r}</span>
+        <span class="fw-semibold" style="font-size:13px;">${fmtMoney(vatByRate[r])}</span>
+      </div>`
+    ).join('');
+  }
+
+  // Kâr marjı (servis bedeli tamamen kar sayılır)
+  const karTutari = (saleEx - costEx) + sfSale;
+  const karBase   = saleEx + sfSale;
+  const margin    = karBase > 0 ? Math.round(karTutari / karBase * 1000) / 10 : 0;
+  const marginEl  = document.getElementById('karMarji');
+  if (marginEl) {
+    marginEl.textContent = `%${margin.toFixed(1)}`;
+    marginEl.className   = 'fw-bold ' + (margin >= 20 ? 'text-success' : margin >= 10 ? 'text-warning' : 'text-danger');
+  }
+  const karEl = document.getElementById('karTutari');
+  if (karEl) karEl.textContent = fmtMoney(karTutari);
+
+  document.getElementById('totalCostExVat').textContent  = fmtMoney(costEx);
+  document.getElementById('totalSaleExVat').textContent  = fmtMoney(saleEx);
+  const dupEl = document.getElementById('totalSaleExVatDup');
+  if (dupEl) dupEl.textContent = fmtMoney(saleEx);
+  const sfExEl = document.getElementById('totalSfExVat');
+  if (sfExEl) sfExEl.textContent = fmtMoney(sfSale);
+  document.getElementById('totalSfIncVat').textContent = fmtMoney(sfSale);
+  document.getElementById('totalSaleIncVat').textContent  = fmtMoney(saleInc);
+  const dupIncEl = document.getElementById('totalSaleIncVatDup');
+  if (dupIncEl) dupIncEl.textContent = fmtMoney(saleInc);
+
+  // Teklif para birimi toplamı
+  const offerBlock = document.getElementById('totalOfferBlock');
+  if (offerCurrency && offerCurrency !== 'TRY' && rateToTry(offerCurrency) > 0) {
+    const saleOffer = amountToOffer(saleInc);
+    const offerEl = document.getElementById('totalSaleOffer');
+    const offerLbl = document.getElementById('totalOfferLabel');
+    if (offerEl) offerEl.textContent = fmtCurrency(saleOffer, offerCurrency);
+    if (offerLbl) offerLbl.textContent = `GENEL TOPLAM (KDV dahil) — ${offerCurrency}`;
+    if (offerBlock) offerBlock.style.display = '';
+  } else {
+    if (offerBlock) offerBlock.style.display = 'none';
+  }
+}
+
+function saveRows() {
+  document.getElementById('rowsJson').value = JSON.stringify(rows);
+}
+
+// ─── Önizleme ───
+function openPreview() {
+  saveRows();
+  const bySec = {};
+  SECTIONS.forEach(s => bySec[s] = []);
+  rows.forEach(r => {
+    if (!r.is_service_fee && !r.is_accommodation_tax) bySec[r.section || 'other'].push(r);
+  });
+
+  // Önce konaklama vergisini hesapla (TRY bazlı)
+  let accomSaleEx = 0;
+  (bySec['accommodation'] || []).forEach(r => {
+    const cur = r.currency || 'TRY';
+    accomSaleEx += amountToTry((parseFloat(r.sale_price)||0) * (parseFloat(r.qty)||1) * (parseFloat(r.nights)||1), cur);
+  });
+  const hasAccomTax = rows.some(r => r.is_accommodation_tax);
+  const accomTaxAmt = hasAccomTax ? Math.round(accomSaleEx * 0.02 * 100) / 100 : 0;
+
+  let grandCostEx = 0, grandSaleEx = 0, grandVatTotal = 0;
+  const vatByRate = {};
+  let html = `<div class="p-0">
+    <div class="px-3 pt-3 pb-2 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom">
+      <div>
+        <div class="fw-bold" style="font-size:16px;">{{ budget.venue_name }}</div>
+        {% if req %}<div class="text-muted" style="font-size:13px;">{{ req.request_no }} — {{ req.event_name }} — {{ req.client_name }}</div>{% endif %}
+      </div>
+    </div>
+    <div class="table-responsive">
+    <table class="table budget-table mb-0">
+      <thead><tr>
+        <th class="ps-3" style="min-width:150px;">Hizmet</th>
+        <th style="width:60px;">Birim</th>
+        <th style="width:45px;">Miktar</th>
+        <th style="width:100px;">Başlangıç</th>
+        <th style="width:100px;">Bitiş</th>
+        <th style="width:45px;">Gece</th>
+        <th style="width:100px; color:#94a3b8; white-space:normal; line-height:1.3;">Birim<br>Maliyet</th>
+        <th style="width:100px; color:#94a3b8; white-space:normal; line-height:1.3;">Maliyet<br>Toplam</th>
+        <th style="width:130px; white-space:normal; line-height:1.3;">Birim Satış<br>(KDV hariç)</th>
+        <th style="width:100px; white-space:normal; line-height:1.3;">Satış<br>Toplam</th>
+        <th style="width:50px;">KDV %</th>
+      </tr></thead><tbody>`;
+
+  SECTIONS.forEach(sec => {
+    const secRows = bySec[sec] || [];
+    const secHasAccomTax = sec === 'accommodation' && hasAccomTax;
+    if (!secRows.length && !secHasAccomTax) return;
+
+    // Tarih bilgisini rows'tan al (DOM input yok artık)
+    const firstWithDate = secRows.find(r => r.date_from);
+    let dateInfo = '';
+    if (firstWithDate) {
+      const n = calcNights(firstWithDate.date_from || '', firstWithDate.date_to || '');
+      dateInfo = `<span class="ms-3" style="font-size:11px; font-weight:400; opacity:.8;">${firstWithDate.date_from} → ${firstWithDate.date_to || '—'} · ${n} ${sec==='accommodation'?'gece':'gün'}</span>`;
+    }
+    html += `<tr class="section-header-row"><td colspan="11" class="ps-3">${SECTION_LABELS[sec] || sec}${dateInfo}</td></tr>`;
+
+    let secCostEx = 0, secSaleEx = 0;
+    secRows.forEach(row => {
+      const hasDates = (sec === 'accommodation' || sec === 'meeting');
+      const qty      = parseFloat(row.qty)        || 1;
+      const nights   = parseFloat(row.nights)     || 1;
+      const cost     = parseFloat(row.cost_price) || 0;
+      const sale     = parseFloat(row.sale_price) || 0;
+      const vat      = parseFloat(row.vat_rate)   || defaultVat(sec);
+      const rowCur   = row.currency || 'TRY';
+      const costSub    = cost * qty * nights;
+      const costSubTry = amountToTry(costSub, rowCur);
+      const saleSub    = sale * qty * nights;
+      const saleSubTry = amountToTry(saleSub, rowCur);
+      const vatAmt     = saleSubTry * (vat / 100);
+      secCostEx   += costSubTry; secSaleEx   += saleSubTry;
+      grandCostEx += costSubTry; grandSaleEx += saleSubTry;
+      if (vat > 0 && vatAmt > 0) vatByRate[vat] = (vatByRate[vat]||0) + vatAmt;
+      grandVatTotal += vatAmt;
+      const df = row.date_from || '';
+      const dt = row.date_to   || '';
+      // Para birimi rozeti + TL karşılığı
+      const costCellVal = cost > 0
+        ? (rowCur !== 'TRY'
+            ? `<div style="font-size:11px;">${fmtCurrency(cost, rowCur)}</div>`
+            : fmtMoney(cost))
+        : '<span class="text-muted">—</span>';
+      const costSubCellVal = costSub > 0
+        ? (rowCur !== 'TRY'
+            ? `<div style="font-size:11px;">${fmtCurrency(costSub, rowCur)}</div><div style="font-size:10px;color:#94a3b8;">${fmtMoney(costSubTry)}</div>`
+            : fmtMoney(costSub))
+        : '<span class="text-muted">—</span>';
+      const saleCellVal = sale > 0 ? fmtMoney(sale) : '<span class="text-muted">—</span>';
+      const saleSubCellVal = saleSub > 0 ? fmtMoney(saleSubTry) : '<span class="text-muted">—</span>';
+      html += `<tr>
+        <td class="ps-3 fw-semibold" style="font-size:13px;">${escHtml(row.service_name||'—')}</td>
+        <td style="color:#64748b; font-size:12px;">${escHtml(row.unit||'Adet')}</td>
+        <td class="text-center" style="font-size:12px;">${qty}</td>
+        <td style="font-size:11px; color:#475569;">${hasDates && df ? df : '<span class="text-muted">—</span>'}</td>
+        <td style="font-size:11px; color:#475569;">${hasDates && dt ? dt : '<span class="text-muted">—</span>'}</td>
+        <td class="text-center" style="font-size:12px;">${nights}</td>
+        <td class="cost-cell" style="font-size:12px;">${costCellVal}</td>
+        <td class="cost-cell" style="font-size:12px; font-weight:600;">${costSubCellVal}</td>
+        <td style="font-size:12px;">${saleCellVal}</td>
+        <td style="font-size:12px; font-weight:600;">${saleSubCellVal}</td>
+        <td><span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-size:10px;">%${vat}</span></td>
+      </tr>`;
+    });
+
+    if (secHasAccomTax) {
+      grandCostEx += accomTaxAmt; grandSaleEx += accomTaxAmt;
+      secCostEx += accomTaxAmt; secSaleEx += accomTaxAmt;
+      html += `<tr style="background:#fffbeb;">
+        <td class="ps-3 fw-semibold" colspan="6" style="font-size:12px; color:#92400e;">🏨 Konaklama Vergisi (%2)</td>
+        <td></td>
+        <td style="font-size:12px; font-weight:600; color:#92400e;">${fmtMoney(accomTaxAmt)}</td>
+        <td></td>
+        <td style="font-size:12px; font-weight:700; color:#92400e;">${fmtMoney(accomTaxAmt)}</td>
+        <td></td>
+      </tr>`;
+    }
+
+    html += `<tr style="background:#f1f5f9; font-size:12px; color:#475569;">
+      <td class="ps-3" colspan="7" style="font-weight:600;">Alt Toplam</td>
+      <td style="font-weight:700;">${fmtMoney(secCostEx)}</td>
+      <td></td>
+      <td style="font-weight:700;">${fmtMoney(secSaleEx)}</td>
+      <td></td>
+    </tr>`;
+  });
+
+  // Hizmet bedeli
+  const sfRow = rows.find(r => r.is_service_fee);
+  const sfSale = sfRow ? (parseFloat(sfRow.sale_price)||0) : 0;
+  const sfVat  = sfRow ? (parseFloat(sfRow.vat_rate)||20) : 20;
+  const sfVatAmt = sfSale * (sfVat / 100);
+  if (sfSale > 0) {
+    if (sfVat > 0) vatByRate[sfVat] = (vatByRate[sfVat]||0) + sfVatAmt;
+    grandVatTotal += sfVatAmt;
+    html += `<tr style="background:#fefce8; font-weight:600;">
+      <td class="ps-3" colspan="7" style="font-size:12px;">💼 Hizmet Bedeli (%${sfRow.sf_percent||0})</td>
+      <td>—</td>
+      <td></td>
+      <td style="font-size:12px; font-weight:700;">${fmtMoney(sfSale)}</td>
+      <td><span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-size:10px;">%${sfVat}</span></td>
+    </tr>`;
+  }
+
+  html += `<tr style="background:#1e293b; color:white; font-size:12px; font-weight:700;">
+    <td class="ps-3" colspan="7">TOPLAM (KDV hariç)</td>
+    <td>${fmtMoney(grandCostEx)}</td>
+    <td></td>
+    <td>${fmtMoney(grandSaleEx + sfSale)}</td>
+    <td></td>
+  </tr>`;
+
+  html += `</tbody></table></div>`;
+
+  // KDV + Genel Toplam kartları
+  const totalInc = grandSaleEx + sfSale + grandVatTotal;
+  const karTutari = (grandSaleEx - grandCostEx) + sfSale;
+  const karBase   = grandSaleEx + sfSale;
+  const margin    = karBase > 0 ? Math.round(karTutari / karBase * 1000) / 10 : 0;
+  const marjClass = margin >= 20 ? '#16a34a' : margin >= 10 ? '#d97706' : '#dc2626';
+  const rates     = Object.keys(vatByRate).map(Number).sort((a,b) => a-b);
+
+  html += `<div class="px-3 py-3 d-flex gap-3 flex-wrap border-top" style="background:#f8fafc;">
+    <div class="border rounded p-3 flex-grow-1" style="min-width:200px;">
+      <div class="text-muted mb-2" style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px;">Fiyat Dökümü</div>
+      <div class="d-flex justify-content-between border-bottom pb-1 mb-1">
+        <span style="font-size:13px; font-weight:600;">Genel Toplam (KDV hariç)</span>
+        <span class="fw-bold text-primary">${fmtMoney(grandSaleEx + sfSale)}</span>
+      </div>
+      ${rates.map(r => `<div class="d-flex justify-content-between border-bottom py-1">
+        <span class="text-muted" style="font-size:13px;">KDV - %${r}</span>
+        <span class="fw-semibold" style="font-size:13px;">${fmtMoney(vatByRate[r])}</span>
+      </div>`).join('')}
+      <div class="d-flex justify-content-between pt-2" style="border-top:2px solid #93c5fd;">
+        <span style="font-size:13px; font-weight:700;">Genel Toplam (KDV dahil)</span>
+        <span class="fw-bold text-success" style="font-size:15px;">${fmtMoney(totalInc)}</span>
+      </div>
+    </div>
+    <div class="border rounded p-3 text-center bg-success bg-opacity-10" style="min-width:180px;">
+      <div class="text-muted mb-1" style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px;">GENEL TOPLAM (KDV dahil)</div>
+      <div class="fw-bold text-success" style="font-size:26px;">${fmtMoney(totalInc)}</div>
+      <hr class="my-2">
+      <div class="d-flex justify-content-between">
+        <span style="font-size:12px; font-weight:700; color:#475569;">Kâr Marjı</span>
+        <span class="fw-bold" style="font-size:18px; color:${marjClass};">%${margin.toFixed(1)}</span>
+      </div>
+      <div class="d-flex justify-content-between">
+        <span class="text-muted" style="font-size:12px;">Kâr Tutarı</span>
+        <span class="fw-bold" style="font-size:13px;">${fmtMoney(karTutari)}</span>
+      </div>
+    </div>
+  </div></div>`;
+
+  document.getElementById('previewContent').innerHTML = html;
+  new bootstrap.Modal(document.getElementById('previewModal')).show();
+}
+
+// ─── Revizyon Bayrakları ───
+function toggleFlag(i) {
+  rows[i].revision_flag = !rows[i].revision_flag;
+  saveRows();
+  renderTable();
+}
+
+// ─── Workflow ───
+function submitApprove() {
+  if (confirm('Bütçeyi onaylamak istediğinizden emin misiniz?')) {
+    saveRows();
+    document.getElementById('approveForm').submit();
+  }
+}
+
+async function submitSaveAndApprove() {
+  if (!confirm('Önce kaydedilecek, ardından onaylanacak. Devam edilsin mi?')) return;
+  // 1) Önce kaydet (AJAX)
+  saveRows();
+  document.getElementById('serviceFeePctInput').value =
+    parseFloat(document.getElementById('serviceFeePercent').value) || 0;
+  document.getElementById('offerCurrencyHidden').value = offerCurrency;
+  document.getElementById('exchangeRatesJson').value   = JSON.stringify(exchangeRates);
+
+  const fd = new FormData(document.getElementById('managerForm'));
+  try {
+    await fetch(`/budgets/{{ budget.id }}/price`, { method: 'POST', body: fd });
+  } catch(e) {
+    alert('Kayıt hatası: ' + e); return;
+  }
+  // 2) Onayla
+  document.getElementById('approveForm').submit();
+}
+function submitCancel() {
+  if (confirm('Bütçeyi ve ilgili talebi iptal etmek istediğinizden emin misiniz?')) {
+    document.getElementById('cancelForm').submit();
+  }
+}
+function submitCopy() {
+  saveRows();
+  document.getElementById('rowsJsonCopy').value = document.getElementById('rowsJson').value;
+  document.getElementById('sfPctCopy').value = document.getElementById('serviceFeePctInput').value;
+  document.getElementById('copyForm').submit();
+}
+
+async function _saveStatementNow() {
+  saveRows();
+  document.getElementById('serviceFeePctInput').value =
+    parseFloat(document.getElementById('serviceFeePercent').value) || 0;
+  document.getElementById('offerCurrencyHidden').value = offerCurrency;
+  document.getElementById('exchangeRatesJson').value   = JSON.stringify(exchangeRates);
+  const fd = new FormData(document.getElementById('managerForm'));
+  try { await fetch(`/budgets/{{ budget.id }}/statement`, { method: 'POST', body: fd }); } catch(e) {}
+}
+
+async function submitSendStatement() {
+  await _saveStatementNow();
+  document.getElementById('sendStatementForm').submit();
+}
+
+async function sendStatementEmail() {
+  if (!confirm('Hesap dökümü kaydedilip müşteriye gönderilecek. Devam edilsin mi?')) return;
+
+  // 1) Kaydet
+  await _saveStatementNow();
+
+  // 2) Mail aç — form submit öncesinde, sayfa yönlendirilmeden
+  const customerEmail = '{{ customer_email | default("") | e }}';
+  const eventName     = '{{ (req.event_name if req else "") | e }}';
+  const refNo         = '{{ (req.request_no if req else "") | e }}';
+  const venueName     = '{{ budget.venue_name | e }}';
+  const subject = encodeURIComponent(`Hesap Dökümü: ${eventName} — ${refNo}`);
+  const body    = encodeURIComponent(
+    `Sayın Yetkili,\n\n${eventName} etkinliğinize ait hesap dökümü ekte sunulmaktadır.\n\nReferans No: ${refNo}\nMekan: ${venueName}\n\nHesap dökümünü inceleyip onaylamanızı rica ederiz.\n\nSaygılarımızla`
+  );
+
+  if (customerEmail) {
+    window.location.href = `mailto:${customerEmail}?subject=${subject}&body=${body}`;
+    showToast('Gönderildi olarak işaretlendi. Excel indiriliyor, mail uygulamanız açılıyor.');
+  } else {
+    showToast('Gönderildi olarak işaretlendi. Excel indiriliyor. Müşteri e-posta adresi tanımlı değil.');
+  }
+
+  // 3) Excel indir
+  const a = document.createElement('a');
+  a.href = `/budgets/{{ budget.id }}/export?currency=${offerCurrency}`;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  // 4) Durumu güncelle — kısa gecikme ile Excel'in başlamasına izin ver
+  setTimeout(() => document.getElementById('sendStatementForm').submit(), 1200);
+}
+
+function submitApproveStatement() {
+  if (!confirm('Müşteri hesap dökümünü onayladı olarak işaretlensin mi? Bu işlemden sonra fatura kesilebilir.')) return;
+  document.getElementById('approveStatementForm').submit();
+}
+
+document.getElementById('managerForm').addEventListener('submit', function() {
+  saveRows();
+  document.getElementById('serviceFeePctInput').value =
+    parseFloat(document.getElementById('serviceFeePercent').value) || 0;
+  // Kur ve para birimi bilgilerini forma yaz
+  document.getElementById('offerCurrencyHidden').value = offerCurrency;
+  document.getElementById('exchangeRatesJson').value   = JSON.stringify(exchangeRates);
+});
+
+async function markOfferSent(e) {
+  e.preventDefault();
+  if (!confirm('Teklif müşteriye gönderildi olarak işaretlensin mi?\nTalebin durumu "Teklif Gönderildi" olarak güncellenecek.')) return;
+  try {
+    const r = await fetch(`/budgets/{{ budget.id }}/mark-offer-sent`, { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) {
+      showToast('Teklif gönderildi olarak işaretlendi.');
+    } else {
+      showToast('Hata: ' + (d.error || 'İşlem başarısız'));
+    }
+  } catch(err) {
+    showToast('Bağlantı hatası.');
+  }
+}
+
+function showToast(msg) {
+  const el = document.getElementById('editorToast');
+  if (el) { el.querySelector('.toast-body').textContent = msg; bootstrap.Toast.getOrCreateInstance(el).show(); }
+}
+
+function fmtMoney(n) { return fmtCurrency(n, 'TRY'); }
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ─── Aktif bütçe ID'si ───
+let _currentBudgetId = '{{ budget.id }}';
+
+// Mekan seçimi
+function onVenueSelect(val) {
+  const manual = document.getElementById('venueNameManual');
+  if (val === '__manual__') {
+    manual.style.display = '';
+    manual.focus();
+  } else {
+    if (manual) manual.style.display = 'none';
+    document.getElementById('venueNameHidden').value = val;
+    updateActiveTab(val);
+  }
+}
+
+// Aktif sekme adını güncelle
+function updateActiveTab(name) {
+  const activeTab = document.querySelector('.budget-tab-active');
+  if (activeTab) {
+    const nameSpan = activeTab.querySelector('.tab-venue-name');
+    if (nameSpan) nameSpan.textContent = name || 'Yeni Bütçe';
+  }
+}
+
+// Sekme görselini güncelle
+function _setActiveTab(budgetId) {
+  document.querySelectorAll('.budget-tab').forEach(t => {
+    const isActive = t.id === 'tab-' + budgetId;
+    t.classList.toggle('budget-tab-active', isActive);
+    t.style.fontWeight   = isActive ? '700' : '500';
+    t.style.color        = isActive ? '#1e293b' : '#64748b';
+    t.style.background   = isActive ? '#ffffff' : '#f8fafc';
+    t.style.border       = isActive ? '1px solid #e2e8f0' : '1px solid transparent';
+    t.style.borderBottom = isActive ? '2px solid #ffffff' : '1px solid transparent';
+    t.style.marginBottom = '-2px';
+  });
+}
+
+// AJAX sekme geçişi — sayfa yenilenmez
+async function switchBudget(budgetId) {
+  if (budgetId === _currentBudgetId) return;
+
+  // Önce mevcut veriyi kaydet (arka planda)
+  await _saveCurrent(false);
+
+  // Yeni bütçe verisini çek
+  const res = await fetch(`/budgets/${budgetId}/json`);
+  if (!res.ok) { alert('Bütçe yüklenemedi.'); return; }
+  const data = await res.json();
+
+  // Editörü güncelle
+  rows = data.rows || [];
+  _currentBudgetId = budgetId;
+
+  // Form action güncelle
+  document.getElementById('managerForm').action = `/budgets/${budgetId}/price`;
+
+  // Mekan adı güncelle
+  const vnHidden = document.getElementById('venueNameHidden');
+  if (vnHidden) vnHidden.value = data.venue_name || '';
+  const vnSelect = document.querySelector('select[onchange^="onVenueSelect"]');
+  if (vnSelect) {
+    // Listede varsa seç
+    let found = false;
+    for (const opt of vnSelect.options) {
+      if (opt.value === data.venue_name) { vnSelect.value = opt.value; found = true; break; }
+    }
+    if (!found) {
+      vnSelect.value = '__manual__';
+      const manual = document.getElementById('venueNameManual');
+      if (manual) { manual.style.display = ''; manual.value = data.venue_name || ''; }
+    }
+  }
+
+  // Hizmet bedeli % güncelle
+  const sfPctEl = document.getElementById('serviceFeePercent');
+  if (sfPctEl) sfPctEl.value = data.service_fee_pct || '';
+
+  // Kur bilgileri
+  exchangeRates = data.exchange_rates || {};
+  document.getElementById('exchangeRatesJson').value = JSON.stringify(exchangeRates);
+  const eurEl = document.getElementById('eurRate');
+  const usdEl = document.getElementById('usdRate');
+  if (eurEl) eurEl.value = exchangeRates['EUR'] || '';
+  if (usdEl) usdEl.value = exchangeRates['USD'] || '';
+
+  // Manager notu
+  const mnInput = document.getElementById('managerNotesInput');
+  if (mnInput) mnInput.value = data.manager_notes || '';
+
+  // Tabloyu ve toplamları yeniden çiz
+  renderTable();
+  calcServiceFee();   // updateTotals + saveRows zinciri
+
+  // Sekme vurgusunu güncelle
+  _setActiveTab(budgetId);
+}
+
+// Arka planda kaydet (navigate etmeden)
+async function _saveCurrent(showAlert = true) {
+  saveRows();
+  const rowsJson = document.getElementById('rowsJson').value;
+  const sfPct    = document.getElementById('serviceFeePercent')?.value || '0';
+  const mgrNotes = document.getElementById('managerNotesInput')?.value || '';
+  const venName  = document.getElementById('venueNameHidden')?.value || '';
+
+  const fd = new FormData();
+  fd.append('rows_json',           rowsJson);
+  fd.append('service_fee_pct',     sfPct);
+  fd.append('manager_notes',       mgrNotes);
+  fd.append('venue_name',          venName);
+  fd.append('exchange_rates_json', JSON.stringify(exchangeRates));
+  fd.append('offer_currency',      offerCurrency);
+
+  try {
+    await fetch(`/budgets/${_currentBudgetId}/price`, { method: 'POST', body: fd });
+    // Sekme adını güncelle
+    const tab = document.getElementById('tab-' + _currentBudgetId);
+    if (tab) {
+      const sp = tab.querySelector('.tab-venue-name');
+      if (sp && venName) sp.textContent = venName;
+    }
+    if (showAlert) showToast('Kaydedildi.');
+  } catch(e) {
+    if (showAlert) alert('Kayıt hatası: ' + e);
+  }
+}
+
+// Kopya oluştur (AJAX — sayfa yenilenmez)
+async function copyAndOpen() {
+  // Önce mevcut veriyi kaydet
+  await _saveCurrent(false);
+
+  const venName = document.getElementById('venueNameHidden')?.value || 'Bütçe';
+  const rowsJson = collectRows();
+
+  // Kopya oluştur
+  const fd = new FormData();
+  fd.append('rows_json', rowsJson);
+  const res = await fetch(`/budgets/${_currentBudgetId}/copy`, { method: 'POST', body: fd });
+
+  // copy endpoint redirect yapıyor; yeni URL'den budget_id al
+  const newUrl = res.url; // redirect sonrası URL
+  const match  = newUrl.match(/\/budgets\/([^/]+)\/price/);
+  if (!match) { location.reload(); return; }
+  const newId = match[1];
+
+  // Yeni sekme ekle
+  const tabBar = document.getElementById('budgetTabBar');
+  if (tabBar) {
+    const plusBtn = tabBar.querySelector('button[onclick="copyAndOpen()"]');
+    const a = document.createElement('a');
+    a.href = 'javascript:void(0)';
+    a.onclick = () => switchBudget(newId);
+    a.id = 'tab-' + newId;
+    a.className = 'text-decoration-none budget-tab';
+    a.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:7px 16px 9px;font-size:13px;font-weight:500;color:#64748b;background:#f8fafc;border:1px solid transparent;border-bottom:1px solid transparent;border-radius:6px 6px 0 0;margin-bottom:-2px;white-space:nowrap;cursor:pointer;';
+    a.innerHTML = `<span class="badge bg-info bg-opacity-15 tab-status-badge" style="font-size:9px;padding:2px 5px;">Manager Onayında</span><span class="tab-venue-name">${venName} (Kopya)</span>`;
+    tabBar.insertBefore(a, plusBtn);
+  }
+
+  // Yeni sekmeye geç
+  await switchBudget(newId);
+}
+</script>
+{% endblock %}

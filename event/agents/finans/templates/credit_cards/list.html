@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Kredi Kartları{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div><div class="page-title">💳 Kredi Kartları</div></div>
+  <a href="/credit-cards/new" class="btn btn-primary">+ Kart Ekle</a>
+</div>
+
+{% if overdue_statements %}
+<div class="alert alert-danger">
+  ⚠️ <strong>{{ overdue_statements | length }}</strong> adet vadesi geçmiş ekstre var —
+  toplam <strong>{{ overdue_statements | sum(attribute='remaining') | currency }}</strong>
+</div>
+{% endif %}
+
+{% if cards %}
+<div class="grid-2">
+  {% for card in cards %}
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div style="font-size:16px;font-weight:700">{{ card.name }}</div>
+        {% if card.bank %}<div style="font-size:12px;color:var(--text-muted)">{{ card.bank }}{% if card.last_four %} &nbsp;·&nbsp; **** {{ card.last_four }}{% endif %}</div>{% endif %}
+      </div>
+      {% if not card.is_active %}<span class="badge badge-neutral">Pasif</span>{% endif %}
+    </div>
+    <div class="card-body">
+      <div class="grid-2" style="gap:12px;margin-bottom:14px">
+        <div>
+          <div style="font-size:11px;color:var(--text-muted)">Limit</div>
+          <div style="font-weight:700">{{ card.credit_limit | currency }}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text-muted)">Açık Bakiye</div>
+          <div style="font-weight:700;color:var(--danger)">{{ card.current_balance | currency }}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text-muted)">Kesim Günü</div>
+          <div>Her ayın {{ card.billing_day }}.</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text-muted)">Son Ödeme</div>
+          <div>Kesimden {{ card.due_day_offset }} gün sonra</div>
+        </div>
+      </div>
+
+      {% set card_overdue = overdue_statements | selectattr('card_id', 'eq', card.id) | list %}
+      {% if card_overdue %}
+      <div class="alert alert-danger" style="font-size:12px;padding:8px 12px;margin-bottom:10px">
+        {{ card_overdue | length }} adet vadesi geçmiş ekstre — {{ card_overdue | sum(attribute='remaining') | currency }}
+      </div>
+      {% endif %}
+
+      <div class="flex gap-2">
+        <a href="/credit-cards/{{ card.id }}" class="btn btn-sm btn-primary">Detay</a>
+        <a href="/credit-cards/{{ card.id }}/edit" class="btn btn-sm btn-outline">Düzenle</a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon">💳</div>
+  <div class="empty-state-text">Kredi kartı tanımlı değil. <a href="/credit-cards/new">Ekle</a></div>
+</div>
+{% endif %}
+{% endblock %}
