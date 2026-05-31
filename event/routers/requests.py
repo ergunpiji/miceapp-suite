@@ -46,6 +46,33 @@ def _check_pm_or_admin(current_user: User, db: Session = None):
         raise HTTPException(status_code=403, detail="Bu sayfa Proje Yöneticilerine özeldir.")
 
 
+def _ensure_reference(db: Session, req, current_user: User) -> None:
+    """Talep için ortak references kaydı oluşturur — idempotent (yoksa).
+    miceapp suite: event referansı yaratır, desk (finans) görür. Draft'lar bunu çağırmaz."""
+    if not req.request_no:
+        return
+    if db.query(DeskReference).filter(DeskReference.ref_no == req.request_no).first():
+        return  # zaten var
+    company_id = None
+    if req.customer_id:
+        _rc = db.query(Customer).filter(Customer.id == req.customer_id).first()
+        if _rc:
+            company_id = _rc.company_id
+
+    def _d(s):
+        try:
+            return date.fromisoformat(s) if s else None
+        except Exception:
+            return None
+
+    db.add(DeskReference(
+        id=_uuid(), ref_no=req.request_no, company_id=company_id,
+        customer_id=req.customer_id, title=req.event_name,
+        event_type=req.event_type, check_in=_d(req.check_in), check_out=_d(req.check_out),
+        status="aktif", created_by=current_user.id, owner_id=current_user.id, created_at=_now(),
+    ))
+
+
 def _get_subtree_ids(user_id: str, db: Session) -> list[str]:
     """Kullanıcının tüm astları (doğrudan + dolaylı) — BFS."""
     result: list[str] = []
@@ -659,35 +686,9 @@ async def requests_create(
     db.add(req)
     db.flush()
 
-    # --- miceapp suite: Her talep = referans ---
-    # Ortak references tablosuna da yaz → desk (finans) bu ref_no'yu görür,
-    # tüm finans akışları (fatura/HBF/gider/ödeme) bu tek referans ile bağlanır.
-    _ref_company_id = None
-    if customer_id:
-        _rc = db.query(Customer).filter(Customer.id == customer_id).first()
-        if _rc:
-            _ref_company_id = _rc.company_id
-
-    def _to_date(s):
-        try:
-            return date.fromisoformat(s) if s else None
-        except Exception:
-            return None
-
-    db.add(DeskReference(
-        id=_uuid(),
-        ref_no=ref_no,
-        company_id=_ref_company_id,
-        customer_id=customer_id or None,
-        title=event_name.strip(),
-        event_type=event_type_code,
-        check_in=_to_date(check_in),
-        check_out=_to_date(check_out),
-        status="aktif",
-        created_by=current_user.id,
-        owner_id=current_user.id,
-        created_at=_now(),
-    ))
+    # --- miceapp suite: draft DEĞİLSE referans oluştur (kaydet/gönder sonrası) ---
+    if ref_status != "draft":
+        _ensure_reference(db, req, current_user)
 
     log_activity(
         db, req.id, "request_created",
@@ -1382,6 +1383,10 @@ async def requests_update(
         went_pending = True
     elif action == "direct" and req.status == "draft":
         req.status = "in_progress"
+
+    # miceapp suite: draft değilse referans oluştur (idempotent) — taslak gönderilince de tetiklenir
+    if req.status != "draft":
+        _ensure_reference(db, req, current_user)
 
     db.commit()
 
