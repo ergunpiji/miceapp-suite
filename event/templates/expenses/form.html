@@ -287,6 +287,11 @@
                   <span class="pay-badge pay-{{ item.payment_method }}">
                     {{ item.payment_label }}
                   </span>
+                  {% if item.payment_method == 'kredi_karti' and item.credit_card_id and card_names.get(item.credit_card_id) %}
+                  <div class="text-muted" style="font-size:11px; margin-top:2px;">
+                    <i class="bi bi-credit-card"></i> {{ card_names[item.credit_card_id] }}
+                  </div>
+                  {% endif %}
                 </td>
                 <td>
                   <span class="pay-badge doc-{{ item.document_type }}">

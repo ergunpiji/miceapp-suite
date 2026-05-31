@@ -380,6 +380,11 @@ async def expenses_view(
     report = db.query(ExpenseReport).filter(ExpenseReport.id == report_id).first()
     if not report:
         raise HTTPException(404)
+    # Hangi kredi kartıyla harcandığını göstermek için: id → "Ad ••1234"
+    card_names = {
+        c.id: (c.name + (f" ••{c.last4}" if c.last4 else ""))
+        for c in db.query(DeskCreditCard).all()
+    }
     return templates.TemplateResponse("expenses/form.html", {
         "request": request,
         "current_user": current_user,
@@ -388,6 +393,7 @@ async def expenses_view(
         "all_requests": [],
         "readonly": True,
         "can_approve": _can_approve(report, current_user, db),
+        "card_names": card_names,
         "page_title": report.title or "HBF Detay",
         "PAYMENT_METHODS": EXPENSE_PAYMENT_METHODS,
         "DOC_TYPES": EXPENSE_DOC_TYPES,

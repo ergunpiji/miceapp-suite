@@ -41,7 +41,12 @@
               <tr>
                 <td class="ps-3">{% set d = it.item_date %}{% if d and d|length == 10 %}{{ d[8:10] }}.{{ d[5:7] }}.{{ d[0:4] }}{% else %}{{ d }}{% endif %}</td>
                 <td>{{ it.description }}</td>
-                <td><span class="badge bg-light text-dark">{{ it.payment_label }}</span></td>
+                <td>
+                  <span class="badge bg-light text-dark">{{ it.payment_label }}</span>
+                  {% if it.payment_method == 'kredi_karti' and it.credit_card_id and card_names.get(it.credit_card_id) %}
+                  <div class="small text-muted mt-1"><i class="bi bi-credit-card me-1"></i>{{ card_names[it.credit_card_id] }}</div>
+                  {% endif %}
+                </td>
                 <td>
                   {{ it.doc_label }}
                   {% if doc_urls.get(it.id) %}
@@ -68,6 +73,14 @@
       <div class="card border-0 shadow-sm">
         <div class="card-body">
           {% if can_pay %}
+          {% if cc_total > 0 %}
+          <div class="alert alert-info py-2 small mb-3">
+            <i class="bi bi-credit-card me-1"></i><strong>{{ cc_total | money }}</strong> kredi kartı harcaması — kart limitinden zaten düşüldü, ödeme gerekmez.
+          </div>
+          {% endif %}
+
+          {% if nakit_total > 0 %}
+          {# Nakit/banka kısmı için ödeme gerekir #}
           <h6 class="mb-3"><i class="bi bi-cash-coin me-1"></i>Öde & Kapat</h6>
           <form method="post" action="/hbf-muhasebe/{{ rep.id }}/pay">
             <div class="mb-2">
@@ -75,7 +88,7 @@
               <input type="date" name="pay_date" value="{{ today }}" class="form-control form-control-sm">
             </div>
             <div class="mb-2">
-              <label class="form-label small">Ödeme Yöntemi</label>
+              <label class="form-label small">Ödeme Yöntemi (nakit kısım)</label>
               <select name="payment_method" class="form-select form-select-sm" id="payMethod" onchange="togglePay()">
                 <option value="banka">Banka</option>
                 <option value="nakit">Nakit (Kasa)</option>
@@ -96,7 +109,7 @@
               </select>
             </div>
             <div class="alert alert-warning py-2 small">
-              Toplam <strong>{{ rep.grand_total | money }}</strong> tutarında gider kaydı + kasa/banka çıkışı oluşturulacak.
+              <strong>{{ nakit_total | money }}</strong> (nakit kısım) için gider kaydı + kasa/banka çıkışı oluşturulacak.
             </div>
             <button type="submit" class="btn btn-success w-100"
                     onclick="return confirm('HBF ödenip kapatılacak. Emin misiniz?')">
@@ -110,6 +123,17 @@
               document.getElementById('cashWrap').style.display = m==='nakit'?'':'none';
             }
           </script>
+          {% else %}
+          {# Tamamı kredi kartı → ödeme yok, sadece kapat #}
+          <form method="post" action="/hbf-muhasebe/{{ rep.id }}/pay">
+            <input type="hidden" name="pay_date" value="{{ today }}">
+            <input type="hidden" name="payment_method" value="kredi_karti">
+            <button type="submit" class="btn btn-success w-100"
+                    onclick="return confirm('HBF kapatılacak (kredi kartı — ödeme gerekmez). Emin misiniz?')">
+              <i class="bi bi-check-circle me-1"></i>Kapat
+            </button>
+          </form>
+          {% endif %}
           {% elif rep.status == 'kapandi' %}
           <h6 class="mb-3 text-success"><i class="bi bi-check-circle me-1"></i>Kapandı</h6>
           <ul class="list-unstyled small mb-0">

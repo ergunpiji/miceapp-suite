@@ -376,11 +376,24 @@ async def hbf_muhasebe_detail(
     cash_books = db.query(CashBook).filter(CashBook.company_id == cid).all()
     bank_accounts = db.query(BankAccount).filter(BankAccount.company_id == cid).all()
 
+    # Hangi kredi kartıyla harcandığını göstermek için: id → "Ad ••1234"
+    card_names = {}
+    for c in db.query(CreditCard).filter(CreditCard.company_id == cid).all():
+        card_names[c.id] = c.name + (f" ••{c.last4}" if c.last4 else "")
+
+    # Kredi kartı kalemleri kartın limitinden zaten düştü → kapanışta nakit/banka
+    # ödemesi yalnızca KREDİ KARTI OLMAYAN (nakit) kısım için gerekir.
+    cc_total = round(sum((i.total_amount or 0) for i in rep.items if i.payment_method == "kredi_karti"), 2)
+    nakit_total = round(sum((i.total_amount or 0) for i in rep.items if i.payment_method != "kredi_karti"), 2)
+
     return templates.TemplateResponse("hbf_muhasebe/detail.html", {
         "request": request,
         "current_user": current_user,
         "rep": rep,
         "doc_urls": doc_urls,
+        "card_names": card_names,
+        "cc_total": cc_total,
+        "nakit_total": nakit_total,
         "cash_books": cash_books,
         "bank_accounts": bank_accounts,
         "user_names": _user_names(db),
@@ -411,43 +424,43 @@ async def hbf_muhasebe_pay(
         raise HTTPException(404, detail="Ödenecek HBF bulunamadı (onaylandı durumunda olmalı).")
 
     pdate = _date.fromisoformat(pay_date) if pay_date else _date.today()
-    total = rep.grand_total
     desc = f"HBF {rep.title or rep.id[:8]}"
 
-    # 1) GeneralExpense kaydı
-    cat_id = _hbf_expense_category(db, cid)
-    ge = GeneralExpense(
-        company_id=cid,
-        category_id=cat_id,
-        description=f"HBF: {rep.title or rep.id[:8]}",
-        amount=total,
-        expense_date=pdate,
-        source="manual",
-        created_by=current_user.id,
-    )
-    db.add(ge)
-    db.flush()
-    rep.general_expense_id = ge.id
+    # Kredi kartı kalemleri kartın limitinden zaten düştü (giriş anında CreditCardTxn).
+    # Kapanışta nakit/banka ödemesi yalnızca KREDİ KARTI OLMAYAN kısım için yapılır.
+    nakit_total = round(sum((i.total_amount or 0) for i in rep.items if i.payment_method != "kredi_karti"), 2)
 
-    # 2) Kasa/Banka çıkış hareketi
-    if payment_method == "nakit" and cash_book_id:
-        db.add(CashEntry(
-            company_id=cid, book_id=cash_book_id, entry_date=pdate,
-            entry_type="cikis", amount=total, description=desc,
-        ))
-    elif payment_method == "banka" and bank_account_id:
-        db.add(BankMovement(
-            company_id=cid, account_id=bank_account_id, movement_date=pdate,
-            movement_type="cikis", amount=total, description=desc,
-        ))
+    if nakit_total > 0:
+        # Nakit/banka kısmı için gider kaydı + kasa/banka çıkışı
+        cat_id = _hbf_expense_category(db, cid)
+        ge = GeneralExpense(
+            company_id=cid, category_id=cat_id,
+            description=f"HBF: {rep.title or rep.id[:8]}",
+            amount=nakit_total, expense_date=pdate,
+            source="manual", created_by=current_user.id,
+        )
+        db.add(ge)
+        db.flush()
+        rep.general_expense_id = ge.id
+        if payment_method == "nakit" and cash_book_id:
+            db.add(CashEntry(
+                company_id=cid, book_id=cash_book_id, entry_date=pdate,
+                entry_type="cikis", amount=nakit_total, description=desc,
+            ))
+        elif payment_method == "banka" and bank_account_id:
+            db.add(BankMovement(
+                company_id=cid, account_id=bank_account_id, movement_date=pdate,
+                movement_type="cikis", amount=nakit_total, description=desc,
+            ))
+    # else: tamamı kredi kartı → ödeme yok, sadece kapat (limit zaten düştü)
 
-    # 3) HBF kapat
+    # HBF kapat
     rep.status = "kapandi"
     rep.paid_by = current_user.id
     rep.paid_at = datetime.utcnow()
-    rep.payment_method = payment_method
-    rep.bank_account_id = bank_account_id if payment_method == "banka" else None
-    rep.cash_book_id = cash_book_id if payment_method == "nakit" else None
+    rep.payment_method = payment_method if nakit_total > 0 else "kredi_karti"
+    rep.bank_account_id = bank_account_id if (nakit_total > 0 and payment_method == "banka") else None
+    rep.cash_book_id = cash_book_id if (nakit_total > 0 and payment_method == "nakit") else None
     rep.updated_at = datetime.utcnow()
     db.commit()
 
