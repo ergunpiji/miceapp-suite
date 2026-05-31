@@ -15,7 +15,7 @@ from auth import get_current_user, require_admin, require_gm, require_mudur, req
 from database import get_db
 from models import (
     Invoice, GeneralExpense, CashEntry, BankMovement,
-    CreditCardStatement, CreditCardTxn, Cheque, Customer, Vendor,
+    CreditCardStatement, CreditCardTxn, Cheque, Customer, Vendor, VendorPrepayment,
     Employee, SalaryPayment, EmployeeBenefit, User,
     AnnualBudget, BudgetLine, FixedExpense, GeneralExpenseCategory,
     PayrollRecord, PayrollSettings,
@@ -144,9 +144,23 @@ async def report_cash_flow(
             if week_start <= due <= weeks_end:
                 cc_txns_due.append((txn, due))
 
+    from collections import defaultdict as _dd
+
+    # KK harcamalarını KART + son ödeme günü bazında KÜMÜLATİF topla → tek "ekstre ödeme"
+    # satırı (satır satır yazmak yerine).
+    _cc_agg = _dd(lambda: {"amount": 0.0, "card_name": "Kredi Kartı"})
+    for txn, due in cc_txns_due:
+        key = ((txn.card_id if txn.card else None) or "?", due)
+        _cc_agg[key]["amount"] += (txn.amount or 0)
+        if txn.card:
+            _cc_agg[key]["card_name"] = txn.card.name
+    cc_statements = [
+        {"card_name": v["card_name"], "due_date": k[1], "amount": round(v["amount"], 2)}
+        for k, v in _cc_agg.items()
+    ]
+
     # --- Sabit Gider projeksiyonlarını önceden hesapla ---
     import calendar as _cal
-    from collections import defaultdict as _dd
 
     # 8 haftanın kapsadığı ay-yıl kombinasyonları
     covered_months: set = set()
@@ -181,6 +195,47 @@ async def report_cash_flow(
                 "amount": fe.amount,
             })
     # ---------------------------------------------------------------
+
+    # --- Gelen faturalar: TEDARİKÇİ ÖN ÖDEMESİ DÜŞÜLEREK önceden hesapla ---
+    # Tedarikçiye yapılmış ön ödeme bir kez nakit çıkışı olarak görünür (ödeme tarihinde);
+    # fatura geldiğinde tüm borç DEĞİL, KALAN (borç − ön ödeme) vadesinde eklenir.
+    from sqlalchemy import func as _sa_func
+    _prepay_bal = _dd(float)
+    for vp in db.query(VendorPrepayment).filter(
+        VendorPrepayment.company_id == cid,
+        VendorPrepayment.payment_type == "prepayment",
+    ).all():
+        if vp.vendor_id:
+            _prepay_bal[vp.vendor_id] += (vp.amount or 0)
+
+    gelen_outflows = []
+    _eff_inv_date = _sa_func.coalesce(Invoice.gm_postpone_until, Invoice.due_date)
+    for inv in db.query(Invoice).filter(
+        Invoice.company_id == cid,
+        Invoice.invoice_type == "gelen",
+        Invoice.status == "approved",
+        Invoice.deleted_at == None,  # noqa: E711
+        _eff_inv_date >= week_start,
+        _eff_inv_date <= weeks_end,
+    ).order_by(_eff_inv_date).all():
+        eff_date = inv.gm_postpone_until or inv.due_date
+        amt = inv.gm_approved_amount or inv.amount or 0
+        applied = 0.0
+        if inv.vendor_id and _prepay_bal.get(inv.vendor_id, 0) > 0:
+            applied = min(amt, _prepay_bal[inv.vendor_id])
+            _prepay_bal[inv.vendor_id] -= applied
+        net = round(amt - applied, 2)
+        if net <= 0:
+            continue  # tamamı ön ödemeden karşılandı
+        suffix = (" · GM ileri vade" if inv.gm_postpone_until else "") + \
+                 (" · ön ödeme düşüldü" if applied > 0 else "")
+        gelen_outflows.append({
+            "type": "invoice",
+            "label": (inv.vendor.name if inv.vendor else (inv.invoice_no or f"Fatura #{inv.id}")) + suffix,
+            "sub": inv.reference.ref_no if inv.reference else "",
+            "date": eff_date,
+            "amount": net,
+        })
 
     weeks_data = []
     for i in range(weeks):
@@ -243,29 +298,13 @@ async def report_cash_flow(
                 "amount": m.amount,
             })
 
-        # Gelen faturalar → GM ileri vade onayı varsa gm_postpone_until, yoksa due_date
-        from sqlalchemy import func as _sa_func
-        eff_inv_date = _sa_func.coalesce(Invoice.gm_postpone_until, Invoice.due_date)
-        for inv in db.query(Invoice).filter(
-            Invoice.company_id == cid,
-            Invoice.invoice_type == "gelen",
-            Invoice.status == "approved",
-            Invoice.deleted_at == None,  # noqa: E711
-            eff_inv_date >= wstart,
-            eff_inv_date <= wend,
-        ).all():
-            eff_date = inv.gm_postpone_until or inv.due_date
-            postponed = bool(inv.gm_postpone_until)
-            label_suffix = " · GM ileri vade" if postponed else ""
-            outgoing.append({
-                "type": "invoice",
-                "label": (inv.vendor.name if inv.vendor else (inv.invoice_no or f"Fatura #{inv.id}")) + label_suffix,
-                "sub": inv.reference.ref_no if inv.reference else "",
-                "date": eff_date,
-                "amount": inv.gm_approved_amount or inv.amount,
-            })
+        # Gelen faturalar (ön ödeme düşülmüş, önceden hesaplanmış)
+        for go in gelen_outflows:
+            if wstart <= go["date"] <= wend:
+                outgoing.append(go)
 
         # Verilen çekler → GM ileri vade onayı varsa gm_postpone_until, yoksa due_date
+        from sqlalchemy import func as _sa_func
         eff_cheque_date = _sa_func.coalesce(Cheque.gm_postpone_until, Cheque.due_date)
         for c in db.query(Cheque).filter(
             Cheque.company_id == cid,
@@ -285,15 +324,15 @@ async def report_cash_flow(
                 "amount": c.gm_approved_amount or c.amount,
             })
 
-        # KK harcamaları → son ödeme gününe göre (önceden hesaplanmış)
-        for txn, due_date in cc_txns_due:
-            if wstart <= due_date <= wend:
+        # KK ekstreleri → kart bazında kümülatif tek satır (önceden hesaplanmış)
+        for st in cc_statements:
+            if wstart <= st["due_date"] <= wend:
                 outgoing.append({
-                    "type": "cc_txn",
-                    "label": txn.description or "KK Harcaması",
-                    "sub": txn.card.name if txn.card else "Kredi Kartı",
-                    "date": due_date,
-                    "amount": txn.amount,
+                    "type": "cc_statement",
+                    "label": f"{st['card_name']} kredi kartı ekstre ödeme",
+                    "sub": "Kredi Kartı Ekstre",
+                    "date": st["due_date"],
+                    "amount": st["amount"],
                 })
 
         # Kasa çıkışları
