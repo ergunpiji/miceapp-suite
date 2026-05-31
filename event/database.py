@@ -549,6 +549,9 @@ def migrate_db():
         # miceapp suite: desk role_permissions'ı 'enabled' kolonuyla yaratmış olabilir;
         # event 'allowed' okuyor → ortak tabloda ikisi de bulunsun.
         _safe_add_column(conn, "role_permissions", "allowed", "BOOLEAN", "TRUE")
+        # miceapp suite: HBF kredi kartı seçimi + limit düşüşü
+        _safe_add_column(conn, "expense_items",    "credit_card_id",    "VARCHAR(36)")
+        _safe_add_column(conn, "credit_card_txns", "expense_report_id", "VARCHAR(36)")
 
         # role_permissions tablosu — yoksa oluştur
         if _is_sqlite:

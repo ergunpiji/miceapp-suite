@@ -16,6 +16,7 @@ from auth import get_current_user
 from database import get_db
 from models import (
     ExpenseReport, ExpenseItem, UndocumentedEntry,
+    DeskCreditCard, DeskCreditCardTxn,
     Request as ReqModel, User,
     EXPENSE_STATUSES, EXPENSE_STATUS_LABELS, EXPENSE_STATUS_COLORS,
     EXPENSE_PAYMENT_METHODS, EXPENSE_DOC_TYPES,
@@ -159,6 +160,7 @@ async def expenses_new(
         "page_title": "Yeni Harcama Bildirim Formu",
         "PAYMENT_METHODS": EXPENSE_PAYMENT_METHODS,
         "DOC_TYPES": EXPENSE_DOC_TYPES,
+        "credit_cards": db.query(DeskCreditCard).order_by(DeskCreditCard.name).all(),
     })
 
 
@@ -254,6 +256,7 @@ async def expenses_edit_get(
         "page_title": report.title or "HBF Düzenle",
         "PAYMENT_METHODS": EXPENSE_PAYMENT_METHODS,
         "DOC_TYPES": EXPENSE_DOC_TYPES,
+        "credit_cards": db.query(DeskCreditCard).order_by(DeskCreditCard.name).all(),
     })
 
 
@@ -627,6 +630,36 @@ async def undocumented_delete(
 # Yardımcı
 # ---------------------------------------------------------------------------
 
+def _sync_credit_card_txns(db: Session, report_id: str) -> None:
+    """HBF kredi_karti kalemleri → micedesk kredi kartı işlemi (CreditCardTxn) oluşturur.
+    Bu, kartın kullanılabilir limitinden düşer. Her kayıtta bu HBF'nin eski txn'leri
+    silinip güncel kalemlerden yeniden oluşturulur (idempotent senkron)."""
+    from datetime import date as _date2
+    db.query(DeskCreditCardTxn).filter(
+        DeskCreditCardTxn.expense_report_id == report_id
+    ).delete(synchronize_session=False)
+    report = db.query(ExpenseReport).filter(ExpenseReport.id == report_id).first()
+    title = (report.title if report else "") or "HBF harcaması"
+    for item in db.query(ExpenseItem).filter(ExpenseItem.report_id == report_id).all():
+        if item.payment_method == "kredi_karti" and item.credit_card_id:
+            card = db.query(DeskCreditCard).filter(DeskCreditCard.id == item.credit_card_id).first()
+            try:
+                tdate = _date2.fromisoformat(item.item_date) if item.item_date else _date2.today()
+            except Exception:
+                tdate = _date2.today()
+            db.add(DeskCreditCardTxn(
+                id=_uuid(),
+                company_id=(card.company_id if card else None),
+                card_id=item.credit_card_id,
+                amount=round(item.total_amount or 0, 2),
+                txn_date=tdate,
+                description=(f"{title} — {item.description or ''}").strip(" —")[:300],
+                is_refund=False,
+                expense_report_id=report_id,
+            ))
+    db.flush()
+
+
 def _save_items_from_json(db: Session, report_id: str, items_json: str) -> None:
     """
     Kalemleri JSON'dan günceller.
@@ -671,6 +704,7 @@ def _save_items_from_json(db: Session, report_id: str, items_json: str) -> None:
             item.item_date           = it.get("item_date", "") or ""
             item.description         = it.get("description", "") or ""
             item.payment_method      = it.get("payment_method", "nakit")
+            item.credit_card_id      = (it.get("credit_card_id") or None) if it.get("payment_method") == "kredi_karti" else None
             item.document_type       = doc_type
             item.amount              = round(amount, 2)
             item.vat_rate            = round(vat_rate, 2)
@@ -691,6 +725,7 @@ def _save_items_from_json(db: Session, report_id: str, items_json: str) -> None:
                 item_date=it.get("item_date", "") or "",
                 description=it.get("description", "") or "",
                 payment_method=it.get("payment_method", "nakit"),
+                credit_card_id=(it.get("credit_card_id") or None) if it.get("payment_method") == "kredi_karti" else None,
                 document_type=doc_type,
                 amount=round(amount, 2),
                 vat_rate=round(vat_rate, 2),
@@ -709,3 +744,6 @@ def _save_items_from_json(db: Session, report_id: str, items_json: str) -> None:
             db.delete(item)
 
     db.flush()
+
+    # miceapp suite: kredi kartı harcamalarını kartın limitinden düş (CreditCardTxn senkron)
+    _sync_credit_card_txns(db, report_id)

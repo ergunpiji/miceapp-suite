@@ -538,6 +538,7 @@ let rows = [
     item_date:            '{{ item.item_date or '' }}',
     description:          {{ item.description | tojson }},
     payment_method:       '{{ item.payment_method }}',
+    credit_card_id:       '{{ item.credit_card_id or '' }}',
     document_type:        '{{ item.document_type }}',
     total_amount:         {{ item.total_amount }},
     vat_amount:           {{ item.vat_amount }},
@@ -551,6 +552,15 @@ let rows = [
 
 const PAYMENT_METHODS = {{ PAYMENT_METHODS | tojson }};
 const DOC_TYPES       = {{ DOC_TYPES | tojson }};
+const CREDIT_CARDS    = [
+  {% for cc in credit_cards %}{ id: '{{ cc.id }}', name: {{ (cc.name or '') | tojson }}, last4: '{{ cc.last4 or '' }}' },{% endfor %}
+];
+
+function toggleCC(i, val) {
+  const sel = document.querySelector('.cc-sel-' + i);
+  if (sel) sel.style.display = (val === 'kredi_karti') ? '' : 'none';
+  if (val !== 'kredi_karti') rows[i].credit_card_id = '';
+}
 
 function fmt(n) {
   return '₺' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.').replace(/\.(\d{2})$/, ',$1');
@@ -567,6 +577,9 @@ function renderTable() {
     ).join('');
     const docOpts = DOC_TYPES.map(d =>
       `<option value="${d.value}" ${row.document_type === d.value ? 'selected' : ''}>${d.label}</option>`
+    ).join('');
+    const ccOpts = `<option value="">Kart seç…</option>` + CREDIT_CARDS.map(c =>
+      `<option value="${c.id}" ${row.credit_card_id === c.id ? 'selected' : ''}>${c.name}${c.last4 ? ' ••' + c.last4 : ''}</option>`
     ).join('');
     const isBelgesiz = row.document_type === 'belgesiz';
     const vatAmtVal = isBelgesiz ? 0 : (row.vat_amount || 0);
@@ -604,8 +617,10 @@ function renderTable() {
                  placeholder="Açıklama" style="width:100%; min-width:160px;"
                  oninput="rows[${i}].description=this.value;"></td>
       <td>
-        <select onchange="rows[${i}].payment_method=this.value; updateTotals();"
+        <select onchange="rows[${i}].payment_method=this.value; toggleCC(${i}, this.value); updateTotals();"
                 style="width:100px;">${payOpts}</select>
+        <select class="cc-sel-${i}" style="width:130px; font-size:11px; margin-top:3px; ${row.payment_method === 'kredi_karti' ? '' : 'display:none;'}"
+                onchange="rows[${i}].credit_card_id=this.value;">${ccOpts}</select>
       </td>
       <td>
         <select onchange="onDocTypeChange(${i}, this.value);" style="width:100px;">${docOpts}</select>
@@ -668,7 +683,7 @@ function setEl(id, val) {
 
 function addRow() {
   rows.push({
-    id: '', item_date: '', description: '', payment_method: 'nakit',
+    id: '', item_date: '', description: '', payment_method: 'nakit', credit_card_id: '',
     document_type: 'fis', total_amount: 0, vat_amount: 0, document_path: '', document_name: ''
   });
   renderTable();

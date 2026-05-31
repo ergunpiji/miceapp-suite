@@ -1468,6 +1468,7 @@ class ExpenseItem(Base):
     item_date           = Column(String(10), default="")    # YYYY-MM-DD
     description         = Column(String(300), default="")
     payment_method      = Column(String(16), default="nakit")   # kredi_karti | nakit
+    credit_card_id      = Column(String(36), nullable=True)     # kredi_karti ise: micedesk credit_cards.id
     document_type       = Column(String(16), default="fis")     # fatura | fis | belgesiz
     amount              = Column(Float, default=0.0)    # KDV hariç
     vat_rate            = Column(Float, default=0.0)    # 0 için belgesiz; 10, 20 vb.
@@ -1841,3 +1842,31 @@ class DeskReference(Base):
     status     = Column(String(30), default="aktif")
     created_by = Column(String(36))
     created_at = Column(DateTime, default=_now)
+
+
+class DeskCreditCard(Base):
+    """micedesk credit_cards tablosunu OKUMAK için bridge — HBF kredi kartı seçimi."""
+    __tablename__ = "credit_cards"
+    __table_args__ = {"extend_existing": True}
+
+    id           = Column(String(36), primary_key=True)
+    company_id   = Column(String(36))
+    name         = Column(String(100))
+    bank_name    = Column(String(100))
+    last4        = Column(String(4))
+    credit_limit = Column(Float, default=0.0)
+
+
+class DeskCreditCardTxn(Base):
+    """micedesk credit_card_txns — HBF kredi kartı harcaması kartın limitinden düşsün diye YAZILIR."""
+    __tablename__ = "credit_card_txns"
+    __table_args__ = {"extend_existing": True}
+
+    id                = Column(String(36), primary_key=True, default=_uuid)
+    company_id        = Column(String(36))
+    card_id           = Column(String(36))
+    txn_date          = Column(Date)
+    amount            = Column(Float)
+    description       = Column(String(300))
+    is_refund         = Column(Boolean, default=False)
+    expense_report_id = Column(String(36))   # HBF bağı (sync/temizlik için)
