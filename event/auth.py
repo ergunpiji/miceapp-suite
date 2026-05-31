@@ -41,6 +41,26 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 COOKIE_NAME = "access_token"
 
+# Cookie domain: iki subdomain (event.miceapp.net / desk.miceapp.net) arasında
+# tek oturum (SSO) için ".miceapp.net" olmalı. Yerelde boş bırakılır (host-only).
+COOKIE_DOMAIN = os.environ.get("COOKIE_DOMAIN") or None
+
+# ---------------------------------------------------------------------------
+# Rol → ana app yönlendirmesi
+# Muhasebe ve İK çalışanları işlerini micedesk (desk) üzerinden yapar; bu roller
+# event'e giriş yapsa bile desk'e yönlendirilir. (admin/super_admin/genel_mudur
+# serbesttir — yönlendirilmez, iki app'i de kullanabilir.)
+# ---------------------------------------------------------------------------
+DESK_HOME_ROLES = {"muhasebe", "muhasebe_muduru", "ik", "insan_kaynaklari"}
+DESK_URL = (os.environ.get("DESK_URL") or "https://desk.miceapp.net").rstrip("/")
+
+
+def redirect_app_url_for(user) -> Optional[str]:
+    """Kullanıcının ana app'i desk ise desk dashboard URL'ini, değilse None döndürür."""
+    if user and getattr(user, "role", None) in DESK_HOME_ROLES:
+        return DESK_URL + "/dashboard"
+    return None
+
 
 # ---------------------------------------------------------------------------
 # Şifre yardımcıları

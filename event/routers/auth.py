@@ -16,7 +16,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 import auth as auth_module
-from auth import COOKIE_NAME, ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, get_current_user
+from auth import COOKIE_NAME, COOKIE_DOMAIN, ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, get_current_user, redirect_app_url_for
 from database import get_db
 from models import User
 
@@ -29,7 +29,9 @@ async def login_get(request: Request, db: Session = Depends(get_db)):
     """Giriş formunu göster — zaten giriş yapmışsa dashboard'a yönlendir"""
     user = auth_module.get_current_user_optional(request, db)
     if user:
-        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+        # Muhasebe/İK rolü ise işlerini desk'te yapar → desk'e yönlendir
+        target = redirect_app_url_for(user)
+        return RedirectResponse(url=target or "/dashboard", status_code=status.HTTP_302_FOUND)
     return templates.TemplateResponse(
         "login.html",
         {"request": request, "error": None, "current_user": None},
@@ -60,7 +62,10 @@ async def login_post(
     token = create_access_token(data={"sub": user.id})
 
     _is_production = os.environ.get("ENVIRONMENT", "").lower() == "production"
-    response = RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+    # Muhasebe/İK rolü ise giriş sonrası desk'e yönlendir (cookie .miceapp.net
+    # domaininde set edildiği için desk'te de geçerli olur)
+    target = redirect_app_url_for(user)
+    response = RedirectResponse(url=target or "/dashboard", status_code=status.HTTP_302_FOUND)
     response.set_cookie(
         key=COOKIE_NAME,
         value=token,
@@ -68,6 +73,7 @@ async def login_post(
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         samesite="lax",
         secure=_is_production,
+        domain=COOKIE_DOMAIN,
     )
     return response
 
@@ -77,7 +83,7 @@ async def login_post(
 async def logout(request: Request):
     """Oturumu kapat"""
     response = RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
-    response.delete_cookie(key=COOKIE_NAME)
+    response.delete_cookie(key=COOKIE_NAME, domain=COOKIE_DOMAIN)
     return response
 
 

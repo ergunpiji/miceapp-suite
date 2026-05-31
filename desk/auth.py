@@ -31,6 +31,26 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 saat
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 COOKIE_NAME = "access_token"
 
+# Cookie domain: event.miceapp.net / desk.miceapp.net arası tek oturum (SSO) için
+# ".miceapp.net" olmalı. Yerelde boş bırakılır (host-only).
+COOKIE_DOMAIN = os.environ.get("COOKIE_DOMAIN") or None
+
+# ---------------------------------------------------------------------------
+# Rol → ana app yönlendirmesi
+# Satış/operasyon rolleri (yonetici/asistan/mudur/satinalma) işlerini event'te
+# yapar; bu roller desk'e giriş yapsa bile event'e yönlendirilir. Muhasebe/İK ve
+# admin/super_admin/genel_mudur desk'te kalır.
+# ---------------------------------------------------------------------------
+EVENT_HOME_ROLES = {"yonetici", "asistan", "mudur", "satinalma"}
+EVENT_URL = (os.environ.get("EVENT_URL") or "https://event.miceapp.net").rstrip("/")
+
+
+def redirect_app_url_for(user) -> Optional[str]:
+    """Kullanıcının ana app'i event ise event dashboard URL'ini, değilse None döndürür."""
+    if user and getattr(user, "role", None) in EVENT_HOME_ROLES:
+        return EVENT_URL + "/dashboard"
+    return None
+
 
 # ---------------------------------------------------------------------------
 # Şifre yardımcıları
