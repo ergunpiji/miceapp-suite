@@ -129,7 +129,33 @@ def _build_financial_stats(db: Session, req_id_filter=None):
         if key:
             monthly[key]["sale"] += sign * val
 
-    # Kar = kesilen + komisyon − gelen (requests/detail.html ile aynı formül)
+    # HBF (Harcama Bildirim Formları) → gider. GM onayından geçenler (onaylandi/kapandi)
+    # KDV hariç tutarıyla maliyete eklenir (requests/detail.html ile aynı mantık).
+    from models import ExpenseReport as _ER
+    hbf_q = db.query(_ER).filter(_ER.status.in_(["onaylandi", "kapandi", "approved"]))
+    if req_id_filter is not None:
+        hbf_q = hbf_q.filter(_ER.request_id.in_(req_id_filter))
+    hbf_gider = 0.0
+    for r in hbf_q.all():
+        amt = r.grand_excl_vat or 0
+        hbf_gider += amt
+        # Aylık gruplama: referansın check_in'i, yoksa HBF oluşturma tarihi
+        key = None
+        req_obj = r.request
+        if req_obj and req_obj.check_in:
+            try:
+                ci = req_obj.check_in
+                key = ci.strftime("%Y-%m") if hasattr(ci, "strftime") else str(ci)[:7]
+            except Exception:
+                pass
+        if not key and r.created_at:
+            key = r.created_at.strftime("%Y-%m")
+        if key:
+            monthly[key]["cost"] += amt
+    hbf_gider = round(hbf_gider, 2)
+    total_cost = round(total_cost + hbf_gider, 2)
+
+    # Kar = kesilen + komisyon − (gelen + HBF gideri)
     kar = total_sale + total_komisyon - total_cost
     total_revenue = total_sale + total_komisyon
     karlilik = round(kar / total_revenue * 100, 1) if total_revenue > 0 else 0.0
@@ -142,6 +168,7 @@ def _build_financial_stats(db: Session, req_id_filter=None):
     return {
         "total_sale":      round(total_revenue, 2),   # ciro + komisyon
         "total_cost":      round(total_cost, 2),
+        "hbf_gider":       hbf_gider,
         "total_kar":       round(kar, 2),
         "karlilik":        karlilik,
         "chart_labels":    chart_labels,
