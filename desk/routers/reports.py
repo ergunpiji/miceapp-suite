@@ -219,7 +219,9 @@ async def report_cash_flow(
         _eff_inv_date <= weeks_end,
     ).order_by(_eff_inv_date).all():
         eff_date = inv.gm_postpone_until or inv.due_date
-        amt = inv.gm_approved_amount or inv.amount or 0
+        # Ödenecek tutar KDV DAHİL (gerçek borç) — gelir tarafı da total_with_vat kullanır.
+        # GM kısmi onay verdiyse o tutar (zaten KDV dahil) geçerli.
+        amt = inv.gm_approved_amount or inv.total_with_vat or inv.amount or 0
         applied = 0.0
         if inv.vendor_id and _prepay_bal.get(inv.vendor_id, 0) > 0:
             applied = min(amt, _prepay_bal[inv.vendor_id])
