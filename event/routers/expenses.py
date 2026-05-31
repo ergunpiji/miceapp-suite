@@ -63,7 +63,10 @@ def _find_hbf_approver(submitted_by: str | None, db: Session) -> User | None:
 
 
 def _can_approve(report: ExpenseReport, user: User, db: Session) -> bool:
-    """HBF gönderenin üstündeki mudur/yonetici veya admin onaylayabilir."""
+    """HBF gönderenin üstündeki mudur/yonetici veya admin onaylayabilir.
+    miceapp suite: KİMSE kendi doldurduğu HBF'yi onaylayamaz."""
+    if report.submitted_by and report.submitted_by == user.id:
+        return False
     if user.role in ("admin", "mudur"):
         return True
     # yonetici: kendi direktifi altındaki birinin gönderdiği formu onaylayabilir

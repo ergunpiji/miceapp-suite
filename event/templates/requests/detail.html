@@ -1996,7 +1996,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 <i class="bi bi-pencil"></i>
               </a>
               {% endif %}
-              {% if rpt.status == 'submitted' and (current_user.role == 'admin' or req.created_by == current_user.id) %}
+              {# miceapp suite: sadece gönderenin ÜSTÜ onaylar — kendi HBF'sini onaylayamaz #}
+              {% if rpt.status == 'submitted' and rpt.id in approvable_hbf_ids %}
               <form method="post" action="/expenses/{{ rpt.id }}/approve" class="d-inline ms-1">
                 <button type="submit" class="btn btn-xs btn-success py-0 px-1" title="Onayla"
                         onclick="return confirm('Onaylanacak. Emin misiniz?')">

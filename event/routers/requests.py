@@ -1123,6 +1123,9 @@ async def requests_detail(
 
     # ── HBF & Belgesiz ──
     expense_reports      = req.expense_reports or []
+    # miceapp suite: HBF onay butonu — sadece gerçekten onaylayabilen görsün (kendi HBF'sini değil)
+    from routers.expenses import _can_approve as _hbf_can_approve
+    approvable_hbf_ids = {r.id for r in expense_reports if _hbf_can_approve(r, current_user, db)}
     undocumented_entries = _undoc
     undoc_gelir_total    = _undoc_gelir
     undoc_gider_total    = _undoc_gider
@@ -1143,7 +1146,7 @@ async def requests_detail(
     )
     activity_logs = (db.query(_AL)
                      .filter(_AL.request_id == req_id)
-                     .order_by(_AL.created_at)
+                     .order_by(_AL.created_at.desc())
                      .all())
     req_documents = (db.query(_RD)
                      .filter(_RD.request_id == req_id)
@@ -1175,8 +1178,8 @@ async def requests_detail(
             "created_at": doc.created_at,
             "id":         doc.id,
         })
-    # Eskiden yeniye sırala (tabloda #1 en eski adım)
-    timeline.sort(key=lambda x: x["created_at"])
+    # miceapp suite: en üstte en son işlem (yeniden eskiye)
+    timeline.sort(key=lambda x: x["created_at"], reverse=True)
 
     return templates.TemplateResponse(
         "requests/detail.html",
@@ -1227,6 +1230,7 @@ async def requests_detail(
             "hbf_approved_total":      hbf_approved_total,
             # HBF & Belgesiz
             "expense_reports":        expense_reports,
+            "approvable_hbf_ids":     approvable_hbf_ids,
             "undocumented_entries":   undocumented_entries,
             "undoc_gelir_total":      undoc_gelir_total,
             "undoc_gider_total":      undoc_gider_total,
