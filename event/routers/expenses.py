@@ -84,12 +84,42 @@ def _find_muhasebe(db: Session) -> list[User]:
     ).all()
 
 
+def _gm_level_users(db: Session, company_id, exclude_id: str | None = None) -> list[User]:
+    """AYNI ŞİRKETteki aktif GM seviyesi kullanıcılar (genel_mudur/admin/super_admin).
+    Şirket-bazlı: başka şirketin admini bu HBF'yi onaylayamaz sayılır."""
+    q = db.query(User).filter(
+        User.role.in_(["genel_mudur", "admin", "super_admin"]),
+        User.active == True,  # noqa: E712
+        User.company_id == company_id,
+    )
+    if exclude_id:
+        q = q.filter(User.id != exclude_id)
+    return q.all()
+
+
+def _other_approver_exists(report: ExpenseReport, user: User, db: Session) -> bool:
+    """Bu HBF için (gönderen hariç) onaylayabilecek başka biri var mı?
+    submitted: başka GM ya da gönderenin müdürü; mudur_onayladi: başka GM.
+    (Aynı şirket kapsamında.)"""
+    if _gm_level_users(db, report.company_id, exclude_id=user.id):
+        return True
+    if report.status == "submitted":
+        approver = _find_hbf_approver(report.submitted_by, db)
+        return approver is not None and approver.id != user.id
+    return False
+
+
 def _can_approve(report: ExpenseReport, user: User, db: Session) -> bool:
     """HBF onay zinciri — mevcut aşamada bu kullanıcı işlem yapabilir mi?
       submitted       → müdür (gönderenin müdürü) veya GM/admin onaylar
       mudur_onayladi  → sadece GM/admin onaylar
-    miceapp suite: KİMSE kendi doldurduğu HBF'yi onaylayamaz."""
-    if report.submitted_by and report.submitted_by == user.id:
+    Kural: kimse kendi HBF'sini onaylayamaz. İSTİSNA: en üst yetkili (GM/admin) ve
+    onaylayacak BAŞKA kimse yoksa kendi HBF'sini onaylayabilir (takılma olmasın)."""
+    is_self = bool(report.submitted_by and report.submitted_by == user.id)
+    if is_self:
+        # Yalnızca GM seviyesi + başka onaylayıcı yoksa kendi formunu onaylayabilir
+        if report.status in ("submitted", "mudur_onayladi") and _is_gm(user):
+            return not _other_approver_exists(report, user, db)
         return False
     if report.status == "submitted":
         # GM/admin her zaman onaylayabilir (müdür adımını atlayarak)
