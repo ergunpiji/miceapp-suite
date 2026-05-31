@@ -123,17 +123,35 @@ async def dashboard(
 
     # Genel giderler: sadece muhasebe/GM/admin'in görmesi gereken finansal veri.
     # Sales user için 0 (kendi müşterilerinin proje gideri ayrı bir konu).
-    if current_user.is_approver or current_user.is_admin or current_user.has_department_key("accounting"):
+    _can_finance = (
+        current_user.is_approver or current_user.is_admin
+        or current_user.has_department_key("accounting")
+        or current_user.role in ("muhasebe", "muhasebe_muduru")
+    )
+    hbf_gider = 0
+    if _can_finance:
+        # HBF kapanışından gelen GeneralExpense'leri hariç tut (HBF'yi ayrıca ekliyoruz → çift sayım olmasın)
         period_expenses = db.query(GeneralExpense).filter(
             GeneralExpense.company_id == cid,
             GeneralExpense.expense_date >= d_from,
             GeneralExpense.expense_date <= d_to,
+            ~GeneralExpense.description.like("HBF:%"),
         ).all()
         toplam_gider = sum(e.amount for e in period_expenses)
+
+        # Harcama Bildirimleri (HBF) — GM onayından geçenler gider sayılır (KDV dahil)
+        from models import ExpenseReport
+        hbf_reports = db.query(ExpenseReport).filter(
+            ExpenseReport.company_id == cid,
+            ExpenseReport.status.in_(["onaylandi", "kapandi", "approved"]),
+            func.date(ExpenseReport.created_at) >= d_from,
+            func.date(ExpenseReport.created_at) <= d_to,
+        ).all()
+        hbf_gider = round(sum((r.grand_total or 0) for r in hbf_reports), 2)
     else:
         toplam_gider = 0
 
-    ytd_kar = ciro - gelen - toplam_gider
+    ytd_kar = ciro - gelen - toplam_gider - hbf_gider
     # Kârlılık oranı (%) — ciro yoksa None
     karlilik = round(ytd_kar / ciro * 100, 1) if ciro else None
 
@@ -210,6 +228,7 @@ async def dashboard(
             "page_title": "Dashboard",
             "ytd_kar": ytd_kar,
             "karlilik": karlilik,
+            "hbf_gider": hbf_gider,
             "tahsilat_beklenen": tahsilat_beklenen,
             "odeme_yapilacak": odeme_yapilacak,
             "kk_bakiye": kk_bakiye,
