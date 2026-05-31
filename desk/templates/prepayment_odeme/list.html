@@ -33,11 +33,18 @@
         <tbody>
           {% for r in rows %}
           <tr>
-            <td class="ps-3 fw-semibold">{{ vendor_names.get(r.vendor_id, '—') }}</td>
+            <td class="ps-3 fw-semibold">
+              <a href="/vendors/{{ r.vendor_id }}" class="text-decoration-none" title="Tedarikçi kartını aç">
+                {{ vendor_names.get(r.vendor_id, '—') }} <i class="bi bi-box-arrow-up-right" style="font-size:10px;opacity:.6;"></i>
+              </a>
+            </td>
             <td class="text-muted small">
               {{ r.description or '—' }}
               {% if doc_urls.get(r.id) %}
               <a href="{{ doc_urls[r.id] }}" target="_blank" class="ms-1" title="Ek dosya"><i class="bi bi-paperclip"></i></a>
+              {% endif %}
+              {% if r.approval_note %}
+              <div class="mt-1"><span class="badge bg-info bg-opacity-10 text-info"><i class="bi bi-chat-left-text me-1"></i>GM notu: {{ r.approval_note }}</span></div>
               {% endif %}
             </td>
             <td>{{ user_names.get(r.requested_by, '—') }}</td>
@@ -67,6 +74,8 @@
                   <select name="payment_method" class="form-select form-select-sm pm-sel" style="width:130px;" data-row="{{ r.id }}">
                     <option value="banka">Banka</option>
                     <option value="nakit">Nakit (Kasa)</option>
+                    <option value="kredi_karti">Kredi Kartı</option>
+                    <option value="cek">Çek</option>
                   </select>
                 </div>
                 <div class="bank-wrap-{{ r.id }}">
@@ -82,6 +91,29 @@
                     <option value="">— Seçin —</option>
                     {% for c in cash_books %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
                   </select>
+                </div>
+                <div class="card-wrap-{{ r.id }}" style="display:none;">
+                  <label class="form-label small mb-1">Kredi Kartı</label>
+                  <select name="credit_card_id" class="form-select form-select-sm" style="width:200px;">
+                    <option value="">— Kart seçin —</option>
+                    {% for cc in credit_cards %}<option value="{{ cc.id }}">{{ cc.name }}{% if cc.last4 %} ••{{ cc.last4 }}{% endif %}</option>{% endfor %}
+                  </select>
+                </div>
+                <div class="cek-wrap-{{ r.id }}" style="display:none;" >
+                  <div class="d-flex gap-2">
+                    <div>
+                      <label class="form-label small mb-1">Çek Vade Tarihi</label>
+                      <input type="date" name="cek_due_date" class="form-control form-control-sm" style="width:150px;">
+                    </div>
+                    <div>
+                      <label class="form-label small mb-1">Çek No</label>
+                      <input type="text" name="cek_no" class="form-control form-control-sm" style="width:120px;" placeholder="(ops.)">
+                    </div>
+                    <div>
+                      <label class="form-label small mb-1">Banka</label>
+                      <input type="text" name="cek_bank" class="form-control form-control-sm" style="width:130px;" placeholder="(ops.)">
+                    </div>
+                  </div>
                 </div>
                 <button type="submit" class="btn btn-success btn-sm" onclick="return confirm('Ön ödeme yapılacak. Emin misiniz?')">
                   <i class="bi bi-check-circle me-1"></i>Öde & Kapat
@@ -107,6 +139,8 @@ document.querySelectorAll('.pm-sel').forEach(function(sel){
     var id = sel.getAttribute('data-row');
     document.querySelector('.bank-wrap-'+id).style.display = sel.value==='banka' ? '' : 'none';
     document.querySelector('.cash-wrap-'+id).style.display = sel.value==='nakit' ? '' : 'none';
+    document.querySelector('.card-wrap-'+id).style.display = sel.value==='kredi_karti' ? '' : 'none';
+    document.querySelector('.cek-wrap-'+id).style.display = sel.value==='cek' ? '' : 'none';
   });
 });
 </script>

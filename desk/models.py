@@ -1389,6 +1389,7 @@ class EventPrepaymentRequest(Base):
     status         = Column(String(20))   # pending_gm|approved|paid|rejected|cancelled
     requested_by   = Column(String(36))
     approved_at    = Column(DateTime)
+    approval_note  = Column(String(500))   # GM'in muhasebeye notu
     paid_by        = Column(String(36))
     paid_at        = Column(String(10))
     payment_method = Column(String(20))

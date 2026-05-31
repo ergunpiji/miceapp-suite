@@ -1330,6 +1330,7 @@ class PrepaymentRequest(Base):
     # GM onayı
     approved_by    = Column(String(36), ForeignKey("users.id"), nullable=True)
     approved_at    = Column(DateTime, nullable=True)
+    approval_note  = Column(String(500), default="")   # GM'in muhasebeye notu
     rejection_note = Column(String(500), default="")
 
     # Muhasebe ödemesi

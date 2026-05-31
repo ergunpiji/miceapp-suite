@@ -335,6 +335,7 @@ async def prepayment_requests_detail(
 async def prepayment_requests_approve(
     pr_id: str,
     request: Request,
+    note: str = Form(""),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -345,11 +346,12 @@ async def prepayment_requests_approve(
     if not pr or pr.status != "pending_gm":
         raise HTTPException(400, "Bu talep onaylanamaz.")
 
-    pr.status      = "approved"
-    pr.approved_by = current_user.id
-    pr.approved_at = _now()
-    pr.updated_at  = _now()
-    _add_log(db, pr.id, "approved", current_user.id)
+    pr.status        = "approved"
+    pr.approved_by   = current_user.id
+    pr.approved_at   = _now()
+    pr.approval_note = (note or "").strip()
+    pr.updated_at    = _now()
+    _add_log(db, pr.id, "approved", current_user.id, (note or "").strip())
 
     # Muhasebe ekibine bildirim — muhasebe desk'te çalışır, desk Ön Ödemeler sayfasına yönlendir
     from auth import DESK_URL

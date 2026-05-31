@@ -14,7 +14,7 @@ from auth import get_current_user, get_company_id
 from database import get_db
 from models import (
     EventPrepaymentRequest, Vendor, User, CashBook, BankAccount,
-    CashEntry, BankMovement, VendorPrepayment, _uuid,
+    CashEntry, BankMovement, VendorPrepayment, CreditCard, CreditCardTxn, Cheque, _uuid,
 )
 from templates_config import templates
 
@@ -90,6 +90,7 @@ async def prepayment_odeme_list(
         "vendor_names": _vendor_names(db), "user_names": _user_names(db),
         "cash_books": db.query(CashBook).filter(CashBook.company_id == cid).all(),
         "bank_accounts": db.query(BankAccount).filter(BankAccount.company_id == cid).all(),
+        "credit_cards": db.query(CreditCard).filter(CreditCard.company_id == cid).order_by(CreditCard.name).all(),
         "today": _date.today().isoformat(),
         "STATUS_LABELS": PR_STATUS_LABELS, "STATUS_COLORS": PR_STATUS_COLORS,
     })
@@ -102,6 +103,10 @@ async def prepayment_odeme_pay(
     payment_method: str = Form("banka"),
     bank_account_id: str = Form(None),
     cash_book_id: str = Form(None),
+    credit_card_id: str = Form(None),
+    cek_due_date: str = Form(""),
+    cek_no: str = Form(""),
+    cek_bank: str = Form(""),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     cid: str = Depends(get_company_id),
@@ -119,7 +124,15 @@ async def prepayment_odeme_pay(
     vname = vendor.name if vendor else "Tedarikçi"
     total = round(pr.amount or 0, 2)
     desc = f"Ön ödeme: {vname}" + (f" — {pr.description}" if pr.description else "")
-    pm = payment_method if payment_method in ("nakit", "banka") else "banka"
+    pm = payment_method if payment_method in ("nakit", "banka", "kredi_karti", "cek") else "banka"
+    ccid = credit_card_id if (pm == "kredi_karti" and credit_card_id) else None
+    if pm == "kredi_karti" and not ccid:
+        raise HTTPException(400, detail="Kredi kartı seçmelisiniz.")
+    cek_vade = None
+    if pm == "cek":
+        if not cek_due_date.strip():
+            raise HTTPException(400, detail="Çek vade tarihi gereklidir.")
+        cek_vade = _date.fromisoformat(cek_due_date.strip())
 
     # 1) VendorPrepayment kaydı (tedarikçi ön ödemesi — ileride faturadan düşülür)
     vp = VendorPrepayment(
@@ -128,12 +141,13 @@ async def prepayment_odeme_pay(
         payment_method=pm,
         bank_account_id=(bank_account_id if pm == "banka" else None),
         cash_book_id=(cash_book_id if pm == "nakit" else None),
+        credit_card_id=ccid,
         notes=(pr.description or "")[:300], created_by=current_user.id,
     )
     db.add(vp)
     db.flush()
 
-    # 2) Kasa/Banka çıkış hareketi → nakit akışına yansır
+    # 2) Ödeme hareketi → nakit akışına yansır
     if pm == "nakit" and cash_book_id:
         db.add(CashEntry(
             company_id=cid, book_id=cash_book_id, entry_date=pdate,
@@ -144,6 +158,26 @@ async def prepayment_odeme_pay(
             company_id=cid, account_id=bank_account_id, movement_date=pdate,
             movement_type="cikis", amount=total, description=desc,
         ))
+    elif pm == "kredi_karti" and ccid:
+        # Kredi kartı: kartın limitinden düş (ekstre ödenince nakit akışına girer)
+        card = db.query(CreditCard).filter(CreditCard.id == ccid).first()
+        db.add(CreditCardTxn(
+            id=_uuid(), company_id=(card.company_id if card else cid),
+            card_id=ccid, txn_date=pdate, amount=total,
+            description=desc[:300], is_refund=False,
+        ))
+    elif pm == "cek":
+        # Çek: verilen çek (beklemede) oluştur — vade gününde nakit akışına girer
+        chq = Cheque(
+            id=_uuid(), company_id=cid, vendor_id=pr.vendor_id,
+            cheque_type="verilen", cheque_no=(cek_no.strip() or None),
+            bank=(cek_bank.strip() or None), amount=total,
+            cheque_date=pdate, due_date=cek_vade, status="beklemede",
+            notes=desc[:300],
+        )
+        db.add(chq)
+        db.flush()
+        vp.cheque_id = chq.id
 
     # 3) Ön ödeme talebini kapat
     pr.status = "paid"

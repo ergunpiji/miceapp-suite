@@ -221,50 +221,29 @@
       <div class="card border-0 shadow-sm mb-3">
         <div class="card-body">
           <div class="fw-semibold mb-3" style="font-size:13px;">GM Kararı</div>
-          <form method="post" action="/prepayment-requests/{{ pr.id }}/approve" class="d-inline me-2">
-            <button type="submit" class="btn btn-success btn-sm">
-              <i class="bi bi-check-circle me-1"></i>Onayla
+          <form method="post" action="/prepayment-requests/{{ pr.id }}/approve">
+            <div class="mb-2">
+              <label class="form-label" style="font-size:12px;">Not (opsiyonel)</label>
+              <textarea name="note" class="form-control form-control-sm" rows="2"
+                        placeholder="Muhasebeye iletmek istediğiniz not…"></textarea>
+            </div>
+            <button type="submit" class="btn btn-success btn-sm me-2">
+              <i class="bi bi-check-circle me-1"></i>Onayla ve Muhasebeye Devret
+            </button>
+            <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#rejectModal">
+              <i class="bi bi-x-circle me-1"></i>Reddet
             </button>
           </form>
-          <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#rejectModal">
-            <i class="bi bi-x-circle me-1"></i>Reddet
-          </button>
         </div>
       </div>
       {% endif %}
 
-      {% if pr.status == 'approved' and can_finance %}
+      {% if pr.status == 'approved' %}
       <div class="card border-0 shadow-sm mb-3">
         <div class="card-body">
-          <div class="fw-semibold mb-3" style="font-size:13px;">Ödemeyi İşle</div>
-          <form method="post" action="/prepayment-requests/{{ pr.id }}/pay" id="payForm">
-            <div class="row g-2 mb-2">
-              <div class="col-6">
-                <label class="form-label fw-semibold" style="font-size:12px;">Ödeme Tarihi</label>
-                <input type="date" name="paid_at" class="form-control form-control-sm"
-                       value="{{ today_str }}" required>
-              </div>
-              <div class="col-6">
-                <label class="form-label fw-semibold" style="font-size:12px;">Ödeme Yöntemi</label>
-                <select name="payment_method" class="form-select form-select-sm"
-                        onchange="onPayMethodChange(this.value)">
-                  <option value="banka">Banka Havalesi</option>
-                  <option value="kredi_karti">Kredi Kartı</option>
-                  <option value="cek">Çek</option>
-                </select>
-              </div>
-            </div>
-            <div id="ccBox" style="display:none;" class="mb-2">
-              <label class="form-label fw-semibold" style="font-size:12px;">Kart Son Ödeme Tarihi</label>
-              <input type="date" name="cc_due_date" class="form-control form-control-sm">
-              <div style="font-size:11px;color:#2563eb;" class="mt-1">
-                <i class="bi bi-info-circle me-1"></i>Nakit akışı kart son ödeme tarihine göre hesaplanacak.
-              </div>
-            </div>
-            <button type="submit" class="btn btn-primary btn-sm w-100">
-              <i class="bi bi-bank me-1"></i>Ödemeyi Kaydet — ₺{{ '{:,.0f}'.format(pr.amount or 0) }}
-            </button>
-          </form>
+          <div class="alert alert-info py-2 mb-0" style="font-size:13px;">
+            <i class="bi bi-bank me-1"></i>GM onayladı — ödeme <strong>micedesk</strong>'te muhasebe ekibi tarafından işlenecek (Ön Ödemeler).
+          </div>
         </div>
       </div>
       {% endif %}

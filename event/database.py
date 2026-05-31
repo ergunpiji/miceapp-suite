@@ -568,6 +568,7 @@ def migrate_db():
         _safe_add_column(conn, "prepayment_requests", "needed_date", "VARCHAR(10)")
         _safe_add_column(conn, "prepayment_requests", "document_path", "VARCHAR(500)")
         _safe_add_column(conn, "prepayment_requests", "document_name", "VARCHAR(255)")
+        _safe_add_column(conn, "prepayment_requests", "approval_note", "VARCHAR(500)")
         # notifications.ref_id: eski şemada INTEGER → UUID string yazmak için VARCHAR'a çevir
         # (sadece hâlâ integer ise — idempotent, gereksiz tablo yeniden yazımı yapmaz)
         try:
