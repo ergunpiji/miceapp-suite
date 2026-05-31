@@ -597,6 +597,7 @@
     <h5 class="mb-0 fw-semibold" style="color:#1e293b; font-size:15px;">
       {% block topbar_title %}{{ page_title | default("") }}{% endblock %}
     </h5>
+    {% block topbar_filter %}{% endblock %}
     <div class="ms-auto d-flex align-items-center gap-2">
       {% block topbar_actions %}{% endblock %}
 

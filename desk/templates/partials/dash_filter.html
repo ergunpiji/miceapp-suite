@@ -1,0 +1,40 @@
+{# Kompakt dashboard filtresi — topbar'a, başlığın yanına. #}
+<form method="get" action="/dashboard" id="dashFilterForm" class="d-flex align-items-center gap-1 ms-3 flex-wrap" style="font-size:12px;">
+  <input type="date" name="date_from" id="dfFrom" value="{{ d_from }}" class="form-control form-control-sm"
+         style="width:128px;height:30px;font-size:12px;padding:2px 6px;">
+  <span style="color:#94a3b8;">→</span>
+  <input type="date" name="date_to" id="dfTo" value="{{ d_to }}" class="form-control form-control-sm"
+         style="width:128px;height:30px;font-size:12px;padding:2px 6px;">
+  {% if customers is defined %}
+  <select name="customer_id" class="form-select form-select-sm" style="width:150px;height:30px;font-size:12px;padding:2px 6px;">
+    <option value="">Tüm Müşteriler</option>
+    {% for c in customers %}
+    <option value="{{ c.id }}" {% if selected_customer_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+    {% endfor %}
+  </select>
+  {% endif %}
+  <select onchange="dashQuick(this.value)" class="form-select form-select-sm" style="width:104px;height:30px;font-size:12px;padding:2px 6px;">
+    <option value="">Dönem…</option>
+    <option value="today">Bugün</option>
+    <option value="7">Son 7 Gün</option>
+    <option value="30">Son 30 Gün</option>
+    <option value="90">Son 90 Gün</option>
+    <option value="month">Bu Ay</option>
+    <option value="year">Bu Yıl</option>
+  </select>
+  <button type="submit" class="btn btn-sm btn-primary" style="height:30px;padding:2px 9px;" title="Filtrele"><i class="bi bi-funnel"></i></button>
+  <a href="/dashboard" class="btn btn-sm btn-outline-secondary" style="height:30px;padding:2px 8px;" title="Temizle"><i class="bi bi-x-lg"></i></a>
+</form>
+<script>
+function dashQuick(v){
+  if(!v) return;
+  var t=new Date(), f=new Date();
+  if(v==='today'){}
+  else if(v==='month'){ f=new Date(t.getFullYear(),t.getMonth(),1); }
+  else if(v==='year'){ f=new Date(t.getFullYear(),0,1); t=new Date(t.getFullYear(),11,31); }
+  else { f.setDate(f.getDate()-parseInt(v)+1); }
+  document.getElementById('dfFrom').value=f.toISOString().slice(0,10);
+  document.getElementById('dfTo').value=t.toISOString().slice(0,10);
+  document.getElementById('dashFilterForm').submit();
+}
+</script>

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block page_title %}Dashboard{% endblock %}
+{% block topbar_filter %}{% include "partials/dash_filter.html" %}{% endblock %}
 
 {% block content %}
 <style>
@@ -27,74 +28,6 @@
   }
   window.addEventListener('resize', fitKpi);
 }());
-</script>
-
-<!-- Filtre kartı -->
-<div class="card border-0 shadow-sm mb-4" style="background:#f8fafc;">
-  <div class="card-body py-3 px-4">
-    <form method="get" action="/dashboard" id="dashFilterForm">
-      <div class="d-flex align-items-end gap-3 flex-wrap">
-        <div>
-          <label class="form-label mb-1" style="font-size:11px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.4px;">Başlangıç</label>
-          <input type="date" name="date_from" id="dfFrom" value="{{ d_from }}" class="form-control form-control-sm" style="width:140px;">
-        </div>
-        <div style="padding-bottom:6px;color:#94a3b8;">→</div>
-        <div>
-          <label class="form-label mb-1" style="font-size:11px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.4px;">Bitiş</label>
-          <input type="date" name="date_to" id="dfTo" value="{{ d_to }}" class="form-control form-control-sm" style="width:140px;">
-        </div>
-        <div style="min-width:200px;">
-          <label class="form-label mb-1" style="font-size:11px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.4px;">Müşteri</label>
-          <select name="customer_id" class="form-select form-select-sm">
-            <option value="">— Tüm Müşteriler —</option>
-            {% for c in customers %}
-            <option value="{{ c.id }}" {% if selected_customer_id == c.id %}selected{% endif %}>{{ c.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="d-flex gap-2" style="padding-bottom:2px;">
-          <button type="submit" class="btn btn-sm btn-primary px-3">
-            <i class="bi bi-funnel me-1"></i>Filtrele
-          </button>
-          <a href="/dashboard" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-x-lg"></i>
-          </a>
-        </div>
-      </div>
-      <!-- Hızlı dönem seçimi -->
-      <div class="d-flex gap-2 mt-2 flex-wrap">
-        <span style="font-size:11px;color:#94a3b8;align-self:center;">Hızlı:</span>
-        <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:11px;" onclick="setRange(0,0)">Bugün</button>
-        <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:11px;" onclick="setRange(6,0)">Son 7 Gün</button>
-        <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:11px;" onclick="setRange(29,0)">Son 30 Gün</button>
-        <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:11px;" onclick="setRange(89,0)">Son 90 Gün</button>
-        <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:11px;" onclick="setThisMonth()">Bu Ay</button>
-        <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:11px;" onclick="setThisYear()">Bu Yıl</button>
-      </div>
-    </form>
-  </div>
-</div>
-<script>
-function setRange(daysBefore, daysAfter) {
-  var t = new Date(); var f = new Date();
-  f.setDate(f.getDate() - daysBefore);
-  t.setDate(t.getDate() + daysAfter);
-  document.getElementById('dfFrom').value = f.toISOString().slice(0,10);
-  document.getElementById('dfTo').value   = t.toISOString().slice(0,10);
-  document.getElementById('dashFilterForm').submit();
-}
-function setThisMonth() {
-  var n = new Date();
-  document.getElementById('dfFrom').value = new Date(n.getFullYear(), n.getMonth(), 1).toISOString().slice(0,10);
-  document.getElementById('dfTo').value   = new Date(n.getFullYear(), n.getMonth()+1, 0).toISOString().slice(0,10);
-  document.getElementById('dashFilterForm').submit();
-}
-function setThisYear() {
-  var y = new Date().getFullYear();
-  document.getElementById('dfFrom').value = y + '-01-01';
-  document.getElementById('dfTo').value   = y + '-12-31';
-  document.getElementById('dashFilterForm').submit();
-}
 </script>
 
 <div class="row g-3 mb-4">

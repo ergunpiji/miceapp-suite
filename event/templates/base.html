@@ -803,7 +803,10 @@
 <!-- ═══════════════════════════════ MAIN ═══════════════════════════════ -->
 <div class="main-content">
   <div class="topbar">
-    <div class="page-title">{% block topbar_title %}{% block page_title_block %}{% endblock %}{% endblock %}</div>
+    <div class="d-flex align-items-center flex-wrap" style="gap:10px;">
+      <div class="page-title">{% block topbar_title %}{% block page_title_block %}{% endblock %}{% endblock %}</div>
+      {% block topbar_filter %}{% endblock %}
+    </div>
     <div class="d-flex align-items-center gap-2">
       {% block topbar_actions %}{% endblock %}
 

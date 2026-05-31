@@ -31,15 +31,40 @@ def _last_n_months(n: int = 6) -> list[str]:
     return months
 
 
-def _build_financial_stats(db: Session, req_id_filter=None):
+def _build_financial_stats(db: Session, req_id_filter=None, d_from=None, d_to=None):
     """Onaylı faturalardan ciro/kar/aylık veri hesapla — sadece gerçek rakamlar.
 
     Fon havuzu ana referanslarının `kesilen` faturaları ciro'ya dahil EDİLMEZ
     (çift sayma önlemi — gelir, alt referanslara yapılan transferlerde oluşur).
     FundTransfer'ler KDV hariç TRY karşılığı ile ciroya/kara eklenir.
+    d_from/d_to verilirse, kalemin etkin tarihi (referans check_in → tarih → oluşturma)
+    bu aralıkta olanlar hesaba katılır.
     """
     from utils.funds import fund_pool_invoice_ids
     _fund_inv_ids = fund_pool_invoice_ids(db)
+
+    _df = d_from.isoformat() if d_from else None
+    _dt = d_to.isoformat() if d_to else None
+
+    def _eff(*cands) -> str | None:
+        """Adaylardan ilk geçerli tarihi YYYY-MM-DD string olarak döndür."""
+        for v in cands:
+            if not v:
+                continue
+            try:
+                return v.strftime("%Y-%m-%d") if hasattr(v, "strftime") else str(v)[:10]
+            except Exception:
+                continue
+        return None
+
+    def _in_range(eff: str | None) -> bool:
+        if not eff:
+            return d_from is None and d_to is None  # tarihi yoksa: filtre yoksa dahil
+        if _df and eff < _df:
+            return False
+        if _dt and eff > _dt:
+            return False
+        return True
 
     inv_query = db.query(Invoice).filter(
         Invoice.status.in_(["approved", "gm_approved", "active"]),
@@ -57,6 +82,8 @@ def _build_financial_stats(db: Session, req_id_filter=None):
     monthly: dict[str, dict] = defaultdict(lambda: {"sale": 0.0, "cost": 0.0})
 
     for inv in invoices:
+        if not _in_range(_eff(inv.request.check_in if inv.request else None, inv.invoice_date, inv.created_at)):
+            continue
         if inv.invoice_type == "kesilen":
             total_sale += inv.amount
         elif inv.invoice_type == "iade_kesilen":
@@ -111,6 +138,8 @@ def _build_financial_stats(db: Session, req_id_filter=None):
     if req_id_filter is not None:
         ft_query = ft_query.filter(_FT.related_request_id.in_(req_id_filter))
     for t in ft_query.all():
+        if not _in_range(_eff(t.related_request.check_in if t.related_request else None, t.transfer_date)):
+            continue
         val = t.amount_try_excl_vat
         sign = +1 if t.direction == "out" else -1
         total_sale += sign * val
@@ -137,6 +166,8 @@ def _build_financial_stats(db: Session, req_id_filter=None):
         hbf_q = hbf_q.filter(_ER.request_id.in_(req_id_filter))
     hbf_gider = 0.0
     for r in hbf_q.all():
+        if not _in_range(_eff(r.request.check_in if r.request else None, r.created_at)):
+            continue
         amt = r.grand_excl_vat or 0
         hbf_gider += amt
         # Aylık gruplama: referansın check_in'i, yoksa HBF oluşturma tarihi
@@ -535,9 +566,22 @@ def _build_pending_tasks(db: Session, current_user) -> list[dict]:
 @router.get("/dashboard", response_class=HTMLResponse, name="dashboard")
 async def dashboard(
     request: Request,
+    date_from: str = None,
+    date_to: str = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    from datetime import date as _date
+    _today = _date.today()
+    try:
+        d_from = _date.fromisoformat(date_from) if date_from else _date(_today.year, 1, 1)
+    except Exception:
+        d_from = _date(_today.year, 1, 1)
+    try:
+        d_to = _date.fromisoformat(date_to) if date_to else _today
+    except Exception:
+        d_to = _today
+
     stats = {}
     financial = {}
     recent_requests = []
@@ -558,7 +602,7 @@ async def dashboard(
                                      "budget_ready", "offer_sent", "revision"])
             ).count(),
         }
-        financial = _build_financial_stats(db, req_id_filter=req_id_filter)
+        financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to)
         recent_requests = (
             base_q.order_by(ReqModel.created_at.desc()).limit(8).all()
         )
@@ -578,7 +622,7 @@ async def dashboard(
                 "my_confirmed":   base_q.filter(ReqModel.status == "confirmed").count(),
                 "total_budgets":  db.query(Budget).filter(Budget.request_id.in_(req_id_filter)).count(),
             }
-            financial = _build_financial_stats(db, req_id_filter=req_id_filter)
+            financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to)
             recent_requests = base_q.order_by(ReqModel.created_at.desc()).limit(8).all()
         else:
             # Normal birim müdürü: sadece kendi takımının istatistikleri
@@ -595,7 +639,7 @@ async def dashboard(
                 ).count() if current_user.team_id else 0,
                 "total_budgets":   db.query(Budget).filter(Budget.request_id.in_(req_id_filter)).count(),
             }
-            financial = _build_financial_stats(db, req_id_filter=req_id_filter)
+            financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to)
             recent_requests = base_q.order_by(ReqModel.created_at.desc()).limit(8).all()
 
     elif current_user.role == "yonetici":
@@ -620,7 +664,7 @@ async def dashboard(
                                      "budget_ready", "offer_sent", "revision"])
             ).count(),
         }
-        financial = _build_financial_stats(db, req_id_filter=req_id_filter)
+        financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to)
         recent_requests = (
             base_q.order_by(ReqModel.created_at.desc()).limit(8).all()
         )
@@ -693,6 +737,8 @@ async def dashboard(
             "recent_requests": recent_requests,
             "pending_tasks":   pending_tasks,
             "page_title":      "Dashboard",
+            "d_from":          d_from.isoformat(),
+            "d_to":            d_to.isoformat(),
             "chart_data":      json.dumps({
                 "labels": financial.get("chart_labels", []),
                 "sale":   financial.get("chart_sale", []),

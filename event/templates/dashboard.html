@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block page_title %}Dashboard{% endblock %}
 {% block page_title_block %}Dashboard{% endblock %}
+{% block topbar_filter %}{% if financial %}{% include "partials/dash_filter.html" %}{% endif %}{% endblock %}
 
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
