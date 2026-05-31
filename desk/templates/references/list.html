@@ -73,8 +73,7 @@
               <button type="submit" class="btn btn-xs btn-outline-success btn-sm py-0">Geri Al</button>
             </form>
             {% endif %}
-            {% elif can_edit(request, 'references') %}
-            <a href="/references/{{ r.id }}/edit" class="btn btn-xs btn-outline-secondary btn-sm py-0">Düzenle</a>
+            {# miceapp suite: Düzenle kaldırıldı — referans micedesk'te düzenlenemez #}
             {% endif %}
           </td>
         </tr>

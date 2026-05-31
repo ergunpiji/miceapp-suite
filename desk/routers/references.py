@@ -174,21 +174,8 @@ async def reference_edit_get(
     db: Session = Depends(get_db),
     cid: int = Depends(get_company_id),
 ):
-    ref = db.query(Reference).filter(Reference.id == ref_id, Reference.company_id == cid).first()
-    if not ref:
-        raise HTTPException(status_code=404)
-    customers = db.query(Customer).filter(Customer.company_id == cid).order_by(Customer.name).all()
-    return templates.TemplateResponse(
-        "references/form.html",
-        {
-            "request": request,
-            "current_user": current_user,
-            "ref": ref,
-            "customers": customers,
-            "event_types": SALES_EVENT_TYPES,
-            "page_title": f"Düzenle — {ref.ref_no}",
-        },
-    )
+    # miceapp suite: micedesk referansı DÜZENLEYEMEZ — referanslar event (satış) tarafında açılır/yönetilir.
+    return RedirectResponse(url=f"/references/{ref_id}", status_code=303)
 
 
 @router.post("/{ref_id}/edit", name="reference_edit_post")
@@ -206,40 +193,8 @@ async def reference_edit_post(
     db: Session = Depends(get_db),
     cid: int = Depends(get_company_id),
 ):
-    ref = db.query(Reference).filter(Reference.id == ref_id, Reference.company_id == cid).first()
-    if not ref:
-        raise HTTPException(status_code=404)
-    if ref.is_locked and not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Onaylanmış referans kilitlidir.")
-
-    ref_no = ref_no.strip().upper()
-    # Benzersizlik kontrolü — kendi kaydı hariç
-    conflict = db.query(Reference).filter(
-        Reference.ref_no == ref_no, Reference.id != ref_id, Reference.company_id == cid
-    ).first()
-    if conflict:
-        customers = db.query(Customer).filter(Customer.company_id == cid).order_by(Customer.name).all()
-        return templates.TemplateResponse(
-            "references/form.html",
-            {
-                "request": request, "current_user": current_user,
-                "ref": ref, "customers": customers,
-                "event_types": SALES_EVENT_TYPES,
-                "page_title": f"Düzenle — {ref.ref_no}",
-                "error": f'"{ref_no}" kodu başka bir referansta kullanımda.',
-            },
-            status_code=422,
-        )
-
-    ref.ref_no = ref_no
-    ref.customer_id = customer_id
-    ref.title = title.strip()
-    ref.event_type = event_type
-    ref.check_in = date.fromisoformat(check_in) if check_in else ref.check_in
-    ref.check_out = date.fromisoformat(check_out) if check_out else ref.check_out
-    ref.notes = notes.strip()
-    db.commit()
-    return RedirectResponse(url=f"/references/{ref_id}", status_code=status.HTTP_302_FOUND)
+    # miceapp suite: micedesk referansı DÜZENLEYEMEZ — doğrudan POST denense bile engellenir.
+    return RedirectResponse(url=f"/references/{ref_id}", status_code=303)
 
 
 @router.post("/{ref_id}/status", name="reference_status")

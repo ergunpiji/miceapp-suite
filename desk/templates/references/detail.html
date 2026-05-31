@@ -2,9 +2,7 @@
 {% block page_title %}{{ ref.ref_no }}{% endblock %}
 
 {% block topbar_actions %}
-{% if can_edit(request, 'references') and (not ref.is_locked or current_user.is_admin) %}
-<a href="/references/{{ ref.id }}/edit" class="btn btn-sm btn-outline-secondary">Düzenle</a>
-{% endif %}
+{# miceapp suite: Düzenle kaldırıldı — referans event (satış) tarafında yönetilir, micedesk düzenlemez #}
 {% if can_edit(request, 'invoices') and not ref.is_locked %}
 <a href="/invoices/new?ref_id={{ ref.id }}" class="btn btn-sm btn-primary">+ Fatura Ekle</a>
 {% endif %}
