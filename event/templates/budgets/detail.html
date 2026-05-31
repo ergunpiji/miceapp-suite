@@ -416,13 +416,16 @@
               <tbody>
                 {% for c in entry.changes %}
                 {% set diff = c.new - c.old %}
+                {% set ns_hcur = namespace(cur=c.get('cur', '')) %}
+                {% if not ns_hcur.cur %}{% for r in budget.rows %}{% if (r.get('service_name','')) == c.row %}{% set ns_hcur.cur = r.get('currency','TRY') %}{% endif %}{% endfor %}{% endif %}
+                {% set _hsym = CURRENCY_SYMBOLS.get(ns_hcur.cur or 'TRY', ns_hcur.cur or 'TRY') %}
                 <tr>
                   <td class="ps-3">{{ c.row }}</td>
                   <td class="text-muted">{{ c.field }}</td>
-                  <td class="text-muted">{{ c.old | money }}</td>
-                  <td class="fw-semibold">{{ c.new | money }}</td>
+                  <td class="text-muted">{{ _hsym }}{{ c.old | money | replace('₺','') }}</td>
+                  <td class="fw-semibold">{{ _hsym }}{{ c.new | money | replace('₺','') }}</td>
                   <td class="fw-semibold {% if diff > 0 %}text-danger{% elif diff < 0 %}text-success{% endif %}">
-                    {% if diff > 0 %}+{% endif %}{{ diff | money }}
+                    {% if diff > 0 %}+{% endif %}{{ _hsym }}{{ diff | money | replace('₺','') }}
                   </td>
                 </tr>
                 {% endfor %}

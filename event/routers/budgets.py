@@ -74,6 +74,7 @@ def _record_price_changes(budget: "Budget", new_rows: list, current_user: "User"
                     "field": FIELD_LABELS.get(field, field),
                     "old": old_val,
                     "new": new_val,
+                    "cur": new_row.get("currency", "TRY") or "TRY",
                 })
 
     if changes:
