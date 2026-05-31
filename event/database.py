@@ -553,6 +553,7 @@ def migrate_db():
         _safe_add_column(conn, "expense_items",    "credit_card_id",    "VARCHAR(36)")
         _safe_add_column(conn, "credit_card_txns", "expense_report_id", "VARCHAR(36)")
         # HBF tam onay zinciri (müdür→GM→muhasebe→kapandı) + tenant + ödeme kayıtları
+        _safe_add_column(conn, "users",           "company_id",          "VARCHAR(36)")
         _safe_add_column(conn, "expense_reports", "company_id",          "VARCHAR(36)")
         _safe_add_column(conn, "expense_reports", "manager_approved_by", "VARCHAR(36)")
         _safe_add_column(conn, "expense_reports", "manager_approved_at", "TIMESTAMP")

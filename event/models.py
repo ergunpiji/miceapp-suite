@@ -293,6 +293,7 @@ class User(Base):
     phone        = Column(String(30), default="")
     avatar_b64   = Column(Text, default="")          # profil fotoğrafı base64 (data URI)
     active       = Column(Boolean, default=True, nullable=False)
+    company_id   = Column(String(36), nullable=True, index=True)   # tenant (desk ile ortak DB)
     created_at   = Column(DateTime, default=_now, nullable=False)
     org_title_id = Column(String(36), ForeignKey("org_titles.id"), nullable=True)
     team_id      = Column(String(36), ForeignKey("teams.id"),     nullable=True)
