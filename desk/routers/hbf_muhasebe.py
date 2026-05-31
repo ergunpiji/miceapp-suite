@@ -92,14 +92,21 @@ async def hbf_muhasebe_detail(
     if not rep:
         raise HTTPException(404)
 
-    # Belge URL'leri (R2 presigned) — muhasebe fişi görsün
+    # Belge URL'leri: önce R2 (presigned/public — auth gerektirmez), yoksa event'in
+    # belge servisine düş (SSO cookie .miceapp.net ile muhasebe görebilir).
+    from auth import EVENT_URL
     doc_urls = {}
     for it in rep.items:
-        if it.document_path:
-            try:
-                doc_urls[it.id] = storage_helper.get_file_url(it.document_path)
-            except Exception:
-                doc_urls[it.id] = None
+        if not it.document_path:
+            continue
+        url = None
+        try:
+            u = storage_helper.get_file_url(it.document_path)
+            if u and u.startswith("http"):
+                url = u
+        except Exception:
+            url = None
+        doc_urls[it.id] = url or f"{EVENT_URL}/expenses/doc/{it.id}"
 
     cash_books = db.query(CashBook).filter(CashBook.company_id == cid).all()
     bank_accounts = db.query(BankAccount).filter(BankAccount.company_id == cid).all()

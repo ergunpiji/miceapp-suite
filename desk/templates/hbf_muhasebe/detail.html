@@ -39,7 +39,7 @@
             <tbody>
               {% for it in rep.items %}
               <tr>
-                <td class="ps-3">{{ it.item_date }}</td>
+                <td class="ps-3">{% set d = it.item_date %}{% if d and d|length == 10 %}{{ d[8:10] }}.{{ d[5:7] }}.{{ d[0:4] }}{% else %}{{ d }}{% endif %}</td>
                 <td>{{ it.description }}</td>
                 <td><span class="badge bg-light text-dark">{{ it.payment_label }}</span></td>
                 <td>
