@@ -371,8 +371,11 @@
       </div>
       {% else %}
         {# Onay/Red butonları — sadece yetkili kişiye göster #}
-        {% if can_approve and report and report.status == 'submitted' %}
+        {% if can_approve and report and report.status in ('submitted', 'mudur_onayladi') %}
         <div class="d-flex flex-column gap-2 mt-auto">
+          <div class="small text-muted">
+            {% if report.status == 'submitted' %}Müdür onayı aşaması{% else %}Genel Müdür onayı aşaması{% endif %}
+          </div>
           <form method="post" action="/expenses/{{ report.id }}/approve" style="margin:0;">
             <button type="submit" class="btn btn-success px-4 w-100"
                     onclick="return confirm('HBF onaylanacak. Emin misiniz?')">

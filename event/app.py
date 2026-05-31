@@ -185,6 +185,13 @@ async def nav_counts_middleware(request: Request, call_next):
                         ).scalar() or 0
                     except Exception:
                         counts["coordinator_pending"] = 0
+                # HBF — bu kullanıcının onayını bekleyen harcama formları
+                if _user_obj:
+                    try:
+                        from routers.expenses import hbf_pending_count_for
+                        counts["pending_hbf"] = hbf_pending_count_for(db, _user_obj)
+                    except Exception:
+                        counts["pending_hbf"] = 0
             except Exception:
                 pass
             finally:

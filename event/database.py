@@ -552,6 +552,31 @@ def migrate_db():
         # miceapp suite: HBF kredi kartı seçimi + limit düşüşü
         _safe_add_column(conn, "expense_items",    "credit_card_id",    "VARCHAR(36)")
         _safe_add_column(conn, "credit_card_txns", "expense_report_id", "VARCHAR(36)")
+        # HBF tam onay zinciri (müdür→GM→muhasebe→kapandı) + tenant + ödeme kayıtları
+        _safe_add_column(conn, "expense_reports", "company_id",          "VARCHAR(36)")
+        _safe_add_column(conn, "expense_reports", "manager_approved_by", "VARCHAR(36)")
+        _safe_add_column(conn, "expense_reports", "manager_approved_at", "TIMESTAMP")
+        _safe_add_column(conn, "expense_reports", "paid_by",             "VARCHAR(36)")
+        _safe_add_column(conn, "expense_reports", "paid_at",             "TIMESTAMP")
+        _safe_add_column(conn, "expense_reports", "payment_method",      "VARCHAR(20)")
+        _safe_add_column(conn, "expense_reports", "bank_account_id",     "VARCHAR(36)")
+        _safe_add_column(conn, "expense_reports", "cash_book_id",        "VARCHAR(36)")
+        _safe_add_column(conn, "expense_reports", "general_expense_id",  "VARCHAR(36)")
+        # notifications.ref_id: eski şemada INTEGER → UUID string yazmak için VARCHAR'a çevir
+        # (sadece hâlâ integer ise — idempotent, gereksiz tablo yeniden yazımı yapmaz)
+        try:
+            if not _is_sqlite:
+                conn.execute(text(
+                    "DO $$ BEGIN "
+                    "IF EXISTS (SELECT 1 FROM information_schema.columns "
+                    "WHERE table_name='notifications' AND column_name='ref_id' "
+                    "AND data_type='integer') THEN "
+                    "ALTER TABLE notifications ALTER COLUMN ref_id TYPE VARCHAR(36) USING ref_id::varchar; "
+                    "END IF; END $$"
+                ))
+                conn.commit()
+        except Exception:
+            conn.rollback()
 
         # role_permissions tablosu — yoksa oluştur
         if _is_sqlite:

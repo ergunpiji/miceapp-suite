@@ -1403,14 +1403,23 @@ EXPENSE_DOC_TYPES = [
     {"value": "belgesiz",  "label": "Belgesiz"},
 ]
 
+# HBF onay zinciri (event+desk ortak):
+#   draft → submitted(müdür onayında) → mudur_onayladi(GM onayında)
+#         → onaylandi(muhasebe bekliyor) → kapandi(muhasebe ödedi/kapattı)
+#   rejected: her aşamada mümkün
 EXPENSE_STATUSES = [
-    {"value": "draft",     "label": "Taslak",        "color": "secondary"},
-    {"value": "submitted", "label": "Onay Bekliyor",  "color": "warning"},
-    {"value": "approved",  "label": "Onaylandı",      "color": "success"},
-    {"value": "rejected",  "label": "Reddedildi",     "color": "danger"},
+    {"value": "draft",          "label": "Taslak",          "color": "secondary"},
+    {"value": "submitted",      "label": "Müdür Onayında",  "color": "warning"},
+    {"value": "mudur_onayladi", "label": "GM Onayında",     "color": "info"},
+    {"value": "onaylandi",      "label": "Muhasebe Bekliyor","color": "primary"},
+    {"value": "kapandi",        "label": "Kapandı",         "color": "success"},
+    {"value": "rejected",       "label": "Reddedildi",      "color": "danger"},
 ]
 EXPENSE_STATUS_LABELS = {s["value"]: s["label"] for s in EXPENSE_STATUSES}
 EXPENSE_STATUS_COLORS = {s["value"]: s["color"] for s in EXPENSE_STATUSES}
+# Geriye dönük: eski "approved" kayıtları "onaylandi" gibi gösterilir (filtre listesinde yok)
+EXPENSE_STATUS_LABELS["approved"] = "Onaylandı"
+EXPENSE_STATUS_COLORS["approved"] = "success"
 
 
 class ExpenseReport(Base):
@@ -1418,14 +1427,26 @@ class ExpenseReport(Base):
     __tablename__ = "expense_reports"
 
     id               = Column(String(36), primary_key=True, default=_uuid)
+    company_id       = Column(String(36), nullable=True, index=True)  # tenant (desk izolasyonu için)
     request_id       = Column(String(36), ForeignKey("requests.id"), nullable=False, index=True)
     request_ids_json = Column(Text, default="[]")   # JSON array of {id,request_no,event_name,client_name}
     title            = Column(String(300), default="")
-    status           = Column(String(16), default="draft")   # draft|submitted|approved|rejected
+    status           = Column(String(16), default="draft")   # bkz. EXPENSE_STATUSES
     submitted_by     = Column(String(36), ForeignKey("users.id"), nullable=False)
+    # Müdür onayı (1. aşama)
+    manager_approved_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    manager_approved_at = Column(DateTime, nullable=True)
+    # GM onayı (2. aşama) — mevcut approved_by/at GM'i temsil eder
     approved_by      = Column(String(36), ForeignKey("users.id"), nullable=True)
     approved_at      = Column(DateTime, nullable=True)
     rejection_note   = Column(Text, default="")
+    # Muhasebe ödeme/kapatma (3. aşama) — desk tarafında doldurulur
+    paid_by            = Column(String(36), ForeignKey("users.id"), nullable=True)
+    paid_at            = Column(DateTime, nullable=True)
+    payment_method     = Column(String(20), nullable=True)   # nakit | banka
+    bank_account_id    = Column(String(36), nullable=True)
+    cash_book_id       = Column(String(36), nullable=True)
+    general_expense_id = Column(String(36), nullable=True)   # oluşan GeneralExpense kaydı
     created_at       = Column(DateTime, default=_now, nullable=False)
     updated_at       = Column(DateTime, default=_now, onupdate=_now, nullable=False)
 

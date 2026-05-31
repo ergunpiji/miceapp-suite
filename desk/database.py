@@ -221,6 +221,14 @@ def _migrate(engine) -> None:
             print(f"[migrate] enum: {e}")
 
     migrations = [
+        # --- miceapp suite: notifications.ref_id INTEGER → VARCHAR (UUID yazımı için) ---
+        """DO $$ BEGIN
+            IF EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name='notifications' AND column_name='ref_id'
+                       AND data_type='integer') THEN
+                ALTER TABLE notifications ALTER COLUMN ref_id TYPE VARCHAR(36) USING ref_id::varchar;
+            END IF;
+        END $$""",
         # --- miceapp suite: companies = tenant (SaaS alanları) ---
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS slug VARCHAR(100)",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS plan VARCHAR(20) DEFAULT 'starter'",

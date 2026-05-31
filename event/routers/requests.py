@@ -1130,9 +1130,11 @@ async def requests_detail(
     undoc_gelir_total    = _undoc_gelir
     undoc_gider_total    = _undoc_gider
 
-    # Onaylanmış HBF giderleri → karlılığa eksi etki (KDV hariç)
+    # GM onayından geçmiş HBF giderleri → karlılığa eksi etki (KDV hariç)
+    # (onaylandi=muhasebe bekliyor, kapandi=ödendi; "approved" eski kayıtlar)
     hbf_approved_total = round(
-        sum(r.grand_excl_vat for r in expense_reports if r.status == "approved"), 2
+        sum(r.grand_excl_vat for r in expense_reports
+            if r.status in ("onaylandi", "kapandi", "approved")), 2
     )
     # Gerçek kar = fatura karı − onaylanan HBF giderleri
     invoice_kar = round(invoice_kar - hbf_approved_total, 2)

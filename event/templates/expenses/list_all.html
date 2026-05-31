@@ -113,10 +113,7 @@
                      class="btn btn-sm btn-outline-secondary py-0 px-2" title="Görüntüle">
                     <i class="bi bi-eye" style="font-size:11px;"></i>
                   </a>
-                  {% if rpt.status == 'submitted' and (
-                      current_user.role == 'admin' or
-                      (rpt.request and rpt.request.created_by == current_user.id)
-                  ) %}
+                  {% if rpt.id in approvable_ids %}
                   <form method="post" action="/expenses/{{ rpt.id }}/approve" class="d-inline">
                     <button type="submit" class="btn btn-sm btn-success py-0 px-2" title="Onayla"
                             onclick="return confirm('Bu HBF\'yi onaylıyorsunuz?')">

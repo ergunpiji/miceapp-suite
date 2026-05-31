@@ -1996,8 +1996,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 <i class="bi bi-pencil"></i>
               </a>
               {% endif %}
-              {# miceapp suite: sadece gönderenin ÜSTÜ onaylar — kendi HBF'sini onaylayamaz #}
-              {% if rpt.status == 'submitted' and rpt.id in approvable_hbf_ids %}
+              {# miceapp suite: aşamalı onay (müdür→GM) — kendi HBF'sini onaylayamaz #}
+              {% if rpt.status in ('submitted', 'mudur_onayladi') and rpt.id in approvable_hbf_ids %}
               <form method="post" action="/expenses/{{ rpt.id }}/approve" class="d-inline ms-1">
                 <button type="submit" class="btn btn-xs btn-success py-0 px-1" title="Onayla"
                         onclick="return confirm('Onaylanacak. Emin misiniz?')">
@@ -2010,12 +2010,13 @@ document.addEventListener('DOMContentLoaded', function() {
           </tr>
           {% endfor %}
         </tbody>
-        {% if expense_reports | selectattr('status','equalto','approved') | list %}
+        {% set hbf_done = expense_reports | selectattr('status','in',['onaylandi','kapandi','approved']) | list %}
+        {% if hbf_done %}
         <tfoot>
           <tr style="background:#f0f9ff; font-weight:700; font-size:12px;">
             <td class="ps-2" colspan="4">Onaylanan HBF Toplamı</td>
             <td class="text-end">
-              ₺{{ '{:,.2f}'.format(expense_reports | selectattr('status','equalto','approved') | sum(attribute='grand_total') | round(2)).replace(',','.') }}
+              ₺{{ '{:,.2f}'.format(hbf_done | sum(attribute='grand_total') | round(2)).replace(',','.') }}
             </td>
             <td></td>
           </tr>

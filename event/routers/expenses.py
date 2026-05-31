@@ -63,18 +63,70 @@ def _find_hbf_approver(submitted_by: str | None, db: Session) -> User | None:
     return db.query(User).filter(User.role == "mudur", User.active == True).first()
 
 
+def _is_gm(user: User) -> bool:
+    """Genel Müdür yetkisi: admin/super_admin/genel_mudur veya org grade 1."""
+    return getattr(user, "is_gm", False) or user.role in ("admin", "super_admin", "genel_mudur")
+
+
+def _find_gms(db: Session) -> list[User]:
+    """Şirketteki GM (genel_mudur/admin/super_admin) kullanıcıları — bildirim için."""
+    return db.query(User).filter(
+        User.role.in_(["genel_mudur", "admin", "super_admin"]),
+        User.active == True,  # noqa: E712
+    ).all()
+
+
+def _find_muhasebe(db: Session) -> list[User]:
+    """Muhasebe kullanıcıları — ödeme/kapatma bildirimleri için."""
+    return db.query(User).filter(
+        User.role.in_(["muhasebe", "muhasebe_muduru"]),
+        User.active == True,  # noqa: E712
+    ).all()
+
+
 def _can_approve(report: ExpenseReport, user: User, db: Session) -> bool:
-    """HBF gönderenin üstündeki mudur/yonetici veya admin onaylayabilir.
+    """HBF onay zinciri — mevcut aşamada bu kullanıcı işlem yapabilir mi?
+      submitted       → müdür (gönderenin müdürü) veya GM/admin onaylar
+      mudur_onayladi  → sadece GM/admin onaylar
     miceapp suite: KİMSE kendi doldurduğu HBF'yi onaylayamaz."""
     if report.submitted_by and report.submitted_by == user.id:
         return False
-    if user.role in ("admin", "mudur"):
-        return True
-    # yonetici: kendi direktifi altındaki birinin gönderdiği formu onaylayabilir
-    if user.role == "yonetici":
+    if report.status == "submitted":
+        # GM/admin her zaman onaylayabilir (müdür adımını atlayarak)
+        if _is_gm(user):
+            return True
+        # Aksi halde gönderenin zincirideki müdür/yönetici
         approver = _find_hbf_approver(report.submitted_by, db)
         return approver is not None and approver.id == user.id
+    if report.status == "mudur_onayladi":
+        # 2. aşama: yalnızca GM/admin
+        return _is_gm(user)
     return False
+
+
+def hbf_pending_count_for(db: Session, user: User) -> int:
+    """Bu kullanıcının onayını bekleyen HBF sayısı (sidebar badge + çan için)."""
+    if not user:
+        return 0
+    cnt = 0
+    # Müdür aşaması: doğrudan ekibinin gönderdiği (submitted) formlar
+    if user.role in ("mudur", "yonetici", "genel_mudur", "admin", "super_admin"):
+        team_ids = [
+            r[0] for r in db.query(User.id).filter(
+                User.manager_id == user.id, User.active == True  # noqa: E712
+            ).all()
+        ]
+        if team_ids:
+            cnt += db.query(ExpenseReport).filter(
+                ExpenseReport.status == "submitted",
+                ExpenseReport.submitted_by.in_(team_ids),
+            ).count()
+    # GM aşaması: müdürü onaylamış, GM onayı bekleyen tüm formlar
+    if _is_gm(user):
+        cnt += db.query(ExpenseReport).filter(
+            ExpenseReport.status == "mudur_onayladi"
+        ).count()
+    return cnt
 
 
 # ---------------------------------------------------------------------------
@@ -104,15 +156,10 @@ async def expenses_all_list(
 
     reports = query.order_by(ExpenseReport.created_at.desc()).all()
 
-    # Onay bekleyen sayısı
-    pending_q = db.query(ExpenseReport).filter(ExpenseReport.status == "submitted")
-    if current_user.role in ("yonetici", "asistan"):
-        pending_q = pending_q.join(ExpenseReport.request).filter(
-            ReqModel.created_by == current_user.id
-        )
-    elif current_user.role == "satinalma":
-        pending_q = pending_q.filter(ExpenseReport.submitted_by == current_user.id)
-    pending_count = pending_q.count()
+    # Bu kullanıcının mevcut aşamada onaylayabileceği HBF'ler (her satır için buton)
+    approvable_ids = {r.id for r in reports if _can_approve(r, current_user, db)}
+    # Onay bekleyen sayısı = bu kullanıcının onayını bekleyenler
+    pending_count = hbf_pending_count_for(db, current_user)
 
     return templates.TemplateResponse("expenses/list_all.html", {
         "request":       request,
@@ -121,6 +168,7 @@ async def expenses_all_list(
         "reports":       reports,
         "status_filter": status_filter,
         "pending_count": pending_count,
+        "approvable_ids": approvable_ids,
         "STATUS_LABELS": EXPENSE_STATUS_LABELS,
         "STATUS_COLORS": EXPENSE_STATUS_COLORS,
         "STATUSES":      EXPENSE_STATUSES,
@@ -212,6 +260,7 @@ async def expenses_create(
             report_title = f"{report_title} ({ref_no})"
         report = ExpenseReport(
             id=_uuid(),
+            company_id=current_user.company_id,
             request_id=ref_id,
             request_ids_json=json.dumps(refs, ensure_ascii=False),
             title=report_title,
@@ -363,10 +412,50 @@ async def expenses_approve(
         raise HTTPException(404)
     if not _can_approve(report, current_user, db):
         raise HTTPException(403)
-    report.status = "approved"
-    report.approved_by = current_user.id
-    report.approved_at = _now()
-    report.updated_at = _now()
+
+    from utils.notifications import create_notification
+    now = _now()
+    report.updated_at = now
+    req_obj = db.query(ReqModel).filter(ReqModel.id == report.request_id).first()
+    ref_no = req_obj.request_no if req_obj else ""
+
+    if report.status == "submitted":
+        if _is_gm(current_user):
+            # GM/admin doğrudan finalize → muhasebe bekliyor
+            report.status = "onaylandi"
+            report.approved_by = current_user.id
+            report.approved_at = now
+            notify_targets, stage_msg = _find_muhasebe(db), "ödeme/kapatma"
+        else:
+            # Müdür onayı → GM onayına gider
+            report.status = "mudur_onayladi"
+            report.manager_approved_by = current_user.id
+            report.manager_approved_at = now
+            notify_targets, stage_msg = _find_gms(db), "GM onayı"
+    elif report.status == "mudur_onayladi":
+        # GM onayı → muhasebe bekliyor
+        report.status = "onaylandi"
+        report.approved_by = current_user.id
+        report.approved_at = now
+        notify_targets, stage_msg = _find_muhasebe(db), "ödeme/kapatma"
+    else:
+        raise HTTPException(400, detail="Bu HBF bu aşamada onaylanamaz.")
+
+    db.commit()
+
+    # Sıradaki onaycı(lar)a bildirim
+    for u in notify_targets:
+        if u.id == current_user.id:
+            continue
+        create_notification(
+            db,
+            user_id    = u.id,
+            notif_type = "hbf_submitted",
+            title      = f"HBF {stage_msg} bekliyor — {report.title or 'Harcama Formu'}",
+            message    = f"{ref_no} referansına ait harcama formu {stage_msg} aşamasında sizi bekliyor.",
+            link       = f"/expenses/{report.id}",
+            ref_id     = report.id,
+        )
     db.commit()
     return RedirectResponse(url=f"/requests/{report.request_id}", status_code=302)
 
@@ -446,6 +535,7 @@ async def expenses_new_draft(
     report_title = title.strip() or f"HBF — {req_obj.request_no}"
     report = ExpenseReport(
         id=_uuid(),
+        company_id=current_user.company_id,
         request_id=primary_id,
         request_ids_json=_json.dumps(refs, ensure_ascii=False),
         title=report_title,

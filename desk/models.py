@@ -1299,7 +1299,7 @@ class Notification(Base):
     title      = Column(String(200), nullable=False)
     message    = Column(String(500))
     link       = Column(String(300))
-    ref_id     = Column(Integer)   # ilgili kaydın ID'si (herhangi bir tablo)
+    ref_id     = Column(String(36))   # ilgili kaydın ID'si (UUID — herhangi bir tablo)
     read_at    = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=_now, nullable=False)
 
