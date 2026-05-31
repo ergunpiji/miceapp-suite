@@ -19,7 +19,7 @@
         </div>
       </div>
 
-      <form method="post" action="/prepayment-requests/new">
+      <form method="post" action="/prepayment-requests/new" enctype="multipart/form-data">
 
         <div class="mb-3">
           <label class="form-label fw-semibold">Tedarikçi <span class="text-danger">*</span></label>
@@ -51,9 +51,17 @@
           <label class="form-label fw-semibold">Tutar (₺) <span class="text-danger">*</span></label>
           <div class="input-group">
             <span class="input-group-text">₺</span>
-            <input type="number" name="amount" class="form-control"
-                   step="0.01" min="1" placeholder="0.00" required>
+            <input type="text" id="amountDisplay" class="form-control" inputmode="decimal"
+                   placeholder="0,00" autocomplete="off" required>
+            <input type="hidden" name="amount" id="amountRaw">
           </div>
+          <div class="form-text">Binlik ayraç nokta, kuruş virgülle (örn. 100.000,00)</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Ödeme / İhtiyaç Tarihi <span class="text-danger">*</span></label>
+          <input type="date" name="needed_date" class="form-control" value="{{ today_str }}" required>
+          <div class="form-text">Ön ödemenin yapılması gereken tarih.</div>
         </div>
 
         <div class="mb-3">
@@ -62,10 +70,17 @@
                  placeholder="Ön ödemenin amacı (kısa)">
         </div>
 
-        <div class="mb-4">
+        <div class="mb-3">
           <label class="form-label fw-semibold">Notlar</label>
           <textarea name="notes" class="form-control" rows="2"
                     placeholder="Varsa ek notlar…"></textarea>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold">Ek Dosya (opsiyonel)</label>
+          <input type="file" name="file" class="form-control"
+                 accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.xlsx,.docx">
+          <div class="form-text">Sözleşme/proforma vb. — müdür, GM ve muhasebe görebilir (maks. 10 MB).</div>
         </div>
 
         <div class="d-flex gap-2 justify-content-end">
@@ -80,4 +95,42 @@
   </div>
 
 </div>
+
+<script>
+(function(){
+  var disp = document.getElementById('amountDisplay');
+  var raw  = document.getElementById('amountRaw');
+  if(!disp || !raw) return;
+  function fmtTR(n){ return n.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function parseTR(s){
+    s = (s||'').replace(/\./g,'').replace(',', '.').replace(/[^0-9.]/g,'');
+    var n = parseFloat(s); return isNaN(n)?null:n;
+  }
+  // Yazarken biçimle: binlik nokta, kuruş virgül
+  disp.addEventListener('input', function(){
+    var v = disp.value.replace(/[^0-9,]/g,'');
+    var parts = v.split(',');
+    var intPart = (parts[0]||'').replace(/^0+(?=\d)/,'');
+    var hasDec  = parts.length > 1;
+    var decPart = hasDec ? parts.slice(1).join('').slice(0,2) : null;
+    var intFmt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+    disp.value = intFmt + (hasDec ? (',' + decPart) : '');
+    var n = parseFloat((intPart||'0') + '.' + (decPart!==null?decPart:'0'));
+    raw.value = isNaN(n) ? '' : n;
+  });
+  // Çıkışta 2 haneye normalize et
+  disp.addEventListener('blur', function(){
+    var n = parseTR(disp.value);
+    if(n!==null){ disp.value = fmtTR(n); raw.value = n; }
+  });
+  // Gönderimde geçerli tutar garantisi
+  if(disp.form){
+    disp.form.addEventListener('submit', function(e){
+      var n = parseTR(disp.value);
+      if(n===null || n<=0){ e.preventDefault(); alert('Geçerli bir tutar girin.'); disp.focus(); return; }
+      raw.value = n;
+    });
+  }
+})();
+</script>
 {% endblock %}

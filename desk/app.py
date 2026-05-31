@@ -224,6 +224,14 @@ async def nav_counts_middleware(request: Request, call_next):
                                     ExpenseReport.status == "onaylandi")
                             .scalar() or 0
                         )
+                        # Ön ödeme — GM onaylı, muhasebe ödemesi bekleyen
+                        from models import EventPrepaymentRequest as _EPR
+                        counts["pending_prepayment"] = (
+                            db.query(func.count(_EPR.id))
+                            .filter(_EPR.company_id == company_id,
+                                    _EPR.status == "approved")
+                            .scalar() or 0
+                        )
 
                     # GM+ için bekleyen referans kapanış/reaktivasyon onayları
                     p_refs = 0
@@ -379,6 +387,7 @@ from routers import employees as employees_router
 from routers import reports as reports_router
 from routers import hbf as hbf_router
 from routers import hbf_muhasebe as hbf_muhasebe_router
+from routers import prepayment_odeme as prepayment_odeme_router
 from routers import advances as advances_router
 from routers import fund_pools as fund_pools_router
 from routers import payments as payments_router
@@ -419,6 +428,7 @@ app.include_router(employees_router.router)
 app.include_router(reports_router.router)
 app.include_router(hbf_router.router)
 app.include_router(hbf_muhasebe_router.router)
+app.include_router(prepayment_odeme_router.router)
 app.include_router(advances_router.router)
 app.include_router(fund_pools_router.router)
 app.include_router(payments_router.router)

@@ -231,6 +231,8 @@ def _migrate(engine) -> None:
         END $$""",
         # --- miceapp suite: HBF kredi kartı kalemi bağı (limit düşüşü) ---
         "ALTER TABLE credit_card_txns ADD COLUMN IF NOT EXISTS expense_report_id VARCHAR(36)",
+        # notif_type genişlet (uzun ön ödeme bildirim tipleri için)
+        "ALTER TABLE notifications ALTER COLUMN notif_type TYPE VARCHAR(50)",
         # --- miceapp suite: companies = tenant (SaaS alanları) ---
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS slug VARCHAR(100)",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS plan VARCHAR(20) DEFAULT 'starter'",

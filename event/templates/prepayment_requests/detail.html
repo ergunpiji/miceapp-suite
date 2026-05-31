@@ -73,6 +73,22 @@
           </div>
           {% endif %}
 
+          {% if pr.needed_date %}
+          <div class="mb-2" style="font-size:13px;">
+            <span class="text-muted">Ödeme Tarihi:</span>
+            <span class="ms-2 fw-semibold">{{ pr.needed_date[8:10] }}.{{ pr.needed_date[5:7] }}.{{ pr.needed_date[0:4] }}</span>
+          </div>
+          {% endif %}
+
+          {% if pr.document_path %}
+          <div class="mb-2" style="font-size:13px;">
+            <span class="text-muted">Ek Dosya:</span>
+            <a href="/prepayment-requests/{{ pr.id }}/doc" target="_blank" class="ms-2">
+              <i class="bi bi-paperclip"></i> {{ pr.document_name or 'Belge' }}
+            </a>
+          </div>
+          {% endif %}
+
           <hr class="my-3">
 
           <div class="mb-1" style="font-size:12px;color:#64748b;">

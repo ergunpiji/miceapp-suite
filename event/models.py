@@ -1310,11 +1310,15 @@ class PrepaymentRequest(Base):
     __tablename__ = "prepayment_requests"
 
     id             = Column(String(36), primary_key=True, default=_uuid)
+    company_id     = Column(String(36), nullable=True, index=True)   # tenant (desk muhasebe için)
     vendor_id      = Column(String(36), ForeignKey("vendors.id"), nullable=False, index=True)
     request_id     = Column(String(36), ForeignKey("requests.id"), nullable=True, index=True)
     amount         = Column(Float, nullable=False)
+    needed_date    = Column(String(10), nullable=True)              # ödeme/ihtiyaç tarihi YYYY-MM-DD
     description    = Column(Text, default="")
     notes          = Column(Text, default="")
+    document_path  = Column(String(500), nullable=True)            # ek dosya (R2 key)
+    document_name  = Column(String(255), nullable=True)
 
     # Durum akışı: pending_gm → approved → paid  (veya rejected / cancelled)
     status         = Column(String(20), default="pending_gm", nullable=False)

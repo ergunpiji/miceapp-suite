@@ -391,13 +391,18 @@
     </a>
     {% endif %}
 
-    <!-- Ortak HBF — muhasebe ödeme/kapatma -->
+    <!-- Ortak HBF + Ön Ödeme — muhasebe ödeme/kapatma -->
     {% if current_user and (current_user.is_admin or current_user.role in ('muhasebe','muhasebe_muduru')) %}
     <div class="nav-section-label">Harcama Bildirimleri</div>
     <a href="/hbf-muhasebe" class="sidebar-link {% if request.url.path.startswith('/hbf-muhasebe') %}active{% endif %}">
       <i class="bi bi-receipt-cutoff"></i> HBF — Muhasebe
       {% set _phm = request.state.nav_counts.get('pending_hbf_muhasebe', 0) %}
       {% if _phm %}<span class="ms-auto badge-nav">{{ _phm }}</span>{% endif %}
+    </a>
+    <a href="/prepayment-odeme" class="sidebar-link {% if request.url.path.startswith('/prepayment-odeme') %}active{% endif %}">
+      <i class="bi bi-cash-coin"></i> Ön Ödemeler
+      {% set _pp = request.state.nav_counts.get('pending_prepayment', 0) %}
+      {% if _pp %}<span class="ms-auto badge-nav">{{ _pp }}</span>{% endif %}
     </a>
     {% endif %}
 

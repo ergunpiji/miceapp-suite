@@ -11,12 +11,15 @@ from __future__ import annotations
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+import os
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from auth import get_current_user
 from database import get_db
+from storage import save_upload, serve_upload as _serve_upload
 from models import (
     Vendor,
     PrepaymentRequest,
@@ -138,8 +141,10 @@ async def prepayment_requests_create(
     vendor_id:   str           = Form(...),
     request_id:  Optional[str] = Form(None),
     amount:      float         = Form(...),
+    needed_date: str           = Form(""),
     description: str           = Form(""),
     notes:       str           = Form(""),
+    file:        UploadFile    = File(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -151,9 +156,11 @@ async def prepayment_requests_create(
 
     pr = PrepaymentRequest(
         id           = _uuid(),
+        company_id   = current_user.company_id,
         vendor_id    = vendor_id,
         request_id   = request_id or None,
         amount       = amount,
+        needed_date  = (needed_date.strip() or None),
         description  = description.strip(),
         notes        = notes.strip(),
         status       = "pending_gm",
@@ -164,6 +171,20 @@ async def prepayment_requests_create(
     )
     db.add(pr)
     db.flush()
+
+    # Ek dosya (opsiyonel) — R2'ye yükle, müdür/GM/muhasebe görebilsin
+    if file is not None and (file.filename or ""):
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext in {".pdf", ".jpg", ".jpeg", ".png", ".gif", ".webp", ".xlsx", ".docx"}:
+            content = await file.read()
+            if content and len(content) <= 10 * 1024 * 1024:
+                try:
+                    key = save_upload(content, "prepayments", f"{pr.id}{ext}")
+                    pr.document_path = key
+                    pr.document_name = file.filename
+                except Exception as exc:
+                    print(f"[PREPAYMENT UPLOAD] {exc}", flush=True)
+
     _add_log(db, pr.id, "created", current_user.id,
              f"₺{amount:,.0f} — {vendor.name}")
 
@@ -181,6 +202,19 @@ async def prepayment_requests_create(
 
     db.commit()
     return RedirectResponse(f"/prepayment-requests/{pr.id}?created=1", status_code=303)
+
+
+@router.get("/{pr_id}/doc", name="prepayment_requests_doc")
+async def prepayment_requests_doc(
+    pr_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Ön ödeme ek dosyasını servis eder (müdür/GM/muhasebe görebilir)."""
+    pr = db.query(PrepaymentRequest).filter(PrepaymentRequest.id == pr_id).first()
+    if not pr or not pr.document_path:
+        raise HTTPException(404)
+    return _serve_upload(pr.document_path, pr.document_name or "belge")
 
 
 # ---------------------------------------------------------------------------
@@ -317,7 +351,8 @@ async def prepayment_requests_approve(
     pr.updated_at  = _now()
     _add_log(db, pr.id, "approved", current_user.id)
 
-    # Muhasebe ekibine bildirim
+    # Muhasebe ekibine bildirim — muhasebe desk'te çalışır, desk Ön Ödemeler sayfasına yönlendir
+    from auth import DESK_URL
     for fu in _get_finance_users(db):
         create_notification(
             db,
@@ -325,7 +360,7 @@ async def prepayment_requests_approve(
             notif_type = "prepayment_request_approved",
             title      = f"Ön Ödeme Onaylandı: {pr.vendor.name if pr.vendor else ''}",
             message    = f"GM onayladı — ₺{pr.amount:,.0f} ödenmesi bekleniyor.",
-            link       = f"/prepayment-requests/{pr.id}",
+            link       = f"{DESK_URL}/prepayment-odeme",
             ref_id     = pr.id,
         )
 

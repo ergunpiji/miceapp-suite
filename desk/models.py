@@ -1296,7 +1296,7 @@ class Notification(Base):
 
     id         = Column(String(36), primary_key=True, default=_uuid)
     user_id    = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
-    notif_type = Column(String(30), nullable=False, default="info")  # info | success | warning | danger
+    notif_type = Column(String(50), nullable=False, default="info")  # info | success | warning | danger
     title      = Column(String(200), nullable=False)
     message    = Column(String(500))
     link       = Column(String(300))
@@ -1370,6 +1370,32 @@ class DeskRequest(Base):
     created_by   = Column(String(36))
     created_at   = Column(DateTime)
     updated_at   = Column(DateTime)
+
+
+class EventPrepaymentRequest(Base):
+    """event'in prepayment_requests tablosu için bridge — muhasebe (desk) GM onaylı
+    ön ödemeleri görür ve öder. event GM onayı kanonik; desk sadece öder/kapatır."""
+    __tablename__ = "prepayment_requests"
+    __table_args__ = {"extend_existing": True}
+
+    id             = Column(String(36), primary_key=True, default=_uuid)
+    company_id     = Column(String(36), index=True)
+    vendor_id      = Column(String(36))
+    request_id     = Column(String(36))
+    amount         = Column(Float)
+    needed_date    = Column(String(10))
+    description    = Column(Text)
+    notes          = Column(Text)
+    status         = Column(String(20))   # pending_gm|approved|paid|rejected|cancelled
+    requested_by   = Column(String(36))
+    approved_at    = Column(DateTime)
+    paid_by        = Column(String(36))
+    paid_at        = Column(String(10))
+    payment_method = Column(String(20))
+    vendor_prepayment_id = Column(String(36))
+    document_path  = Column(String(500))
+    document_name  = Column(String(255))
+    updated_at     = Column(DateTime)
 
 
 class ExpenseItem(Base):

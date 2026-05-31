@@ -563,6 +563,11 @@ def migrate_db():
         _safe_add_column(conn, "expense_reports", "bank_account_id",     "VARCHAR(36)")
         _safe_add_column(conn, "expense_reports", "cash_book_id",        "VARCHAR(36)")
         _safe_add_column(conn, "expense_reports", "general_expense_id",  "VARCHAR(36)")
+        # Ön ödeme talebi: tenant + ödeme/ihtiyaç tarihi (desk muhasebe akışı için)
+        _safe_add_column(conn, "prepayment_requests", "company_id",  "VARCHAR(36)")
+        _safe_add_column(conn, "prepayment_requests", "needed_date", "VARCHAR(10)")
+        _safe_add_column(conn, "prepayment_requests", "document_path", "VARCHAR(500)")
+        _safe_add_column(conn, "prepayment_requests", "document_name", "VARCHAR(255)")
         # notifications.ref_id: eski şemada INTEGER → UUID string yazmak için VARCHAR'a çevir
         # (sadece hâlâ integer ise — idempotent, gereksiz tablo yeniden yazımı yapmaz)
         try:
