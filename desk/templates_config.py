@@ -73,8 +73,19 @@ def format_datetime_tr(value: Any) -> str:
         return str(value)[:16]
 
 
-def tojson_filter(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False)
+def tojson_filter(value: Any):
+    """JSON üret + <script> ve HTML attribute içinde güvenli + Markup (autoescape'i atla).
+    Jinja'nın yerleşik htmlsafe_json_dumps davranışını taklit eder; düz str döndürürsek
+    autoescape tırnakları &#34; yapar ve gömülü JS bozulur."""
+    from markupsafe import Markup
+    rv = (
+        json.dumps(value, ensure_ascii=False)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+        .replace("'", "\\u0027")
+    )
+    return Markup(rv)
 
 
 def next_day_filter(value: Any) -> Any:

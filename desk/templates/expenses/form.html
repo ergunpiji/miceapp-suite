@@ -219,29 +219,34 @@
         <div id="refTagsWrap" class="d-flex flex-wrap gap-2 align-items-center mb-2">
           {# Mevcut referanslar (edit modunda) — JS tarafından doldurulur #}
         </div>
-        <div class="d-flex gap-2" style="max-width:520px;">
+        <div style="position:relative; max-width:520px;">
           <input type="text" id="refSearchInput" class="form-control form-control-sm"
+                 style="width:100%;"
                  placeholder="Referans no veya etkinlik adı ara..." autocomplete="off"
                  oninput="filterRefDropdown(this.value)" onfocus="showRefDropdown()"
                  onblur="setTimeout(hideRefDropdown, 200)">
-          <div style="position:relative; flex:1;">
-            <div id="refDropdown" class="border rounded shadow-sm bg-white"
-                 style="display:none; position:absolute; top:0; left:-100%; width:450px; max-height:200px;
-                        overflow-y:auto; z-index:1000; font-size:13px;">
-              {% for r in all_requests %}
-              <div class="refDropItem px-3 py-2 border-bottom"
-                   style="cursor:pointer;"
-                   data-id="{{ r.id }}"
-                   data-no="{{ r.request_no }}"
-                   data-name="{{ r.event_name | e }}"
-                   data-client="{{ r.client_name | e }}"
-                   onmousedown="addRef(this)">
-                <span class="fw-bold text-primary">{{ r.request_no }}</span>
-                <span class="text-muted ms-2">{{ r.event_name }}</span>
-                {% if r.client_name %}<span class="text-muted"> — {{ r.client_name }}</span>{% endif %}
-              </div>
-              {% endfor %}
+          <div id="refDropdown" class="border rounded shadow-sm bg-white"
+               style="display:none; position:absolute; top:100%; left:0; right:0; margin-top:2px;
+                      max-height:240px; overflow-y:auto; z-index:1060; font-size:13px;">
+            {% if all_requests %}
+            {% for r in all_requests %}
+            <div class="refDropItem px-3 py-2 border-bottom"
+                 style="cursor:pointer;"
+                 data-id="{{ r.id }}"
+                 data-no="{{ r.request_no }}"
+                 data-name="{{ r.event_name | e }}"
+                 data-client="{{ r.client_name | e }}"
+                 onmousedown="addRef(this)">
+              <span class="fw-bold text-primary">{{ r.request_no }}</span>
+              <span class="text-muted ms-2">{{ r.event_name }}</span>
+              {% if r.client_name %}<span class="text-muted"> — {{ r.client_name }}</span>{% endif %}
             </div>
+            {% endfor %}
+            {% else %}
+            <div class="px-3 py-2 text-muted" style="font-size:12px;">
+              Aktif referans yok — önce <a href="/references">Referanslar</a>'dan oluşturun.
+            </div>
+            {% endif %}
           </div>
         </div>
       </div>
