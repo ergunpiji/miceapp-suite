@@ -62,11 +62,20 @@ MODULES = {
 # Screen-level (modül erişimi)
 # ---------------------------------------------------------------------------
 
+# Muhasebe ve İK çalışanları: admin gibi tüm operasyonel alanları görür/kullanır.
+# TEK fark: "Yönetim" bölümünü (kullanıcı/rol/departman/modül/şirket profili) GÖREMEZ
+# ve giremez — o alan ayrıca is_admin (template) + require_admin (route) ile korunur.
+# GM'e özel onay yetkileri (payment_list_approve vb.) check_permission ile ayrı; açılmaz.
+FULL_ACCESS_ROLES = {"muhasebe", "muhasebe_muduru", "ik", "insan_kaynaklari"}
+
+
 def _bypass(user: "User") -> bool:
-    """GM / admin / super_admin her şeyi görür."""
+    """GM / admin / super_admin + muhasebe/İK her şeyi (Yönetim hariç) görür."""
     if not ENFORCE:
         return True
-    return bool(user and (user.is_approver or user.is_admin))
+    return bool(user and (
+        user.is_approver or user.is_admin or (user.role in FULL_ACCESS_ROLES)
+    ))
 
 
 # Kişisel modüller: her user kendi adına erişebilir, içerik row-level filter ile
