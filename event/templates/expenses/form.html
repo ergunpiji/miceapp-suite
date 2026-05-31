@@ -735,8 +735,9 @@ async function uploadDoc(rowIdx, input) {
     const draftRes = await fetch('/expenses/new-draft', { method: 'POST', body: draftFd });
     const draftData = await draftRes.json();
     if (!draftData.ok) { alert(draftData.error || 'Taslak kaydedilemedi.'); return; }
-    // REPORT_ID ve form action'ı güncelle
-    window.REPORT_ID = draftData.report_id;
+    // REPORT_ID ve form action'ı güncelle (let değişkenini doğrudan ata —
+    // window.REPORT_ID let binding'i güncellemez, sync-rows boş id'yle 404 olurdu)
+    REPORT_ID = draftData.report_id;
     document.getElementById('hbfForm').action = `/expenses/${draftData.report_id}/edit`;
     history.replaceState(null, '', `/expenses/${draftData.report_id}/edit`);
   }
