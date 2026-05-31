@@ -38,7 +38,13 @@
         <div class="card-body">
           {% set st = statuses.get(pr.status, ('—','secondary','bi-circle')) %}
           <div class="d-flex justify-content-between align-items-start mb-3">
-            <h6 class="fw-bold mb-0">{{ pr.vendor.name if pr.vendor else '—' }}</h6>
+            <h6 class="fw-bold mb-0">
+              {% if pr.vendor %}
+              <a href="/vendors/{{ pr.vendor_id }}" class="text-decoration-none text-dark" title="Tedarikçi kartını aç">
+                {{ pr.vendor.name }} <i class="bi bi-box-arrow-up-right" style="font-size:11px;opacity:.5;"></i>
+              </a>
+              {% else %}—{% endif %}
+            </h6>
             <span class="badge bg-{{ st[1] }}">
               <i class="bi {{ st[2] }} me-1"></i>{{ st[0] }}
             </span>
