@@ -476,12 +476,14 @@
                 </thead>
                 <tbody>
                   {% for row in snap.rows %}
+                  {% set _scur = row.get('currency', 'TRY') or 'TRY' %}
+                  {% set _ssym = CURRENCY_SYMBOLS.get(_scur, _scur) %}
                   <tr>
                     <td class="ps-3" style="color:#374151;">{{ row.service_name or row.description or '—' }}</td>
                     <td>{{ row.unit or '—' }}</td>
                     <td class="text-end">{{ row.qty or 1 }}</td>
-                    <td class="text-end">{{ '{:,.2f}'.format(row.cost_price | float) }}</td>
-                    <td class="text-end">{{ '{:,.2f}'.format(row.sale_price | float) }}</td>
+                    <td class="text-end">{{ _ssym }}{{ '{:,.2f}'.format(row.cost_price | float) }}</td>
+                    <td class="text-end">{{ _ssym }}{{ '{:,.2f}'.format(row.sale_price | float) }}</td>
                     <td class="text-end pe-3">%{{ (row.vat_rate | float) | int }}</td>
                   </tr>
                   {% endfor %}

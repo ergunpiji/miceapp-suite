@@ -661,10 +661,10 @@ async def budgets_price_save(
     if not budget:
         return RedirectResponse(url="/budgets", status_code=status.HTTP_302_FOUND)
 
-    # Fiyat geçmişi: sale_price değişimlerini kaydet
+    # Fiyat geçmişi: hem maliyet (alış) hem satış değişimlerini kaydet
     try:
         new_rows = json.loads(rows_json)
-        _record_price_changes(budget, new_rows, current_user, ["sale_price"])
+        _record_price_changes(budget, new_rows, current_user, ["cost_price", "sale_price", "confirmed_cost_price"])
     except Exception:
         pass
 
