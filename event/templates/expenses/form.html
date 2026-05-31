@@ -399,6 +399,14 @@
             </form>
           </div>
         </div>
+        {% elif report and report.status in ('submitted', 'mudur_onayladi') and report.submitted_by == current_user.id %}
+        <div class="mt-auto">
+          <div class="alert alert-info py-2 mb-0" style="font-size:13px;">
+            <i class="bi bi-info-circle me-1"></i>
+            Bu HBF'yi siz gönderdiniz; <strong>kendi HBF'nizi onaylayamazsınız</strong>.
+            {% if report.status == 'submitted' %}Müdürünüz{% else %}Genel Müdür / başka bir yönetici{% endif %} onayını bekliyor.
+          </div>
+        </div>
         {% elif report and report.status == 'draft' and report.submitted_by == current_user.id %}
         <div class="mt-auto">
           <a href="/expenses/{{ report.id }}/edit" class="btn btn-outline-primary px-4">
