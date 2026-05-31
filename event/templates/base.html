@@ -803,8 +803,8 @@
 <!-- ═══════════════════════════════ MAIN ═══════════════════════════════ -->
 <div class="main-content">
   <div class="topbar">
-    <div class="d-flex align-items-center flex-wrap" style="gap:10px;">
-      <div class="page-title">{% block topbar_title %}{% block page_title_block %}{% endblock %}{% endblock %}</div>
+    <div class="page-title">{% block topbar_title %}{% block page_title_block %}{% endblock %}{% endblock %}</div>
+    <div class="d-flex justify-content-center flex-grow-1 px-3" style="min-width:0;">
       {% block topbar_filter %}{% endblock %}
     </div>
     <div class="d-flex align-items-center gap-2">

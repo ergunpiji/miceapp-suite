@@ -31,7 +31,7 @@ def _last_n_months(n: int = 6) -> list[str]:
     return months
 
 
-def _build_financial_stats(db: Session, req_id_filter=None, d_from=None, d_to=None):
+def _build_financial_stats(db: Session, req_id_filter=None, d_from=None, d_to=None, customer_id=None):
     """Onaylı faturalardan ciro/kar/aylık veri hesapla — sadece gerçek rakamlar.
 
     Fon havuzu ana referanslarının `kesilen` faturaları ciro'ya dahil EDİLMEZ
@@ -83,6 +83,8 @@ def _build_financial_stats(db: Session, req_id_filter=None, d_from=None, d_to=No
 
     for inv in invoices:
         if not _in_range(_eff(inv.request.check_in if inv.request else None, inv.invoice_date, inv.created_at)):
+            continue
+        if customer_id and (not inv.request or inv.request.customer_id != customer_id):
             continue
         if inv.invoice_type == "kesilen":
             total_sale += inv.amount
@@ -140,6 +142,8 @@ def _build_financial_stats(db: Session, req_id_filter=None, d_from=None, d_to=No
     for t in ft_query.all():
         if not _in_range(_eff(t.related_request.check_in if t.related_request else None, t.transfer_date)):
             continue
+        if customer_id and (not t.related_request or t.related_request.customer_id != customer_id):
+            continue
         val = t.amount_try_excl_vat
         sign = +1 if t.direction == "out" else -1
         total_sale += sign * val
@@ -167,6 +171,8 @@ def _build_financial_stats(db: Session, req_id_filter=None, d_from=None, d_to=No
     hbf_gider = 0.0
     for r in hbf_q.all():
         if not _in_range(_eff(r.request.check_in if r.request else None, r.created_at)):
+            continue
+        if customer_id and (not r.request or r.request.customer_id != customer_id):
             continue
         amt = r.grand_excl_vat or 0
         hbf_gider += amt
@@ -568,11 +574,13 @@ async def dashboard(
     request: Request,
     date_from: str = None,
     date_to: str = None,
+    customer_id: str = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     from datetime import date as _date
     _today = _date.today()
+    cust_id = customer_id.strip() if customer_id and customer_id.strip() else None
     try:
         d_from = _date.fromisoformat(date_from) if date_from else _date(_today.year, 1, 1)
     except Exception:
@@ -602,7 +610,7 @@ async def dashboard(
                                      "budget_ready", "offer_sent", "revision"])
             ).count(),
         }
-        financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to)
+        financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to, customer_id=cust_id)
         recent_requests = (
             base_q.order_by(ReqModel.created_at.desc()).limit(8).all()
         )
@@ -622,7 +630,7 @@ async def dashboard(
                 "my_confirmed":   base_q.filter(ReqModel.status == "confirmed").count(),
                 "total_budgets":  db.query(Budget).filter(Budget.request_id.in_(req_id_filter)).count(),
             }
-            financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to)
+            financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to, customer_id=cust_id)
             recent_requests = base_q.order_by(ReqModel.created_at.desc()).limit(8).all()
         else:
             # Normal birim müdürü: sadece kendi takımının istatistikleri
@@ -639,7 +647,7 @@ async def dashboard(
                 ).count() if current_user.team_id else 0,
                 "total_budgets":   db.query(Budget).filter(Budget.request_id.in_(req_id_filter)).count(),
             }
-            financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to)
+            financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to, customer_id=cust_id)
             recent_requests = base_q.order_by(ReqModel.created_at.desc()).limit(8).all()
 
     elif current_user.role == "yonetici":
@@ -664,7 +672,7 @@ async def dashboard(
                                      "budget_ready", "offer_sent", "revision"])
             ).count(),
         }
-        financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to)
+        financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to, customer_id=cust_id)
         recent_requests = (
             base_q.order_by(ReqModel.created_at.desc()).limit(8).all()
         )
@@ -739,6 +747,8 @@ async def dashboard(
             "page_title":      "Dashboard",
             "d_from":          d_from.isoformat(),
             "d_to":            d_to.isoformat(),
+            "customers":       db.query(Customer).order_by(Customer.name).all(),
+            "selected_customer_id": cust_id,
             "chart_data":      json.dumps({
                 "labels": financial.get("chart_labels", []),
                 "sale":   financial.get("chart_sale", []),

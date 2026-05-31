@@ -594,11 +594,13 @@
             title="Geri">
       <i class="bi bi-arrow-left" style="font-size:14px;"></i>
     </button>
-    <h5 class="mb-0 fw-semibold" style="color:#1e293b; font-size:15px;">
+    <h5 class="mb-0 fw-semibold" style="color:#1e293b; font-size:15px; white-space:nowrap;">
       {% block topbar_title %}{{ page_title | default("") }}{% endblock %}
     </h5>
-    {% block topbar_filter %}{% endblock %}
-    <div class="ms-auto d-flex align-items-center gap-2">
+    <div class="d-flex justify-content-center flex-grow-1 px-3" style="min-width:0;">
+      {% block topbar_filter %}{% endblock %}
+    </div>
+    <div class="d-flex align-items-center gap-2">
       {% block topbar_actions %}{% endblock %}
 
       {% if current_user %}
