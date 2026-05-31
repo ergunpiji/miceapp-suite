@@ -177,12 +177,20 @@
     }
     .bell-dropdown {
       min-width: 300px; padding: 0; border: 0;
-      box-shadow: 0 8px 30px rgba(0,0,0,.14); border-radius: 12px; overflow: hidden;
+      box-shadow: 0 8px 30px rgba(0,0,0,.14); border-radius: 12px;
+      max-height: 80vh; overflow-y: auto; overflow-x: hidden;
     }
     .bell-dropdown-header {
+      position: sticky; top: 0; z-index: 2;
       background: #1a3a5c; color: #fff; padding: 12px 16px;
       font-size: 13px; font-weight: 700; letter-spacing: .02em;
+      display: flex; align-items: center; justify-content: space-between;
     }
+    .bell-dropdown-header .bell-clear {
+      color: #cbd5e1; font-size: 11px; font-weight: 600; text-decoration: none;
+      background: rgba(255,255,255,.12); padding: 3px 9px; border-radius: 8px;
+    }
+    .bell-dropdown-header .bell-clear:hover { color: #fff; background: rgba(255,255,255,.22); }
     .bell-item {
       display: flex; align-items: center; gap: 12px;
       padding: 11px 16px; font-size: 13px; color: #1e293b;
@@ -608,7 +616,10 @@
           {% if _ptotal or _pins %}<span class="bell-badge">{{ (_ptotal + _pins) if (_ptotal + _pins) < 100 else '99+' }}</span>{% endif %}
         </button>
         <ul class="dropdown-menu dropdown-menu-end bell-dropdown">
-          <li><div class="bell-dropdown-header"><i class="bi bi-bell me-2"></i>Bekleyen İşlemler</div></li>
+          <li><div class="bell-dropdown-header">
+            <span><i class="bi bi-bell me-2"></i>Bekleyen İşlemler</span>
+            <a href="javascript:void(0)" class="bell-clear" onclick="notifReadAll()">Tümünü temizle</a>
+          </div></li>
           {% if _prefs %}
           <li>
             <a class="bell-item" href="/references?approval_status=pending">
@@ -932,7 +943,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
   window.notifReadAll = function () {
     fetch('/notifications/read-all', { method: 'POST' })
-      .then(function () { loadNotifs(); })
+      .then(function () {
+        unreadCount = 0;
+        if (typeof updateBadge === 'function') updateBadge();
+        loadNotifs();
+      })
       .catch(function () {});
   };
 
