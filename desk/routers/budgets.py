@@ -2,7 +2,7 @@
 Satın Alma — Bütçe yönetimi router'ı
 
 Workflow:
-  Satın Alma:   oluştur (draft_edem) → manager'a gönder (pending_manager) → revizyonu düzelt
+  Satın Alma:   oluştur (draft_satinalma) → manager'a gönder (pending_manager) → revizyonu düzelt
   Manager: satış fiyatı gir (draft_manager) → onayla (approved) / revizyon iste / iptal et
   Admin:   her şeyi görür
 
@@ -11,7 +11,7 @@ Endpoints:
   GET    /budgets/new                → Satın Alma: yeni bütçe formu
   POST   /budgets/new                → Satın Alma: oluştur
   GET    /budgets/{id}               → detay (role-based)
-  GET    /budgets/{id}/edit          → Satın Alma: maliyet düzenle (draft_edem veya revision_requested)
+  GET    /budgets/{id}/edit          → Satın Alma: maliyet düzenle (draft_satinalma veya revision_requested)
   POST   /budgets/{id}/edit          → Satın Alma: kaydet
   POST   /budgets/{id}/send-to-manager → Satın Alma: manager'a gönder
   GET    /budgets/{id}/price         → Manager: satış fiyatı editörü
@@ -20,7 +20,7 @@ Endpoints:
   POST   /budgets/{id}/request-revision → Manager: revizyon iste
   POST   /budgets/{id}/cancel        → Manager: iptal et
   GET    /budgets/{id}/export        → Manager: Excel export (customer template kullan)
-  POST   /budgets/{id}/delete        → Satın Alma/Admin: sil (sadece draft_edem)
+  POST   /budgets/{id}/delete        → Satın Alma/Admin: sil (sadece draft_satinalma)
 """
 
 import io
@@ -87,7 +87,7 @@ def _record_price_changes(budget: "Budget", new_rows: list, current_user: "User"
         budget.price_history_json = json.dumps(history, ensure_ascii=False)
 
 BUDGET_STATUS_LABELS = {
-    "draft_edem":         "Taslak (Satın Alma)",
+    "draft_satinalma":         "Taslak (Satın Alma)",
     "pending_manager":    "Manager Onayında",
     "draft_manager":      "Manager Düzenliyor",
     "approved":           "Onaylandı",
@@ -96,7 +96,7 @@ BUDGET_STATUS_LABELS = {
     "cancelled":          "İptal Edildi",
 }
 BUDGET_STATUS_COLORS = {
-    "draft_edem":         "secondary",
+    "draft_satinalma":         "secondary",
     "pending_manager":    "warning",
     "draft_manager":      "info",
     "approved":           "success",
@@ -106,8 +106,8 @@ BUDGET_STATUS_COLORS = {
 }
 
 
-def _can_edem_edit(budget: Budget) -> bool:
-    return budget.budget_status in ("draft_edem", "revision_requested")
+def _can_satinalma_edit(budget: Budget) -> bool:
+    return budget.budget_status in ("draft_satinalma", "revision_requested")
 
 
 def _can_manager_price(budget: Budget) -> bool:
@@ -286,7 +286,7 @@ async def budgets_create(
             pass
 
     # PM/Admin direkt yönetimde bütçe direkt approved olur
-    initial_status = "approved" if is_direct_manager else "draft_edem"
+    initial_status = "approved" if is_direct_manager else "draft_satinalma"
 
     budget = Budget(
         id=_uuid(),
@@ -383,7 +383,7 @@ async def budgets_detail(
         "rows_by_section":    rows_by_section,
         "vat_by_rate":        vat_by_rate_sorted,
         "service_categories": SERVICE_CATEGORIES,
-        "can_edem_edit":      _can_edem_edit(budget) and current_user.role in ("admin", "satinalma", "asistan"),
+        "can_satinalma_edit":      _can_satinalma_edit(budget) and current_user.role in ("admin", "satinalma", "asistan"),
         "can_manager_price":  _can_manager_price(budget) and current_user.role in ("admin", "mudur", "yonetici"),
         "status_label":       BUDGET_STATUS_LABELS.get(budget.budget_status, budget.budget_status),
         "status_color":       BUDGET_STATUS_COLORS.get(budget.budget_status, "secondary"),
@@ -407,7 +407,7 @@ async def budgets_edit(
     budget = db.query(Budget).filter(Budget.id == budget_id).first()
     if not budget:
         return RedirectResponse(url="/budgets", status_code=status.HTTP_302_FOUND)
-    if not _can_edem_edit(budget) and current_user.role not in ("admin", "asistan"):
+    if not _can_satinalma_edit(budget) and current_user.role not in ("admin", "asistan"):
         return RedirectResponse(url=f"/budgets/{budget_id}", status_code=status.HTTP_302_FOUND)
     req = db.query(ReqModel).filter(ReqModel.id == budget.request_id).first()
     services = db.query(Service).filter(Service.active == True).order_by(Service.category, Service.sort_order, Service.name).all()
@@ -489,10 +489,10 @@ async def budgets_update(
     budget.exchange_rates_json = exchange_rates_json or "{}"
     budget.updated_at          = _now()
 
-    if is_direct_manager and budget.budget_status in ("draft_edem", "pending_manager", "revision_requested"):
+    if is_direct_manager and budget.budget_status in ("draft_satinalma", "pending_manager", "revision_requested"):
         # PM/Admin direkt yönetimde kaydetmek = onaylamak
         budget.budget_status = "approved"
-    elif next_action == "send_to_manager" and budget.budget_status in ("draft_edem", "revision_requested"):
+    elif next_action == "send_to_manager" and budget.budget_status in ("draft_satinalma", "revision_requested"):
         budget.budget_status = "pending_manager"
 
     db.commit()
@@ -512,7 +512,7 @@ async def budgets_send_to_manager(
     if current_user.role not in ("admin", "satinalma", "asistan"):
         raise HTTPException(403)
     budget = db.query(Budget).filter(Budget.id == budget_id).first()
-    if budget and budget.budget_status in ("draft_edem", "revision_requested"):
+    if budget and budget.budget_status in ("draft_satinalma", "revision_requested"):
         budget.budget_status = "pending_manager"
         budget.updated_at    = _now()
         db.commit()
@@ -961,14 +961,14 @@ async def budgets_delete(
     if current_user.role not in ("admin", "satinalma"):
         raise HTTPException(403)
     budget = db.query(Budget).filter(Budget.id == budget_id).first()
-    if budget and (budget.budget_status == "draft_edem" or current_user.role == "admin"):
+    if budget and (budget.budget_status == "draft_satinalma" or current_user.role == "admin"):
         db.delete(budget)
         db.commit()
     return RedirectResponse(url="/budgets", status_code=status.HTTP_302_FOUND)
 
 
-@router.post("/{budget_id}/copy-edem", name="budgets_copy_edem")
-async def budgets_copy_edem(
+@router.post("/{budget_id}/copy-satinalma", name="budgets_copy_satinalma")
+async def budgets_copy_satinalma(
     budget_id: str,
     rows_json: str = Form(""),
     current_user: User = Depends(get_current_user),
@@ -986,7 +986,7 @@ async def budgets_copy_edem(
         request_id=budget.request_id,
         venue_name=budget.venue_name + " (Kopya)",
         rows_json=src_rows,
-        budget_status="draft_edem",
+        budget_status="draft_satinalma",
         service_fee_pct=budget.service_fee_pct,
         offer_currency=budget.offer_currency or "TRY",
         exchange_rates_json=budget.exchange_rates_json or "{}",

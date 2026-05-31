@@ -33,8 +33,8 @@ def _verify_key(x_api_key: str = Header(...)):
 
 
 class ActivateRequest(BaseModel):
-    edem_request_id: str
-    edem_request_no: str
+    satinalma_request_id: str
+    satinalma_request_no: str
     event_name: str
     start_date: str   # YYYY-MM-DD
     end_date: str     # YYYY-MM-DD
@@ -51,11 +51,11 @@ def _activate_internal(body: dict, db: Session) -> dict:
             transfer_supplier_url, accommodation_supplier_url,
             task_supplier_url, client_url}
     """
-    edem_request_id = body["edem_request_id"]
+    satinalma_request_id = body["satinalma_request_id"]
 
     # Zaten aktifleştirilmiş mi?
     existing = db.query(Event).filter(
-        Event.edem_request_id == edem_request_id
+        Event.satinalma_request_id == satinalma_request_id
     ).first()
 
     if existing:
@@ -63,8 +63,8 @@ def _activate_internal(body: dict, db: Session) -> dict:
     else:
         event = Event(
             name=body["event_name"],
-            edem_request_id=edem_request_id,
-            edem_request_no=body.get("edem_request_no", ""),
+            satinalma_request_id=satinalma_request_id,
+            satinalma_request_no=body.get("satinalma_request_no", ""),
             start_date=date.fromisoformat(body["start_date"]),
             end_date=date.fromisoformat(body["end_date"]),
             venue=body.get("venue"),
@@ -134,15 +134,15 @@ async def activate_module(
     return JSONResponse(data)
 
 
-@router.get("/status/{edem_request_id}")
+@router.get("/status/{satinalma_request_id}")
 async def module_status(
-    edem_request_id: str,
+    satinalma_request_id: str,
     db: Session = Depends(get_db),
     _: None = Depends(_verify_key),
 ):
     """Modülün aktif olup olmadığını ve token URL'lerini döner."""
     event = db.query(Event).filter(
-        Event.edem_request_id == edem_request_id
+        Event.satinalma_request_id == satinalma_request_id
     ).first()
 
     if not event:

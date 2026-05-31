@@ -132,7 +132,7 @@
   <a href="/requests/{{ req.id }}" class="btn btn-sm btn-outline-light py-1" style="font-size:12px;">
     <i class="bi bi-arrow-left me-1"></i>Geri
   </a>
-  <span class="brand">PrizmaDesk</span>
+  <span class="brand">micedesk</span>
   <span style="opacity:.5; font-size:11px;">{{ req.request_no }}</span>
 
   {# Bütçe seçici (birden fazla onaylı varsa) #}
@@ -175,7 +175,7 @@
 
   {# Başlık #}
   <div class="doc-header">
-    <div class="company">{{ (settings.company_name if settings else 'PrizmaDesk') }}</div>
+    <div class="company">{{ (settings.company_name if settings else 'micedesk') }}</div>
     <div class="title">{{ req.event_name }}</div>
     <div class="subtitle">
       {{ req.client_name }}
@@ -234,7 +234,7 @@
   {# Footer #}
   <div class="doc-footer">
     <div>
-      <strong>{{ settings.company_name if settings else 'PrizmaDesk' }}</strong>
+      <strong>{{ settings.company_name if settings else 'micedesk' }}</strong>
       {% if settings and settings.company_email %} · {{ settings.company_email }}{% endif %}
       {% if settings and settings.company_phone %} · {{ settings.company_phone }}{% endif %}
     </div>

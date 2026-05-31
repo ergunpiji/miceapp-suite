@@ -33,8 +33,8 @@ class Event(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String, nullable=False)
-    edem_request_id: Mapped[str | None] = mapped_column(String)
-    edem_request_no: Mapped[str | None] = mapped_column(String)
+    satinalma_request_id: Mapped[str | None] = mapped_column(String)
+    satinalma_request_no: Mapped[str | None] = mapped_column(String)
     supplier_token: Mapped[str] = mapped_column(String, default=new_token, unique=True)
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)

@@ -64,8 +64,8 @@ async def activate_operasyon(
     _oa_base = os.environ.get("OA_PUBLIC_BASE", _host_base).rstrip("/")
 
     payload = {
-        "edem_request_id":  req.id,
-        "edem_request_no":  req.request_no or "",
+        "satinalma_request_id":  req.id,
+        "satinalma_request_no":  req.request_no or "",
         "event_name":       req.event_name,
         "start_date":       (req.check_in.isoformat() if hasattr(req.check_in, 'isoformat') else str(req.check_in)) if req.check_in else datetime.today().date().isoformat(),
         "end_date":         (req.check_out.isoformat() if hasattr(req.check_out, 'isoformat') else str(req.check_out)) if req.check_out else datetime.today().date().isoformat(),

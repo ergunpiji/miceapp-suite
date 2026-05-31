@@ -31,7 +31,7 @@ if _env_key:
 else:
     # Development fallback — her restart'ta aynı kalır,
     # ama production'da asla kullanılmamalı.
-    SECRET_KEY = "edem-dev-fallback-key--set-SECRET_KEY-env-var-in-production"
+    SECRET_KEY = "satinalma-dev-fallback-key--set-SECRET_KEY-env-var-in-production"
     print("[AUTH] ⚠️  SECRET_KEY env variable ayarlı değil — development fallback kullanılıyor!", flush=True)
 
 ALGORITHM       = "HS256"
@@ -193,7 +193,7 @@ def require_pm_mudur(current_user: User = Depends(get_current_user)) -> User:
     )
 
 
-def require_edem(current_user: User = Depends(get_current_user)) -> User:
+def require_satinalma(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role not in ("admin", "satinalma") and not current_user.is_gm:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -202,7 +202,7 @@ def require_edem(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
-def require_admin_or_edem(current_user: User = Depends(get_current_user)) -> User:
+def require_admin_or_satinalma(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role not in ("admin", "satinalma", "muhasebe_muduru") and not current_user.is_gm:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

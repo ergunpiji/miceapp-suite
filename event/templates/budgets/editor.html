@@ -205,7 +205,7 @@
         <label class="form-label fw-semibold" style="font-size:13px;">Mekan / Tedarikçi Adı</label>
         <input type="hidden" name="venue_id" id="venueIdInput" value="{{ (budget.venue_id or '') if budget else '' }}">
         {% if preferred_venues %}
-        <select class="form-select mb-2" id="venueNameSelect" onchange="onVenueSelectEdem(this.value)">
+        <select class="form-select mb-2" id="venueNameSelect" onchange="onVenueSelectSatinalma(this.value)">
           <option value="">— Talep edilen mekanlardan seçin —</option>
           {% for v in preferred_venues %}
           <option value="{{ v.name | e }}" data-venue-id="{{ v.id }}"
@@ -312,7 +312,7 @@
       <i class="bi bi-save me-1"></i> Kaydet
     </button>
     {% endif %}
-    {% if not budget or budget.budget_status in ('draft_edem', 'revision_requested') %}
+    {% if not budget or budget.budget_status in ('draft_satinalma', 'revision_requested') %}
     <button type="button" class="btn btn-primary {% if budget %}{% else %}ms-2{% endif %}"
             onclick="sendToManager()">
       <i class="bi bi-send me-1"></i> Manager'a Gönder
@@ -354,7 +354,7 @@ function defaultVat(section) {
 }
 
 const groupedServices = {{ grouped_services | safe }};
-const BUDGET_STATUS = '{{ budget.budget_status if budget else "draft_edem" }}';
+const BUDGET_STATUS = '{{ budget.budget_status if budget else "draft_satinalma" }}';
 
 // ─── Para Birimi ───
 const CURRENCIES = {
@@ -980,7 +980,7 @@ let _autoSaveTimer = null;
 function scheduleAutoSave() {
   if (!window._currentBudgetId && typeof _currentBudgetId === 'undefined') return;
   clearTimeout(_autoSaveTimer);
-  _autoSaveTimer = setTimeout(() => _saveCurrentEdem(true), 3000);
+  _autoSaveTimer = setTimeout(() => _saveCurrentSatinalma(true), 3000);
 }
 
 // ─── AJAX Sekme Sistemi (Satın Alma) ───
@@ -999,7 +999,7 @@ function _setActiveTab(budgetId) {
   });
 }
 
-async function _saveCurrentEdem(showMsg = false) {
+async function _saveCurrentSatinalma(showMsg = false) {
   saveRows();
   const rowsJson  = document.getElementById('rowsJson')?.value || '[]';
   const venueName = document.getElementById('venueNameInput')?.value || '';
@@ -1028,7 +1028,7 @@ async function _saveCurrentEdem(showMsg = false) {
 // Mevcut sekmeden başka bir sekmeye satırları kopyala
 async function copyRowsToTab(targetId, targetName) {
   if (!confirm(`Mevcut sekmedeki tüm satırlar "${targetName}" bütçesine kopyalanacak. Devam edilsin mi?`)) return;
-  await _saveCurrentEdem(false);
+  await _saveCurrentSatinalma(false);
   const rowsJson = document.getElementById('rowsJson')?.value || '[]';
   const fd = new FormData();
   fd.append('rows_json', rowsJson);
@@ -1046,7 +1046,7 @@ async function copyRowsToTab(targetId, targetName) {
   }
 }
 
-function onVenueSelectEdem(val) {
+function onVenueSelectSatinalma(val) {
   const inp = document.getElementById('venueNameInput');
   const vidInp = document.getElementById('venueIdInput');
   if (val === '__manual__') {
@@ -1066,7 +1066,7 @@ function onVenueSelectEdem(val) {
 
 async function switchBudget(budgetId) {
   if (budgetId === _currentBudgetId) return;
-  await _saveCurrentEdem(true);
+  await _saveCurrentSatinalma(true);
 
   const res = await fetch(`/budgets/${budgetId}/json`);
   if (!res.ok) { alert('Bütçe yüklenemedi.'); return; }
@@ -1110,11 +1110,11 @@ async function switchBudget(budgetId) {
 }
 
 async function copyAndOpen() {
-  await _saveCurrentEdem(false);
+  await _saveCurrentSatinalma(false);
   const rowsJson = document.getElementById('rowsJson')?.value || '[]';
   const fd = new FormData();
   fd.append('rows_json', rowsJson);
-  const res = await fetch(`/budgets/${_currentBudgetId}/copy-edem`, { method: 'POST', body: fd });
+  const res = await fetch(`/budgets/${_currentBudgetId}/copy-satinalma`, { method: 'POST', body: fd });
   const newUrl = res.url;
   const match  = newUrl.match(/\/budgets\/([^/]+)\/edit/);
   if (!match) { location.reload(); return; }

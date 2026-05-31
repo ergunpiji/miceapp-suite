@@ -1,9 +1,9 @@
-# PrizmaDesk — Finans & İK Yönetim Sistemi
+# micedesk — Finans & İK Yönetim Sistemi
 
-Bu repo (`prizmafinans`) **PrizmaDesk** adlı kapsamlı bir kurumsal yönetim sistemini barındırır.
+Bu repo (`prizmafinans`) **micedesk** adlı kapsamlı bir kurumsal yönetim sistemini barındırır.
 Kökeni `Satın Alma` (etkinlik/RFQ yönetimi) projesi olmasına rağmen evrim sonucu artık ana odak
 **finans + İK + onay akışı + Türkiye e-fatura entegrasyonu**'dur. Satın Alma ürünü ayrı bir
-repo'ya (`ergunpiji/Satın Alma`) ayrılmıştır; bu repo sadece **PrizmaDesk** içindir.
+repo'ya (`ergunpiji/Satın Alma`) ayrılmıştır; bu repo sadece **micedesk** içindir.
 
 > **Önemli:** Eski etkinlik yönetimi kodları (Reference, Venue, event_types, budgets RFQ kısmı)
 > hâlâ duruyor — silmeyin, çünkü `Reference` model'i fatura/HBF/avans gibi finans modüllerinde
@@ -16,7 +16,7 @@ repo'ya (`ergunpiji/Satın Alma`) ayrılmıştır; bu repo sadece **PrizmaDesk**
 - **Web:** FastAPI 0.111, Starlette 0.37, Uvicorn
 - **ORM:** SQLAlchemy 2.0+ (Pydantic 2 ile)
 - **Auth:** python-jose (JWT) + passlib (bcrypt). HttpOnly cookie `access_token`.
-- **DB:** PostgreSQL (Railway'de canlı), yerelde fallback olarak SQLite (`edem.db`).
+- **DB:** PostgreSQL (Railway'de canlı), yerelde fallback olarak SQLite (`satinalma.db`).
 - **Şablonlama:** Jinja2 (server-side rendered HTML, SPA değil)
 - **Asenkron:** `httpx` (e-fatura provider çağrıları için)
 - **Excel:** `openpyxl` (rapor export)
@@ -226,7 +226,7 @@ Sadece sıfırlama gerekiyorsa kullanılmalı, asla production'da değil.
 modelleri, kendi router'ları olan ayrı FastAPI uygulamaları**. Ana app'le aynı process'te
 çalışmıyorlar; mount edilmiyorlar; ayrı port/host ile deploy edilebilirler.
 
-> Ana PrizmaDesk app'i kanonik. Agent'lar ileride microservice'leşmek üzere ayrılmış prototip
+> Ana micedesk app'i kanonik. Agent'lar ileride microservice'leşmek üzere ayrılmış prototip
 > niteliğinde. Yeni özellik geliştirirken **ana app'e** ekle, agent'a değil — aksi belirtilmedikçe.
 
 `agents/operasyon` özellikle Satın Alma'in eski etkinlik kodunun daha derin halini içeriyor; bu kod
@@ -290,7 +290,7 @@ uvicorn app:app --reload --port 8000
 ```
 SECRET_KEY=<32+ karakter random — `python3 -c "import secrets; print(secrets.token_hex(32))"`>
 ENVIRONMENT=development
-DATABASE_URL=postgresql://...   # boş bırakılırsa edem.db (SQLite) kullanılır
+DATABASE_URL=postgresql://...   # boş bırakılırsa satinalma.db (SQLite) kullanılır
 APP_URL=http://localhost:8000
 ```
 
@@ -314,7 +314,7 @@ APP_URL=http://localhost:8000
   Railway disk'i geçici, S3'e taşınmadan büyük dosya saklamayın.
 - **Excel export** `openpyxl` ile, `excel_export/` modülünde — yeni rapor eklerken oradaki
   pattern'i izle (StreamingResponse + `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`).
-- **`reference/` klasörü gitignore'lı** — tarihsel HTML referansı (eski `edem.html`), commit edilmez.
+- **`reference/` klasörü gitignore'lı** — tarihsel HTML referansı (eski `satinalma.html`), commit edilmez.
 
 ---
 
@@ -364,6 +364,6 @@ Employee
 
 ## 15. Eskiden ne vardı, ne kaldı
 
-`reference/edem.html` — orijinal single-page HTML referans uygulaması (~5000 satır). Bu Python
+`reference/satinalma.html` — orijinal single-page HTML referans uygulaması (~5000 satır). Bu Python
 sürümünün ilk taslağı için kullanıldı, **artık güncel değil**. Repo'da bulunsa bile gitignore'lı.
 Yeni özellik için referans almayın — kod kendi başına kanonik.

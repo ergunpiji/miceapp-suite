@@ -9,17 +9,17 @@
   <form method="post" action="{% if event %}/events/{{ event.id }}/edit{% else %}/events/new{% endif %}" id="event-form">
 
     <!-- Gizli Satın Alma alanları -->
-    <input type="hidden" name="edem_request_id" id="edem_request_id" value="{{ event.edem_request_id or '' if event else '' }}">
-    <input type="hidden" name="edem_request_no" id="edem_request_no" value="{{ event.edem_request_no or '' if event else '' }}">
+    <input type="hidden" name="satinalma_request_id" id="satinalma_request_id" value="{{ event.satinalma_request_id or '' if event else '' }}">
+    <input type="hidden" name="satinalma_request_no" id="satinalma_request_no" value="{{ event.satinalma_request_no or '' if event else '' }}">
 
     <!-- Satın Alma Referansı Seçici -->
-    {% if edem_available %}
+    {% if satinalma_available %}
     <div style="margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid #f1f5f9;">
       <div class="card-title" style="margin-bottom:10px;">🔗 Satın Alma Referansı</div>
 
-      {% if event and event.edem_request_no %}
+      {% if event and event.satinalma_request_no %}
       <div class="alert alert-info" style="margin-bottom:10px;">
-        Bağlı referans: <strong>{{ event.edem_request_no }}</strong>
+        Bağlı referans: <strong>{{ event.satinalma_request_no }}</strong>
         <button type="button" onclick="clearReference()" class="btn btn-secondary btn-sm" style="margin-left:10px;">Bağlantıyı Kaldır</button>
       </div>
       {% endif %}
@@ -35,7 +35,7 @@
 
       <!-- Referans listesi -->
       <div id="ref-list" style="margin-top:10px; max-height:280px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:8px; display:none;">
-        {% for ref in edem_refs %}
+        {% for ref in satinalma_refs %}
         <div class="ref-item"
              data-id="{{ ref.id }}"
              data-no="{{ ref.request_no }}"
@@ -68,7 +68,7 @@
         </div>
         {% endfor %}
 
-        {% if not edem_refs %}
+        {% if not satinalma_refs %}
         <div style="padding:20px; text-align:center; color:#94a3b8; font-size:13px;">
           Aktif referans bulunamadı
         </div>
@@ -161,8 +161,8 @@ function filterRefs(q) {
 
 function selectReference(el) {
   // Gizli alanları doldur
-  document.getElementById('edem_request_id').value = el.dataset.id;
-  document.getElementById('edem_request_no').value = el.dataset.no;
+  document.getElementById('satinalma_request_id').value = el.dataset.id;
+  document.getElementById('satinalma_request_no').value = el.dataset.no;
 
   // Form alanlarını doldur (boşsa veya her zaman)
   setValue('f-name',  el.dataset.name);
@@ -192,15 +192,15 @@ function setValue(id, val) {
 }
 
 function clearReference() {
-  document.getElementById('edem_request_id').value = '';
-  document.getElementById('edem_request_no').value = '';
+  document.getElementById('satinalma_request_id').value = '';
+  document.getElementById('satinalma_request_no').value = '';
   if (refSearch) refSearch.value = '';
   const label = document.getElementById('ref-selected-label');
   if (label) label.innerHTML = '';
 }
 
 // Sayfa açılışında mevcut bağlantıyı göster
-const currentNo = document.getElementById('edem_request_no')?.value;
+const currentNo = document.getElementById('satinalma_request_no')?.value;
 if (currentNo && refSearch) {
   const matched = [...items].find(i => i.dataset.no === currentNo);
   if (matched) {

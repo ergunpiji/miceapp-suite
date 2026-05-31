@@ -376,21 +376,21 @@ async def delete_task(
 # Satın Alma Bütçesinden İçe Aktar
 # ---------------------------------------------------------------------------
 
-@router.post("/tasks/import-edem")
-async def import_tasks_from_edem(
+@router.post("/tasks/import-satinalma")
+async def import_tasks_from_satinalma(
     event_id: str,
     db: Session = Depends(get_db)
 ):
     """Satın Alma bütçesindeki satırları tedarikçi görevlerine dönüştürür."""
     import uuid
     from datetime import datetime as dt
-    from services.edem_bridge import get_budget_rows, SECTION_TO_SUPPLIER_TYPE
+    from services.satinalma_bridge import get_budget_rows, SECTION_TO_SUPPLIER_TYPE
 
     event = db.query(Event).filter(Event.id == event_id).first()
-    if not event or not event.edem_request_id:
+    if not event or not event.satinalma_request_id:
         return RedirectResponse(url=url(f"/events/{event_id}/tasks"), status_code=303)
 
-    venue_name, rows = get_budget_rows(event.edem_request_id)
+    venue_name, rows = get_budget_rows(event.satinalma_request_id)
     if not rows:
         return RedirectResponse(url=url(f"/events/{event_id}/tasks"), status_code=303)
 
@@ -430,20 +430,20 @@ async def import_tasks_from_edem(
     return RedirectResponse(url=url(f"/events/{event_id}/tasks?imported=1"), status_code=303)
 
 
-@router.post("/agenda/import-edem")
-async def import_agenda_from_edem(
+@router.post("/agenda/import-satinalma")
+async def import_agenda_from_satinalma(
     event_id: str,
     db: Session = Depends(get_db)
 ):
     """Satın Alma bütçesindeki toplantı / yemek / transfer kalemlerini günlük programa ekler."""
     import uuid
-    from services.edem_bridge import get_budget_rows, SECTION_TO_SESSION_TYPE
+    from services.satinalma_bridge import get_budget_rows, SECTION_TO_SESSION_TYPE
 
     event = db.query(Event).filter(Event.id == event_id).first()
-    if not event or not event.edem_request_id:
+    if not event or not event.satinalma_request_id:
         return RedirectResponse(url=url(f"/events/{event_id}/agenda"), status_code=303)
 
-    venue_name, rows = get_budget_rows(event.edem_request_id)
+    venue_name, rows = get_budget_rows(event.satinalma_request_id)
     if not rows:
         return RedirectResponse(url=url(f"/events/{event_id}/agenda"), status_code=303)
 

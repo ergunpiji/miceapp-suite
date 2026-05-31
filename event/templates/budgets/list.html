@@ -32,7 +32,7 @@
         </thead>
         <tbody>
           {% for budget in budgets %}
-          {% set bs = budget.budget_status if budget.budget_status else 'draft_edem' %}
+          {% set bs = budget.budget_status if budget.budget_status else 'draft_satinalma' %}
           {% set slabel = status_labels.get(bs, bs) %}
           {% set scolor = status_colors.get(bs, 'secondary') %}
           <tr>
@@ -76,8 +76,8 @@
                 <i class="bi bi-eye"></i>
               </a>
 
-              {# Satın Alma / Asistan: düzenle butonu (draft_edem veya revision_requested ise) #}
-              {% if current_user.role in ('admin', 'satinalma', 'asistan') and bs in ('draft_edem', 'revision_requested') %}
+              {# Satın Alma / Asistan: düzenle butonu (draft_satinalma veya revision_requested ise) #}
+              {% if current_user.role in ('admin', 'satinalma', 'asistan') and bs in ('draft_satinalma', 'revision_requested') %}
               <a href="/budgets/{{ budget.id }}/edit" class="btn btn-sm btn-outline-primary ms-1" title="Maliyeti Düzenle">
                 <i class="bi bi-pencil"></i>
               </a>
@@ -97,8 +97,8 @@
               </a>
               {% endif %}
 
-              {# Sil (sadece draft_edem, admin veya satinalma) #}
-              {% if current_user.role == 'admin' or (current_user.role == 'satinalma' and bs == 'draft_edem') %}
+              {# Sil (sadece draft_satinalma, admin veya satinalma) #}
+              {% if current_user.role == 'admin' or (current_user.role == 'satinalma' and bs == 'draft_satinalma') %}
               <form method="post" action="/budgets/{{ budget.id }}/delete" class="d-inline ms-1"
                     onsubmit="return confirm('Bu bütçeyi silmek istediğinizden emin misiniz?')">
                 <button type="submit" class="btn btn-sm btn-outline-danger">

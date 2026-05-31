@@ -1,5 +1,5 @@
 """
-PrizmaDesk — Ana FastAPI uygulama girişi
+micedesk — Ana FastAPI uygulama girişi
 Çalıştır: uvicorn app:app --reload
 """
 
@@ -67,7 +67,7 @@ else:
 # ---------------------------------------------------------------------------
 
 app = FastAPI(
-    title="PrizmaDesk",
+    title="micedesk",
     version="2.0.0",
     docs_url=None,
     redoc_url=None,

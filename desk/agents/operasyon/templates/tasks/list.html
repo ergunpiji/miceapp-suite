@@ -7,8 +7,8 @@
     <div class="page-subtitle">{{ tasks | length }} görev</div>
   </div>
   <div style="display:flex; gap:8px; align-items:center;">
-    {% if event.edem_request_id %}
-    <form method="post" action="{{ base_url }}/events/{{ event.id }}/tasks/import-edem"
+    {% if event.satinalma_request_id %}
+    <form method="post" action="{{ base_url }}/events/{{ event.id }}/tasks/import-satinalma"
           onsubmit="return confirm('Satın Alma bütçesindeki hizmet kalemleri görev olarak eklenecek. Devam?')">
       <button type="submit" class="btn btn-secondary"
               style="font-size:13px;">📥 Satın Alma'den Aktar</button>
@@ -148,8 +148,8 @@
     <br>
     <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
       <a href="{{ base_url }}/events/{{ event.id }}/tasks/new" class="btn btn-primary">+ İlk Görevi Ekle</a>
-      {% if event.edem_request_id %}
-      <form method="post" action="{{ base_url }}/events/{{ event.id }}/tasks/import-edem"
+      {% if event.satinalma_request_id %}
+      <form method="post" action="{{ base_url }}/events/{{ event.id }}/tasks/import-satinalma"
             onsubmit="return confirm('Satın Alma bütçesindeki kalemler görev olarak eklenecek. Devam?')">
         <button type="submit" class="btn btn-secondary">📥 Satın Alma'den Aktar</button>
       </form>

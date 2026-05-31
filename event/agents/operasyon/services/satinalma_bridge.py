@@ -4,8 +4,8 @@ Satın Alma Köprü Servisi
 Satın Alma'in SQLite veritabanını okuyarak referansları (Request) ve onaylı
 bütçeleri (Budget) katılımcı ajanına sunar.
 
-DB yolu: EDEM_DB_PATH env değişkeninden okunur,
-         yoksa ../../edem.db (göreceli yol) kullanılır.
+DB yolu: SATINALMA_DB_PATH env değişkeninden okunur,
+         yoksa ../../satinalma.db (göreceli yol) kullanılır.
 """
 
 import sqlite3
@@ -16,8 +16,8 @@ from dataclasses import dataclass
 from datetime import date
 
 # Satın Alma DB yolu
-_DEFAULT_DB = Path(__file__).parent.parent.parent.parent / "edem.db"
-EDEM_DB_PATH = os.environ.get("EDEM_DB_PATH", str(_DEFAULT_DB))
+_DEFAULT_DB = Path(__file__).parent.parent.parent.parent / "satinalma.db"
+SATINALMA_DB_PATH = os.environ.get("SATINALMA_DB_PATH", str(_DEFAULT_DB))
 
 # Katılımcı ajanında gösterilecek Satın Alma statüleri
 VISIBLE_STATUSES = {
@@ -41,7 +41,7 @@ def _fmt(ymd: str | None) -> str:
 
 
 @dataclass
-class EdemReference:
+class SatinalmaReference:
     id: str
     request_no: str
     event_name: str
@@ -60,19 +60,19 @@ class EdemReference:
 
 def _connect() -> sqlite3.Connection | None:
     """Satın Alma DB bağlantısı açar. Dosya yoksa None döner."""
-    if not Path(EDEM_DB_PATH).exists():
+    if not Path(SATINALMA_DB_PATH).exists():
         return None
-    conn = sqlite3.connect(EDEM_DB_PATH)
+    conn = sqlite3.connect(SATINALMA_DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def is_available() -> bool:
     """Satın Alma DB erişilebilir mi?"""
-    return Path(EDEM_DB_PATH).exists()
+    return Path(SATINALMA_DB_PATH).exists()
 
 
-def get_references(search: str = "") -> list[EdemReference]:
+def get_references(search: str = "") -> list[SatinalmaReference]:
     """
     Katılımcı ajanında gösterilebilecek Satın Alma referanslarını döner.
     Sadece aktif / tamamlanmış referanslar listelenir.
@@ -116,7 +116,7 @@ def get_references(search: str = "") -> list[EdemReference]:
         rows = conn.execute(query, params).fetchall()
 
         return [
-            EdemReference(
+            SatinalmaReference(
                 id=r["id"],
                 request_no=r["request_no"] or "",
                 event_name=r["event_name"] or "",
@@ -172,10 +172,10 @@ SECTION_TO_SESSION_TYPE = {
 }
 
 
-def get_budget_rows(edem_request_id: str) -> tuple[str, list[BudgetRow]]:
+def get_budget_rows(satinalma_request_id: str) -> tuple[str, list[BudgetRow]]:
     """
     Verilen Satın Alma referansı için en iyi bütçenin satırlarını döner.
-    Öncelik sırası: approved > pending_manager > draft_edem
+    Öncelik sırası: approved > pending_manager > draft_satinalma
     Dönüş: (venue_name, [BudgetRow])
     """
     conn = _connect()
@@ -193,11 +193,11 @@ def get_budget_rows(edem_request_id: str) -> tuple[str, list[BudgetRow]]:
                     WHEN 'approved'        THEN 1
                     WHEN 'pending_manager' THEN 2
                     WHEN 'draft_manager'   THEN 3
-                    WHEN 'draft_edem'      THEN 4
+                    WHEN 'draft_satinalma'      THEN 4
                     ELSE 5
                 END
             LIMIT 1
-        """, [edem_request_id]).fetchone()
+        """, [satinalma_request_id]).fetchone()
 
         if not row:
             return "", []
@@ -226,7 +226,7 @@ def get_budget_rows(edem_request_id: str) -> tuple[str, list[BudgetRow]]:
         conn.close()
 
 
-def get_reference(request_id: str) -> EdemReference | None:
+def get_reference(request_id: str) -> SatinalmaReference | None:
     """Tek bir referansı ID'ye göre getirir."""
     conn = _connect()
     if not conn:
@@ -248,7 +248,7 @@ def get_reference(request_id: str) -> EdemReference | None:
         if not row:
             return None
 
-        return EdemReference(
+        return SatinalmaReference(
             id=row["id"],
             request_no=row["request_no"] or "",
             event_name=row["event_name"] or "",

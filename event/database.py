@@ -22,7 +22,7 @@ from models import (
 
 import os
 
-_raw_url = os.environ.get("DATABASE_URL", "sqlite:///./edem.db")
+_raw_url = os.environ.get("DATABASE_URL", "sqlite:///./satinalma.db")
 
 # Railway / Render PostgreSQL URL'i "postgres://" ile başlar,
 # SQLAlchemy "postgresql://" ister.
@@ -99,8 +99,8 @@ def seed_data() -> None:
                 ),
                 User(
                     id=_uuid(),
-                    email="edem@miceapp.net",
-                    password_hash=pwd_ctx.hash("Edem123"),
+                    email="satinalma@miceapp.net",
+                    password_hash=pwd_ctx.hash("Satinalma123"),
                     role="satinalma",
                     name="Satın Alma",
                     surname="Kullanıcısı",
@@ -604,7 +604,7 @@ def migrate_db():
             conn.rollback()
 
         # Budgets
-        _safe_add_column(conn, "budgets", "budget_status",       "TEXT",  "'draft_edem'")
+        _safe_add_column(conn, "budgets", "budget_status",       "TEXT",  "'draft_satinalma'")
         _safe_add_column(conn, "budgets", "revision_notes",      "TEXT",  "''")
         _safe_add_column(conn, "budgets", "manager_notes",       "TEXT",  "''")
         _safe_add_column(conn, "budgets", "service_fee_pct",     "REAL",  "0")

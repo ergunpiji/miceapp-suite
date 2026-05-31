@@ -21,7 +21,7 @@ from models import User, RolePermission, ROLE_ORDER
 # ---------------------------------------------------------------------------
 
 _env_key = os.environ.get("SECRET_KEY", "")
-SECRET_KEY = _env_key or "edem-dev-fallback-key--set-SECRET_KEY-env-var-in-production"
+SECRET_KEY = _env_key or "satinalma-dev-fallback-key--set-SECRET_KEY-env-var-in-production"
 if not _env_key:
     print("[AUTH] SECRET_KEY env variable ayarlı değil — development fallback kullanılıyor!", flush=True)
 

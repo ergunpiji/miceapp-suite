@@ -5,7 +5,7 @@ Kullanım:
   DATABASE_URL="postgresql://..." python3 scripts/restore_from_backup.py
 
 SQLite backup yolu SQLITE_PATH env ile override edilebilir.
-Default: ~/Desktop/CLAUDE/Satın Alma-backup-2026-04-29/edem.db
+Default: ~/Desktop/CLAUDE/Satın Alma-backup-2026-04-29/satinalma.db
 """
 import os
 import sqlite3
@@ -14,7 +14,7 @@ from pathlib import Path
 
 SQLITE_PATH = os.environ.get(
     "SQLITE_PATH",
-    str(Path.home() / "Desktop/CLAUDE/Satın Alma-backup-2026-04-29/edem.db"),
+    str(Path.home() / "Desktop/CLAUDE/Satın Alma-backup-2026-04-29/satinalma.db"),
 )
 PG_URL = os.environ.get("DATABASE_URL", "").strip()
 

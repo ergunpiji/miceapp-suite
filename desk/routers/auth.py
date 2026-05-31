@@ -79,7 +79,7 @@ async def logout(request: Request):
 async def demo_login(db: Session = Depends(get_db)):
     """Demo hesabına otomatik giriş — 1 saatlik oturum."""
     demo_user = db.query(User).filter(
-        User.email == "demo@prizmadesk.com", User.active == True  # noqa: E712
+        User.email == "demo@miceapp.net", User.active == True  # noqa: E712
     ).first()
     if not demo_user:
         raise HTTPException(

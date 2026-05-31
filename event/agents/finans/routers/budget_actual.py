@@ -52,7 +52,7 @@ async def project_new(request: Request):
 async def project_create(
     request: Request,
     name: str = Form(...),
-    edem_request_no: str = Form(""),
+    satinalma_request_no: str = Form(""),
     customer_name: str = Form(""),
     event_date: str = Form(""),
     event_end_date: str = Form(""),
@@ -62,7 +62,7 @@ async def project_create(
 ):
     project = Project(
         name=name,
-        edem_request_no=edem_request_no or None,
+        satinalma_request_no=satinalma_request_no or None,
         customer_name=customer_name or None,
         event_date=date.fromisoformat(event_date) if event_date else None,
         event_end_date=date.fromisoformat(event_end_date) if event_end_date else None,
@@ -136,7 +136,7 @@ async def project_edit(project_id: str, request: Request, db: Session = Depends(
 async def project_update(
     project_id: str,
     name: str = Form(...),
-    edem_request_no: str = Form(""),
+    satinalma_request_no: str = Form(""),
     customer_name: str = Form(""),
     event_date: str = Form(""),
     event_end_date: str = Form(""),
@@ -148,7 +148,7 @@ async def project_update(
     if not project:
         raise HTTPException(status_code=404, detail="Proje bulunamadı.")
     project.name = name
-    project.edem_request_no = edem_request_no or None
+    project.satinalma_request_no = satinalma_request_no or None
     project.customer_name = customer_name or None
     project.event_date = date.fromisoformat(event_date) if event_date else None
     project.event_end_date = date.fromisoformat(event_end_date) if event_end_date else None

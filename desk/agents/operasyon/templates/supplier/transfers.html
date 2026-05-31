@@ -169,7 +169,7 @@
   </div>
 
   {# Satın Alma Proje Kartı #}
-  {% if edem_ref %}
+  {% if satinalma_ref %}
   <div style="background:#fff; border:1px solid #e2e8f0; border-radius:12px;
               padding:16px 20px; margin-bottom:20px;">
     <div style="display:flex; align-items:center; justify-content:space-between;
@@ -178,51 +178,51 @@
         <span style="font-size:13px; font-weight:700; color:#1e3a5f;">📋 Satın Alma Projesi</span>
         <span style="background:#f0f9ff; color:#0369a1; border-radius:20px;
                       padding:2px 10px; font-size:12px; font-weight:600;">
-          {{ edem_ref.request_no }}
+          {{ satinalma_ref.request_no }}
         </span>
       </div>
       <span style="background:#dcfce7; color:#166534; border-radius:20px;
                     padding:2px 10px; font-size:12px; font-weight:600;">
-        {{ edem_ref.status_label }}
+        {{ satinalma_ref.status_label }}
       </span>
     </div>
     <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
                 gap:10px;">
       <div>
         <div style="font-size:11px; color:#94a3b8; margin-bottom:2px;">Müşteri</div>
-        <div style="font-size:14px; font-weight:700; color:#1e293b;">{{ edem_ref.client_name }}</div>
+        <div style="font-size:14px; font-weight:700; color:#1e293b;">{{ satinalma_ref.client_name }}</div>
       </div>
       <div>
         <div style="font-size:11px; color:#94a3b8; margin-bottom:2px;">Etkinlik</div>
-        <div style="font-size:14px; font-weight:700; color:#1e293b;">{{ edem_ref.event_name }}</div>
+        <div style="font-size:14px; font-weight:700; color:#1e293b;">{{ satinalma_ref.event_name }}</div>
       </div>
-      {% if edem_ref.check_in %}
+      {% if satinalma_ref.check_in %}
       <div>
         <div style="font-size:11px; color:#94a3b8; margin-bottom:2px;">Tarih</div>
         <div style="font-size:14px; font-weight:700; color:#1e293b;">
-          {{ edem_ref.check_in }}
-          {% if edem_ref.check_out and edem_ref.check_out != edem_ref.check_in %}
-            — {{ edem_ref.check_out }}
+          {{ satinalma_ref.check_in }}
+          {% if satinalma_ref.check_out and satinalma_ref.check_out != satinalma_ref.check_in %}
+            — {{ satinalma_ref.check_out }}
           {% endif %}
         </div>
       </div>
       {% endif %}
-      {% if edem_ref.city %}
+      {% if satinalma_ref.city %}
       <div>
         <div style="font-size:11px; color:#94a3b8; margin-bottom:2px;">Şehir</div>
-        <div style="font-size:14px; font-weight:700; color:#1e293b;">{{ edem_ref.city }}</div>
+        <div style="font-size:14px; font-weight:700; color:#1e293b;">{{ satinalma_ref.city }}</div>
       </div>
       {% endif %}
-      {% if edem_ref.attendee_count %}
+      {% if satinalma_ref.attendee_count %}
       <div>
         <div style="font-size:11px; color:#94a3b8; margin-bottom:2px;">Katılımcı</div>
-        <div style="font-size:14px; font-weight:700; color:#1e293b;">{{ edem_ref.attendee_count }} kişi</div>
+        <div style="font-size:14px; font-weight:700; color:#1e293b;">{{ satinalma_ref.attendee_count }} kişi</div>
       </div>
       {% endif %}
-      {% if edem_ref.venue_name %}
+      {% if satinalma_ref.venue_name %}
       <div>
         <div style="font-size:11px; color:#94a3b8; margin-bottom:2px;">Mekan</div>
-        <div style="font-size:14px; font-weight:700; color:#1e293b;">{{ edem_ref.venue_name }}</div>
+        <div style="font-size:14px; font-weight:700; color:#1e293b;">{{ satinalma_ref.venue_name }}</div>
       </div>
       {% endif %}
     </div>

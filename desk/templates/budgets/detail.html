@@ -3,7 +3,7 @@
 {% block page_title_block %}{{ page_title }}{% endblock %}
 
 {% block topbar_actions %}
-{% if can_edem_edit %}
+{% if can_satinalma_edit %}
 <a href="/budgets/{{ budget.id }}/edit" class="btn btn-primary btn-sm">
   <i class="bi bi-pencil me-1"></i> Düzenle
 </a>
@@ -66,9 +66,9 @@
         {% endif %}
       </div>
       <div class="d-flex gap-2 flex-wrap">
-        {% if can_edem_edit %}
-        {# Satın Alma silebilir sadece draft_edem durumunda #}
-        {% if budget.budget_status == 'draft_edem' or current_user.role == 'admin' %}
+        {% if can_satinalma_edit %}
+        {# Satın Alma silebilir sadece draft_satinalma durumunda #}
+        {% if budget.budget_status == 'draft_satinalma' or current_user.role == 'admin' %}
         <form method="post" action="/budgets/{{ budget.id }}/delete"
               onsubmit="return confirm('Bu bütçeyi silmek istediğinizden emin misiniz?')">
           <button type="submit" class="btn btn-outline-danger btn-sm">

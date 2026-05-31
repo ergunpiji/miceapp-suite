@@ -71,7 +71,7 @@ async def admin_backup_db(current_user: User = Depends(require_super_admin)):
                 )
             content = gzip.compress(result.stdout)
         else:
-            db_file = "edem.db"
+            db_file = "satinalma.db"
             if not os.path.exists(db_file):
                 return JSONResponse({"ok": False, "error": "SQLite dosyası bulunamadı."}, status_code=400)
             with open(db_file, "rb") as f:

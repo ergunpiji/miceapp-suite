@@ -8,7 +8,7 @@ from datetime import date
 from config import url
 from database import get_db
 from models import Event, UserToken
-from services import edem_bridge
+from services import satinalma_bridge
 
 
 def _public_base(request: Request) -> str:
@@ -59,10 +59,10 @@ async def list_events(request: Request, db: Session = Depends(get_db)):
     })
 
 
-@router.get("/edem-references", response_class=JSONResponse)
-async def edem_references_api(search: str = Query("")):
+@router.get("/satinalma-references", response_class=JSONResponse)
+async def satinalma_references_api(search: str = Query("")):
     """Satın Alma referanslarını JSON olarak döner (form otomatik doldurma için)."""
-    refs = edem_bridge.get_references(search=search)
+    refs = satinalma_bridge.get_references(search=search)
     return [
         {
             "id": r.id,
@@ -84,13 +84,13 @@ async def edem_references_api(search: str = Query("")):
 
 @router.get("/new", response_class=HTMLResponse)
 async def new_event_form(request: Request):
-    edem_available = edem_bridge.is_available()
-    edem_refs = edem_bridge.get_references() if edem_available else []
+    satinalma_available = satinalma_bridge.is_available()
+    satinalma_refs = satinalma_bridge.get_references() if satinalma_available else []
     return templates.TemplateResponse("events/form.html", {
         "request": request,
         "event": None,
-        "edem_available": edem_available,
-        "edem_refs": edem_refs,
+        "satinalma_available": satinalma_available,
+        "satinalma_refs": satinalma_refs,
         "active": "events"
     })
 
@@ -104,8 +104,8 @@ async def create_event(
     venue: str = Form(""),
     city: str = Form(""),
     notes: str = Form(""),
-    edem_request_id: str = Form(""),
-    edem_request_no: str = Form(""),
+    satinalma_request_id: str = Form(""),
+    satinalma_request_no: str = Form(""),
     db: Session = Depends(get_db)
 ):
     event = Event(
@@ -115,8 +115,8 @@ async def create_event(
         venue=venue or None,
         city=city or None,
         notes=notes or None,
-        edem_request_id=edem_request_id or None,
-        edem_request_no=edem_request_no or None,
+        satinalma_request_id=satinalma_request_id or None,
+        satinalma_request_no=satinalma_request_no or None,
     )
     db.add(event)
     db.commit()
@@ -177,13 +177,13 @@ async def edit_event_form(
     event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
         return RedirectResponse(url=url("/events"))
-    edem_available = edem_bridge.is_available()
-    edem_refs = edem_bridge.get_references() if edem_available else []
+    satinalma_available = satinalma_bridge.is_available()
+    satinalma_refs = satinalma_bridge.get_references() if satinalma_available else []
     return templates.TemplateResponse("events/form.html", {
         "request": request,
         "event": event,
-        "edem_available": edem_available,
-        "edem_refs": edem_refs,
+        "satinalma_available": satinalma_available,
+        "satinalma_refs": satinalma_refs,
         "active": "events"
     })
 
@@ -197,8 +197,8 @@ async def update_event(
     venue: str = Form(""),
     city: str = Form(""),
     notes: str = Form(""),
-    edem_request_id: str = Form(""),
-    edem_request_no: str = Form(""),
+    satinalma_request_id: str = Form(""),
+    satinalma_request_no: str = Form(""),
     db: Session = Depends(get_db)
 ):
     event = db.query(Event).filter(Event.id == event_id).first()
@@ -209,8 +209,8 @@ async def update_event(
         event.venue = venue or None
         event.city = city or None
         event.notes = notes or None
-        event.edem_request_id = edem_request_id or None
-        event.edem_request_no = edem_request_no or None
+        event.satinalma_request_id = satinalma_request_id or None
+        event.satinalma_request_no = satinalma_request_no or None
         db.commit()
     return RedirectResponse(url=url(f"/events/{event_id}"), status_code=303)
 

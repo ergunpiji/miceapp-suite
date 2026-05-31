@@ -245,7 +245,7 @@
 <script>
   // Sidebar durumu — boyanmadan önce oku (flash önlemek için)
   try {
-    if (localStorage.getItem('edem_sidebar_collapsed') === '1') {
+    if (localStorage.getItem('satinalma_sidebar_collapsed') === '1') {
       document.body.classList.add('sidebar-collapsed');
     }
   } catch(e) {}
@@ -657,18 +657,18 @@
     {% elif current_user.role == 'satinalma' %}
 
       {# ── DOSYA TAKİP — tek grup ── #}
-      {% set _edem_pending = (nc.requests_pending or 0) %}
+      {% set _satinalma_pending = (nc.requests_pending or 0) %}
       <div class="tree-group" id="grp-dosya">
         <div class="tree-header" onclick="toggleTree('grp-dosya')">
           <i class="bi bi-folder2-open tree-icon"></i> Dosya Takip
-          {{ tb(_edem_pending) }}
+          {{ tb(_satinalma_pending) }}
           <i class="bi bi-chevron-right tree-arrow"></i>
         </div>
         <div class="tree-children">
           <a href="/requests?view=pending_work"
              class="sidebar-link {% if 'view=pending_work' in cq or (cp == '/requests' and 'view=' not in cq) %}active{% endif %}">
             <i class="bi bi-hourglass-split nav-icon"></i> Yeni & İşlemdekiler
-            {{ nb(_edem_pending) }}
+            {{ nb(_satinalma_pending) }}
           </a>
           <a href="/requests?view=awaiting"
              class="sidebar-link {% if 'view=awaiting' in cq %}active{% endif %}">
@@ -969,14 +969,14 @@
 <script>
   window.toggleSidebar = function() {
     var collapsed = document.body.classList.toggle('sidebar-collapsed');
-    try { localStorage.setItem('edem_sidebar_collapsed', collapsed ? '1' : '0'); } catch(e) {}
+    try { localStorage.setItem('satinalma_sidebar_collapsed', collapsed ? '1' : '0'); } catch(e) {}
   };
 </script>
 
 <!-- ── Tree Nav JS ── -->
 <script>
 (function() {
-  var STORE_KEY = 'edem_nav_open_{{ current_user.role }}';
+  var STORE_KEY = 'satinalma_nav_open_{{ current_user.role }}';
 
   function getSaved() {
     try { return JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); } catch(e) { return []; }

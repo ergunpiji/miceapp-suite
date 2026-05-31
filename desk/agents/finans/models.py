@@ -133,8 +133,8 @@ class Project(Base):
 
     id: Mapped[str]           = mapped_column(String, primary_key=True, default=_uuid)
     name: Mapped[str]         = mapped_column(String, nullable=False)
-    edem_request_id: Mapped[Optional[str]]  = mapped_column(String)
-    edem_request_no: Mapped[Optional[str]]  = mapped_column(String)
+    satinalma_request_id: Mapped[Optional[str]]  = mapped_column(String)
+    satinalma_request_no: Mapped[Optional[str]]  = mapped_column(String)
     customer_name: Mapped[Optional[str]]    = mapped_column(String)
     event_date: Mapped[Optional[date]]      = mapped_column(Date)
     event_end_date: Mapped[Optional[date]]  = mapped_column(Date)
@@ -320,7 +320,7 @@ class EFatura(Base):
     total_incl_vat: Mapped[float]          = mapped_column(Float, default=0.0)
 
     # Bağlantılar
-    edem_request_no: Mapped[Optional[str]] = mapped_column(String)
+    satinalma_request_no: Mapped[Optional[str]] = mapped_column(String)
     project_id: Mapped[Optional[str]]      = mapped_column(ForeignKey("projects.id"))
     notes: Mapped[Optional[str]]           = mapped_column(Text)
     created_at: Mapped[datetime]           = mapped_column(DateTime, default=_now)

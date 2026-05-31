@@ -197,8 +197,8 @@ async def supplier_transfers(
         earliest_time = min((t.pickup_time or "99:99") for t in items)
         return (earliest_date, earliest_time)
 
-    from services.edem_bridge import get_reference as _edem_ref, is_available as _edem_ok
-    edem_ref = _edem_ref(event.edem_request_id) if event.edem_request_id and _edem_ok() else None
+    from services.satinalma_bridge import get_reference as _satinalma_ref, is_available as _satinalma_ok
+    satinalma_ref = _satinalma_ref(event.satinalma_request_id) if event.satinalma_request_id and _satinalma_ok() else None
 
     return templates.TemplateResponse("supplier/transfers.html", {
         "request": request,
@@ -206,7 +206,7 @@ async def supplier_transfers(
         "token": token,
         "transfers": transfers,
         "groups": dict(sorted(groups.items(), key=group_sort_key)),
-        "edem_ref": edem_ref,
+        "satinalma_ref": satinalma_ref,
     })
 
 
@@ -231,15 +231,15 @@ async def supplier_accommodations(
         .all()
     )
 
-    from services.edem_bridge import get_reference as _edem_ref, is_available as _edem_ok
-    edem_ref = _edem_ref(event.edem_request_id) if event.edem_request_id and _edem_ok() else None
+    from services.satinalma_bridge import get_reference as _satinalma_ref, is_available as _satinalma_ok
+    satinalma_ref = _satinalma_ref(event.satinalma_request_id) if event.satinalma_request_id and _satinalma_ok() else None
 
     return templates.TemplateResponse("supplier/accommodations.html", {
         "request": request,
         "event": event,
         "token": token,
         "accommodations": accommodations,
-        "edem_ref": edem_ref,
+        "satinalma_ref": satinalma_ref,
     })
 
 

@@ -796,7 +796,7 @@ class Budget(Base):
     created_by           = Column(String(36), ForeignKey("users.id"), nullable=False)
     created_at           = Column(DateTime, default=_now, nullable=False)
     updated_at           = Column(DateTime, default=_now, onupdate=_now, nullable=False)
-    budget_status        = Column(String(32), default="draft_edem", nullable=False)
+    budget_status        = Column(String(32), default="draft_satinalma", nullable=False)
     revision_notes       = Column(Text, default="")   # manager → Satın Alma notları
     manager_notes        = Column(Text, default="")   # manager iç notları
     service_fee_pct      = Column(Float, default=0.0) # manager girer

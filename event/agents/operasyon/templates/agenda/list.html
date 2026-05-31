@@ -7,8 +7,8 @@
     <div class="page-subtitle">{{ event.name }}</div>
   </div>
   <div style="display:flex; gap:8px; align-items:center;">
-    {% if event.edem_request_id %}
-    <form method="post" action="{{ base_url }}/events/{{ event.id }}/agenda/import-edem"
+    {% if event.satinalma_request_id %}
+    <form method="post" action="{{ base_url }}/events/{{ event.id }}/agenda/import-satinalma"
           onsubmit="return confirm('Satın Alma bütçesindeki toplantı ve yemek kalemleri programa eklenecek. Devam?')">
       <button type="submit" class="btn btn-secondary"
               style="font-size:13px;">📥 Satın Alma'den Aktar</button>
@@ -119,8 +119,8 @@
     <br>
     <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
       <a href="{{ base_url }}/events/{{ event.id }}/agenda/new" class="btn btn-primary">+ İlk Oturumu Ekle</a>
-      {% if event.edem_request_id %}
-      <form method="post" action="{{ base_url }}/events/{{ event.id }}/agenda/import-edem"
+      {% if event.satinalma_request_id %}
+      <form method="post" action="{{ base_url }}/events/{{ event.id }}/agenda/import-satinalma"
             onsubmit="return confirm('Satın Alma bütçesindeki kalemler programa eklenecek. Devam?')">
         <button type="submit" class="btn btn-secondary">📥 Satın Alma'den Aktar</button>
       </form>

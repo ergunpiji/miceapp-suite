@@ -87,7 +87,7 @@ def _get_subtree_ids(user_id: str, db: Session) -> list[str]:
     return result
 
 
-def _check_edem_or_admin(current_user: User):
+def _check_satinalma_or_admin(current_user: User):
     if current_user.role not in ("admin", "satinalma"):
         raise HTTPException(status_code=403, detail="Bu sayfa Satın Alma kullanıcılarına özeldir.")
 
@@ -1393,10 +1393,10 @@ async def requests_update(
     # Bildirim: tüm satinalma kullanıcılarına yeni referans
     if went_pending:
         from utils.notifications import create_notification
-        edem_users = db.query(User).filter(
+        satinalma_users = db.query(User).filter(
             User.role == "satinalma", User.active == True  # noqa: E712
         ).all()
-        for eu in edem_users:
+        for eu in satinalma_users:
             create_notification(
                 db,
                 user_id    = eu.id,
@@ -1428,13 +1428,13 @@ async def requests_update_status(
 
     # Satın Alma/Admin: her duruma geçebilir
     # PM direkt yönetim: sadece kendi talebi ve belirli statüler
-    is_edem_or_admin = current_user.role in ("admin", "satinalma")
+    is_satinalma_or_admin = current_user.role in ("admin", "satinalma")
     is_pm_direct = (
         current_user.role in ("mudur", "yonetici") and
         (req.created_by == current_user.id or current_user.role == "mudur") and
         req.status in ("in_progress", "venues_contacted", "budget_ready")
     )
-    if not is_edem_or_admin and not is_pm_direct:
+    if not is_satinalma_or_admin and not is_pm_direct:
         raise HTTPException(status_code=403, detail="Yetkisiz erişim.")
 
     old_status = req.status
@@ -1564,7 +1564,7 @@ async def requests_revision(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Tarih değişikliği → request 'revision', onaylı/confirmed bütçeler draft_edem'e döner"""
+    """Tarih değişikliği → request 'revision', onaylı/confirmed bütçeler draft_satinalma'e döner"""
     req = db.query(ReqModel).filter(ReqModel.id == req_id).first()
     if not req:
         return RedirectResponse(url="/requests", status_code=status.HTTP_302_FOUND)
@@ -1585,7 +1585,7 @@ async def requests_revision(
 
     for b in req.budgets:
         if b.budget_status in ("approved", "confirmed"):
-            b.budget_status = "draft_edem"
+            b.budget_status = "draft_satinalma"
     db.commit()
     return RedirectResponse(url=f"/requests/{req_id}#tab-summary", status_code=status.HTTP_302_FOUND)
 
@@ -1607,7 +1607,7 @@ async def requests_complete(
 
 
 # ---------------------------------------------------------------------------
-# Tüm draft_edem bütçeleri manager'a gönder
+# Tüm draft_satinalma bütçeleri manager'a gönder
 # ---------------------------------------------------------------------------
 
 @router.post("/{req_id}/send-all-to-manager", name="requests_send_all_to_manager")
@@ -1616,7 +1616,7 @@ async def requests_send_all_to_manager(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _check_edem_or_admin(current_user)
+    _check_satinalma_or_admin(current_user)
     req = db.query(ReqModel).filter(ReqModel.id == req_id).first()
     if not req:
         raise HTTPException(404)
@@ -1624,7 +1624,7 @@ async def requests_send_all_to_manager(
     from models import Budget as BudgetModel
     drafts = db.query(BudgetModel).filter(
         BudgetModel.request_id == req_id,
-        BudgetModel.budget_status == "draft_edem",
+        BudgetModel.budget_status == "draft_satinalma",
     ).all()
 
     for b in drafts:

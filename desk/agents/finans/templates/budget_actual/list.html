@@ -32,7 +32,7 @@
         {% for p in projects %}
         <tr>
           <td><a href="/projects/{{ p.id }}" style="color:var(--accent);font-weight:600">{{ p.name }}</a></td>
-          <td class="font-mono">{{ p.edem_request_no or '—' }}</td>
+          <td class="font-mono">{{ p.satinalma_request_no or '—' }}</td>
           <td>{{ p.customer_name or '—' }}</td>
           <td class="nowrap">
             {% if p.event_date %}{{ p.event_date | fmtdate }}{% else %}—{% endif %}

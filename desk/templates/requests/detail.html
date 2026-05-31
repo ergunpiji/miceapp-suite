@@ -606,14 +606,14 @@ document.addEventListener('DOMContentLoaded', function() {
       {% for bd in budgets_data %}
       {% set b = bd.budget %}
       {% set bs = b.budget_status %}
-      {% set scolor = {'draft_edem':'secondary','pending_manager':'warning','draft_manager':'info','approved':'success','confirmed':'success','revision_requested':'danger','cancelled':'dark'}.get(bs, 'secondary') %}
+      {% set scolor = {'draft_satinalma':'secondary','pending_manager':'warning','draft_manager':'info','approved':'success','confirmed':'success','revision_requested':'danger','cancelled':'dark'}.get(bs, 'secondary') %}
       <li class="nav-item flex-shrink-0" role="presentation">
         <button class="nav-link"
                 data-bs-toggle="tab"
                 data-bs-target="#btpane-{{ b.id }}"
                 type="button" style="white-space:nowrap;">
           <i class="bi bi-building me-1"></i>{{ b.venue_name or ('Bütçe #' + loop.index|string) }}
-          <span class="badge bg-{{ scolor }} ms-1" style="font-size:10px;">{{ {'draft_edem':'Taslak','pending_manager':'Onayda','draft_manager':'Düzenleniyor','approved':'Onaylandı','confirmed':'Müşteri Seçti ✓','revision_requested':'Revizyon','cancelled':'İptal'}.get(bs, bs) }}</span>
+          <span class="badge bg-{{ scolor }} ms-1" style="font-size:10px;">{{ {'draft_satinalma':'Taslak','pending_manager':'Onayda','draft_manager':'Düzenleniyor','approved':'Onaylandı','confirmed':'Müşteri Seçti ✓','revision_requested':'Revizyon','cancelled':'İptal'}.get(bs, bs) }}</span>
           {% if bs == 'pending_manager' and budget_pending_approvers.get(b.id) %}
           <span class="ms-1" style="font-size:10px; color:#92400e;" title="Onay bekleyen kişi">
             <i class="bi bi-person-fill"></i> {{ budget_pending_approvers[b.id].full_name }}
@@ -656,13 +656,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 <th class="text-end pe-3" style="min-width:170px;">
                   <div style="font-size:12px; font-weight:700;">{{ b.venue_name or ('Bütçe #' + loop.index|string) }}</div>
                   <div style="margin-top:3px; display:flex; gap:4px; justify-content:flex-end; flex-wrap:wrap;">
-                    <span class="badge bg-{{ {'draft_edem':'secondary','pending_manager':'warning','draft_manager':'info','approved':'success','confirmed':'success','revision_requested':'danger','cancelled':'dark'}.get(bs,'secondary') }}" style="font-size:9px;">
-                      {{ {'draft_edem':'Taslak','pending_manager':'Onayda','draft_manager':'Düzenleniyor','approved':'Onaylandı','confirmed':'Müşteri Seçti ✓','revision_requested':'Revizyon','cancelled':'İptal'}.get(bs, bs) }}
+                    <span class="badge bg-{{ {'draft_satinalma':'secondary','pending_manager':'warning','draft_manager':'info','approved':'success','confirmed':'success','revision_requested':'danger','cancelled':'dark'}.get(bs,'secondary') }}" style="font-size:9px;">
+                      {{ {'draft_satinalma':'Taslak','pending_manager':'Onayda','draft_manager':'Düzenleniyor','approved':'Onaylandı','confirmed':'Müşteri Seçti ✓','revision_requested':'Revizyon','cancelled':'İptal'}.get(bs, bs) }}
                     </span>
                     {% if is_best %}<span class="badge bg-success" style="font-size:9px;">⭐ En İyi</span>{% endif %}
                   </div>
                   {# Satın Alma: Managera Gönder butonu #}
-                  {% if req.status != 'closed' and current_user.role in ('admin','satinalma') and bs == 'draft_edem' %}
+                  {% if req.status != 'closed' and current_user.role in ('admin','satinalma') and bs == 'draft_satinalma' %}
                   <div style="margin-top:6px; display:flex; gap:4px; justify-content:flex-end;">
                     <form method="post" action="/budgets/{{ b.id }}/send-to-manager" style="margin:0;">
                       <input type="hidden" name="back" value="{{ req.id }}">
@@ -897,7 +897,7 @@ document.addEventListener('DOMContentLoaded', function() {
           <a href="/budgets/{{ b.id }}" class="btn btn-outline-primary btn-sm">
             <i class="bi bi-eye me-1"></i>Detay
           </a>
-          {% if current_user.role in ('admin', 'satinalma', 'asistan') and b.budget_status in ('draft_edem', 'revision_requested') %}
+          {% if current_user.role in ('admin', 'satinalma', 'asistan') and b.budget_status in ('draft_satinalma', 'revision_requested') %}
           <a href="/budgets/{{ b.id }}/edit" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-pencil me-1"></i>Düzenle
           </a>
@@ -2275,7 +2275,7 @@ function buildEmailHtml(venue, contactNames, filterSection) {
   <div style="background:${light};padding:18px 36px;border-radius:0 0 10px 10px;border:1px solid ${border};border-top:none;">
     <p style="margin:0;font-size:12px;color:${tMuted};line-height:1.8;">
       Saygılarımızla,<br>
-      <strong style="color:${tDark};font-size:13px;">PrizmaDesk</strong>
+      <strong style="color:${tDark};font-size:13px;">micedesk</strong>
     </p>
   </div>
 
@@ -2385,7 +2385,7 @@ function buildEmailText(venue, contactNames, filterSection) {
   txt += `\n─────────────────────────────────────\n`;
   txt += `Teklif son tarihi: ${deadlineDate()}\n`;
   txt += `Lütfen fiyatlarınıza KDV oranlarını ve KDV'nin dahil olup olmadığını belirtiniz.\n\n`;
-  txt += `Saygılarımızla,\nPrizmaDesk`;
+  txt += `Saygılarımızla,\nmicedesk`;
   return txt;
 }
 

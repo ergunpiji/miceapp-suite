@@ -107,7 +107,7 @@ async def efatura_create(
     buyer_name   = form.get("buyer_name", "")
     buyer_tax_no     = form.get("buyer_tax_no", "")
     buyer_tax_office  = form.get("buyer_tax_office", "")
-    edem_request_no  = form.get("edem_request_no", "")
+    satinalma_request_no  = form.get("satinalma_request_no", "")
     notes        = form.get("notes", "")
     status       = form.get("status", "taslak")
 
@@ -158,7 +158,7 @@ async def efatura_create(
         total_excl_vat=round(total_excl, 2),
         total_vat=round(total_vat, 2),
         total_incl_vat=round(total_excl + total_vat, 2),
-        edem_request_no=edem_request_no or None,
+        satinalma_request_no=satinalma_request_no or None,
         notes=notes or None,
     )
     for line in lines:

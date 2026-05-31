@@ -3,7 +3,7 @@
 
 Bu dosya, mevcut single-page HTML uygulamasının Python tabanlı bir web uygulamasına
 dönüştürülmesi için kapsamlı teknik spesifikasyon içerir.
-Referans uygulama: `reference/edem.html` (~5000 satır, sıfır dış bağımlılık, localStorage tabanlı)
+Referans uygulama: `reference/satinalma.html` (~5000 satır, sıfır dış bağımlılık, localStorage tabanlı)
 
 ---
 
@@ -41,7 +41,7 @@ backend/
 requirements.txt
 CLAUDE.md             # Bu dosya
 reference/
-  edem.html           # Orijinal çalışan referans uygulama
+  satinalma.html           # Orijinal çalışan referans uygulama
 ```
 
 **Önerilen paketler:**
@@ -75,7 +75,7 @@ class User:
 # Varsayılan kullanıcılar (seed):
 # admin@miceapp.net / Admin123 / role=admin
 # manager@miceapp.net / Manager123 / role=project_manager
-# edem@miceapp.net / Edem123 / role=satinalma
+# satinalma@miceapp.net / Satinalma123 / role=satinalma
 ```
 
 ### 3.2 Venue (Tedarikçi / Mekan)
@@ -550,7 +550,7 @@ VENUES:
   DELETE /venues/{id}      → Admin + Satın Alma
 
 REQUESTS:
-  GET    /requests         → Role bazlı filtreleme (admin=all, pm=mine, edem=pending+)
+  GET    /requests         → Role bazlı filtreleme (admin=all, pm=mine, satinalma=pending+)
   POST   /requests         → PM only
   PUT    /requests/{id}    → PM (draft), Satın Alma (status update)
   DELETE /requests/{id}    → PM (draft only)
@@ -613,7 +613,7 @@ FastAPI backend + React/Vue SPA frontend
 
 ## 15. Mevcut Referans Uygulamadan Notlar
 
-- `reference/edem.html` tamamen çalışan versiyondur — tarayıcıda açarak inceleyebilirsin
+- `reference/satinalma.html` tamamen çalışan versiyondur — tarayıcıda açarak inceleyebilirsin
 - localStorage kullanır → veri kaybolmaması için önce import/export ekle
 - ~5000 satır tek dosya JavaScript — Python'da aynı mantık backend'e taşınacak
 - Tüm UI Türkçe

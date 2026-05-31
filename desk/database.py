@@ -19,7 +19,7 @@ from models import (
 # Engine & Session
 # ---------------------------------------------------------------------------
 
-_raw_url = os.environ.get("DATABASE_URL", "sqlite:///./edem.db")
+_raw_url = os.environ.get("DATABASE_URL", "sqlite:///./satinalma.db")
 if _raw_url.startswith("postgres://"):
     _raw_url = _raw_url.replace("postgres://", "postgresql://", 1)
 
@@ -912,7 +912,7 @@ def _seed_demo_company() -> None:
         demo = db.query(Company).filter_by(name="Demo A.Ş.").first()
         if demo is None:
             demo = Company(name="Demo A.Ş.", short_name="DEMO",
-                           email="demo@prizmadesk.com", is_demo=True,
+                           email="demo@miceapp.net", is_demo=True,
                            demo_reset_at=datetime.utcnow())
             db.add(demo)
             db.flush()
@@ -921,11 +921,11 @@ def _seed_demo_company() -> None:
         cid = str(demo.id)  # vendors.company_id VARCHAR — integer karşılaştırma hatası önlenir
 
         # Demo admin kullanıcı
-        demo_user = db.query(User).filter_by(email="demo@prizmadesk.com").first()
+        demo_user = db.query(User).filter_by(email="demo@miceapp.net").first()
         if demo_user is None:
             demo_user = User(
                 name="Demo", surname="Kullanıcı",
-                email="demo@prizmadesk.com",
+                email="demo@miceapp.net",
                 password_hash=_pwd_ctx.hash("Demo123"),
                 role="admin", company_id=cid, active=True,
             )
@@ -1096,7 +1096,7 @@ def _seed_rbac_test_users() -> None:
         # ───────── Müşteriler ─────────
         satis_user = db.query(User).filter_by(email="satis@demo.com").first()
         muhasebe_user = db.query(User).filter_by(email="muhasebe@demo.com").first()
-        admin_user = db.query(User).filter_by(email="demo@prizmadesk.com").first()
+        admin_user = db.query(User).filter_by(email="demo@miceapp.net").first()
         owner_satis = satis_user.id if satis_user else None
         owner_muh = muhasebe_user.id if muhasebe_user else None
         owner_admin = admin_user.id if admin_user else None

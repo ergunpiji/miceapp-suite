@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from auth import get_current_user, require_admin_or_edem
+from auth import get_current_user, require_admin_or_satinalma
 from database import get_db
 from models import TR_CITIES, SUPPLIER_TYPES, User, Venue, _uuid, _now
 
@@ -67,7 +67,7 @@ async def venues_list(
 @router.get("/new", response_class=HTMLResponse, name="venues_new")
 async def venues_new(
     request: Request,
-    current_user: User = Depends(require_admin_or_edem),
+    current_user: User = Depends(require_admin_or_satinalma),
 ):
     return templates.TemplateResponse(
         "venues/form.html",
@@ -98,7 +98,7 @@ async def venues_create(
     halls_json:    str = Form("[]"),
     contacts_json: str = Form("[]"),
     payment_term:  str = Form(""),
-    current_user:  User = Depends(require_admin_or_edem),
+    current_user:  User = Depends(require_admin_or_satinalma),
     db: Session = Depends(get_db),
 ):
     venue = Venue(
@@ -152,7 +152,7 @@ async def venues_detail(
 async def venues_edit(
     venue_id: str,
     request: Request,
-    current_user: User = Depends(require_admin_or_edem),
+    current_user: User = Depends(require_admin_or_satinalma),
     db: Session = Depends(get_db),
 ):
     venue = db.query(Venue).filter(Venue.id == venue_id).first()
@@ -190,7 +190,7 @@ async def venues_update(
     contacts_json: str = Form("[]"),
     payment_term:  str = Form(""),
     active:        str = Form("on"),
-    current_user:  User = Depends(require_admin_or_edem),
+    current_user:  User = Depends(require_admin_or_satinalma),
     db: Session = Depends(get_db),
 ):
     venue = db.query(Venue).filter(Venue.id == venue_id).first()
@@ -219,7 +219,7 @@ async def venues_update(
 async def venues_upload_doc(
     venue_id: str,
     doc_file: UploadFile = File(...),
-    current_user: User = Depends(require_admin_or_edem),
+    current_user: User = Depends(require_admin_or_satinalma),
     db: Session = Depends(get_db),
 ):
     venue = db.query(Venue).filter(Venue.id == venue_id).first()
@@ -254,7 +254,7 @@ async def venues_upload_doc(
 async def venues_delete_doc(
     venue_id: str,
     filename: str = Form(...),
-    current_user: User = Depends(require_admin_or_edem),
+    current_user: User = Depends(require_admin_or_satinalma),
     db: Session = Depends(get_db),
 ):
     venue = db.query(Venue).filter(Venue.id == venue_id).first()
@@ -293,7 +293,7 @@ async def venues_delete_doc(
 @router.post("/bulk-delete", name="venues_bulk_delete")
 async def venues_bulk_delete(
     ids_json: str = Form(...),
-    current_user: User = Depends(require_admin_or_edem),
+    current_user: User = Depends(require_admin_or_satinalma),
     db: Session = Depends(get_db),
 ):
     try:
@@ -328,7 +328,7 @@ async def venues_bulk_delete(
 @router.post("/{venue_id}/delete", name="venues_delete")
 async def venues_delete(
     venue_id: str,
-    current_user: User = Depends(require_admin_or_edem),
+    current_user: User = Depends(require_admin_or_satinalma),
     db: Session = Depends(get_db),
 ):
     venue = db.query(Venue).filter(Venue.id == venue_id).first()
