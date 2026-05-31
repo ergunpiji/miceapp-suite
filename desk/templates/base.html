@@ -383,6 +383,16 @@
     </a>
     {% endif %}
 
+    <!-- Ortak HBF — muhasebe ödeme/kapatma -->
+    {% if current_user and (current_user.is_admin or current_user.role in ('muhasebe','muhasebe_muduru')) %}
+    <div class="nav-section-label">Harcama Bildirimleri</div>
+    <a href="/hbf-muhasebe" class="sidebar-link {% if request.url.path.startswith('/hbf-muhasebe') %}active{% endif %}">
+      <i class="bi bi-receipt-cutoff"></i> HBF — Muhasebe
+      {% set _phm = request.state.nav_counts.get('pending_hbf_muhasebe', 0) %}
+      {% if _phm %}<span class="ms-auto badge-nav">{{ _phm }}</span>{% endif %}
+    </a>
+    {% endif %}
+
     <!-- Ödemeler -->
     {% set has_payments = can_see(request, 'payments_weekly') or can_see(request, 'payment_instructions') %}
     {% if has_payments %}
@@ -470,7 +480,7 @@
     </a>
     {% endif %}
     {% if can_see(request, 'hbf') %}
-    <a href="/hbf" class="sidebar-link {% if request.url.path.startswith('/hbf') %}active{% endif %}">
+    <a href="/hbf" class="sidebar-link {% if request.url.path == '/hbf' or request.url.path.startswith('/hbf/') %}active{% endif %}">
       <i class="bi bi-receipt"></i> Harcama Bildirimleri
       {% set _ph = request.state.nav_counts.get('pending_hbf', 0) %}
       {% if _ph %}<span class="ms-auto badge-nav">{{ _ph }}</span>{% endif %}

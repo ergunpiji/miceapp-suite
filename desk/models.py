@@ -1307,6 +1307,85 @@ class Notification(Base):
 
 
 # ---------------------------------------------------------------------------
+# ExpenseReport / ExpenseItem — ORTAK HBF (event ile paylaşımlı tablolar)
+# Kanonik tablo event'in expense_reports/expense_items'ı; desk buradan okur/yazar.
+# Onay zinciri: draft→submitted(müdür)→mudur_onayladi(GM)→onaylandi(muhasebe)→kapandi
+# ---------------------------------------------------------------------------
+
+class ExpenseReport(Base):
+    __tablename__ = "expense_reports"
+    __table_args__ = {"extend_existing": True}
+
+    id                  = Column(String(36), primary_key=True, default=_uuid)
+    company_id          = Column(String(36), index=True)
+    request_id          = Column(String(36))
+    request_ids_json    = Column(Text)
+    title               = Column(String(300))
+    status              = Column(String(16), default="draft")
+    submitted_by        = Column(String(36))
+    manager_approved_by = Column(String(36))
+    manager_approved_at = Column(DateTime)
+    approved_by         = Column(String(36))
+    approved_at         = Column(DateTime)
+    rejection_note      = Column(Text)
+    paid_by             = Column(String(36))
+    paid_at             = Column(DateTime)
+    payment_method      = Column(String(20))
+    bank_account_id     = Column(String(36))
+    cash_book_id        = Column(String(36))
+    general_expense_id  = Column(String(36))
+    created_at          = Column(DateTime)
+    updated_at          = Column(DateTime)
+
+    items = relationship("ExpenseItem", back_populates="report",
+                         order_by="ExpenseItem.sort_order")
+
+    @property
+    def grand_total(self) -> float:
+        return round(sum((i.total_amount or 0) for i in self.items), 2)
+
+    @property
+    def grand_excl_vat(self) -> float:
+        return round(sum((i.amount or 0) for i in self.items), 2)
+
+    @property
+    def grand_vat(self) -> float:
+        return round(sum((i.vat_amount or 0) for i in self.items), 2)
+
+
+class ExpenseItem(Base):
+    __tablename__ = "expense_items"
+    __table_args__ = {"extend_existing": True}
+
+    id                  = Column(String(36), primary_key=True, default=_uuid)
+    report_id           = Column(String(36), ForeignKey("expense_reports.id"), index=True)
+    assigned_request_id = Column(String(36))
+    item_date           = Column(String(10))
+    description         = Column(String(300))
+    payment_method      = Column(String(16))
+    credit_card_id      = Column(String(36))
+    document_type       = Column(String(16))
+    amount              = Column(Float)
+    vat_rate            = Column(Float)
+    vat_amount          = Column(Float)
+    total_amount        = Column(Float)
+    document_path       = Column(String(500))
+    document_name       = Column(String(255))
+    sort_order          = Column(Integer)
+    created_at          = Column(DateTime)
+
+    report = relationship("ExpenseReport", back_populates="items")
+
+    @property
+    def payment_label(self) -> str:
+        return {"kredi_karti": "Kredi Kartı", "nakit": "Nakit"}.get(self.payment_method, self.payment_method or "")
+
+    @property
+    def doc_label(self) -> str:
+        return {"fatura": "Fatura", "fis": "Fiş", "belgesiz": "Belgesiz"}.get(self.document_type, self.document_type or "")
+
+
+# ---------------------------------------------------------------------------
 # SystemSetting — basit key-value config (örn. ödeme günü)
 # ---------------------------------------------------------------------------
 

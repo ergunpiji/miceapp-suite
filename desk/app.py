@@ -110,6 +110,7 @@ async def nav_counts_middleware(request: Request, call_next):
                     Invoice, PaymentInstruction, SystemSetting,
                     LeaveRequest, EmployeeAdvance, HBF,
                     User as UserModel, Employee, Company, Reference,
+                    ExpenseReport,
                 )
                 user_id_raw = payload.get("sub")
 
@@ -214,6 +215,15 @@ async def nav_counts_middleware(request: Request, call_next):
                     counts["pending_leaves"]   = p_leaves
                     counts["pending_advances"] = p_adv
                     counts["pending_hbf"]      = p_hbf
+
+                    # Ortak HBF — muhasebe ödeme/kapatma bekleyen (onaylandi)
+                    if user_role in ("muhasebe", "muhasebe_muduru", "admin", "super_admin"):
+                        counts["pending_hbf_muhasebe"] = (
+                            db.query(func.count(ExpenseReport.id))
+                            .filter(ExpenseReport.company_id == company_id,
+                                    ExpenseReport.status == "onaylandi")
+                            .scalar() or 0
+                        )
 
                     # GM+ için bekleyen referans kapanış/reaktivasyon onayları
                     p_refs = 0
@@ -339,6 +349,7 @@ from routers import general_expenses as general_expenses_router
 from routers import employees as employees_router
 from routers import reports as reports_router
 from routers import hbf as hbf_router
+from routers import hbf_muhasebe as hbf_muhasebe_router
 from routers import advances as advances_router
 from routers import fund_pools as fund_pools_router
 from routers import payments as payments_router
@@ -378,6 +389,7 @@ app.include_router(general_expenses_router.router)
 app.include_router(employees_router.router)
 app.include_router(reports_router.router)
 app.include_router(hbf_router.router)
+app.include_router(hbf_muhasebe_router.router)
 app.include_router(advances_router.router)
 app.include_router(fund_pools_router.router)
 app.include_router(payments_router.router)

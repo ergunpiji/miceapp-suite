@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block page_title %}{{ rep.title or 'HBF' }}{% endblock %}
+{% block topbar_actions %}
+<a href="/hbf-muhasebe" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Liste</a>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+  <div class="row g-3">
+
+    <!-- Sol: HBF detayı -->
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <h5 class="mb-0">{{ rep.title or 'HBF' }}</h5>
+            <span class="badge bg-{{ STATUS_COLORS.get(rep.status,'secondary') }}">{{ STATUS_LABELS.get(rep.status, rep.status) }}</span>
+          </div>
+          <div class="text-muted small">
+            Gönderen: <strong>{{ user_names.get(rep.submitted_by, '—') }}</strong>
+            &nbsp;·&nbsp; Müdür onayı: <strong>{{ user_names.get(rep.manager_approved_by, '—') }}</strong>
+            &nbsp;·&nbsp; GM onayı: <strong>{{ user_names.get(rep.approved_by, '—') }}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th class="ps-3">Tarih</th>
+                <th>Açıklama</th>
+                <th>Ödeme</th>
+                <th>Belge</th>
+                <th class="text-end pe-3">Tutar (KDV dahil)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for it in rep.items %}
+              <tr>
+                <td class="ps-3">{{ it.item_date }}</td>
+                <td>{{ it.description }}</td>
+                <td><span class="badge bg-light text-dark">{{ it.payment_label }}</span></td>
+                <td>
+                  {{ it.doc_label }}
+                  {% if doc_urls.get(it.id) %}
+                  <a href="{{ doc_urls[it.id] }}" target="_blank" class="ms-1" title="Belgeyi gör"><i class="bi bi-paperclip"></i></a>
+                  {% endif %}
+                </td>
+                <td class="text-end pe-3">{{ it.total_amount | money }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr class="table-light fw-bold">
+                <td colspan="4" class="ps-3 text-end">Genel Toplam</td>
+                <td class="text-end pe-3">{{ rep.grand_total | money }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sağ: ödeme / kapatma -->
+    <div class="col-lg-4">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          {% if can_pay %}
+          <h6 class="mb-3"><i class="bi bi-cash-coin me-1"></i>Öde & Kapat</h6>
+          <form method="post" action="/hbf-muhasebe/{{ rep.id }}/pay">
+            <div class="mb-2">
+              <label class="form-label small">Ödeme Tarihi</label>
+              <input type="date" name="pay_date" value="{{ today }}" class="form-control form-control-sm">
+            </div>
+            <div class="mb-2">
+              <label class="form-label small">Ödeme Yöntemi</label>
+              <select name="payment_method" class="form-select form-select-sm" id="payMethod" onchange="togglePay()">
+                <option value="banka">Banka</option>
+                <option value="nakit">Nakit (Kasa)</option>
+              </select>
+            </div>
+            <div class="mb-2" id="bankWrap">
+              <label class="form-label small">Banka Hesabı</label>
+              <select name="bank_account_id" class="form-select form-select-sm">
+                <option value="">— Seçin —</option>
+                {% for b in bank_accounts %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="mb-3" id="cashWrap" style="display:none;">
+              <label class="form-label small">Kasa</label>
+              <select name="cash_book_id" class="form-select form-select-sm">
+                <option value="">— Seçin —</option>
+                {% for c in cash_books %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="alert alert-warning py-2 small">
+              Toplam <strong>{{ rep.grand_total | money }}</strong> tutarında gider kaydı + kasa/banka çıkışı oluşturulacak.
+            </div>
+            <button type="submit" class="btn btn-success w-100"
+                    onclick="return confirm('HBF ödenip kapatılacak. Emin misiniz?')">
+              <i class="bi bi-check-circle me-1"></i>Öde & Kapat
+            </button>
+          </form>
+          <script>
+            function togglePay(){
+              var m=document.getElementById('payMethod').value;
+              document.getElementById('bankWrap').style.display = m==='banka'?'':'none';
+              document.getElementById('cashWrap').style.display = m==='nakit'?'':'none';
+            }
+          </script>
+          {% elif rep.status == 'kapandi' %}
+          <h6 class="mb-3 text-success"><i class="bi bi-check-circle me-1"></i>Kapandı</h6>
+          <ul class="list-unstyled small mb-0">
+            <li>Ödeyen: <strong>{{ user_names.get(rep.paid_by, '—') }}</strong></li>
+            <li>Tarih: <strong>{{ rep.paid_at | date_tr }}</strong></li>
+            <li>Yöntem: <strong>{{ 'Banka' if rep.payment_method == 'banka' else ('Nakit' if rep.payment_method == 'nakit' else '—') }}</strong></li>
+          </ul>
+          {% else %}
+          <div class="text-muted small">Bu HBF henüz muhasebe aşamasında değil ({{ STATUS_LABELS.get(rep.status, rep.status) }}).</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
