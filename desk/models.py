@@ -1355,15 +1355,21 @@ class ExpenseReport(Base):
 
 
 class DeskRequest(Base):
-    """event'in requests tablosunu okumak için bridge (HBF referans seçimi)."""
+    """event'in requests tablosu için bridge. HBF için: ref_no eşleşen request yoksa
+    desk'te referanstan minimal bir request oluşturulur (expense_reports FK'sı için)."""
     __tablename__ = "requests"
     __table_args__ = {"extend_existing": True}
 
-    id           = Column(String(36), primary_key=True)
+    id           = Column(String(36), primary_key=True, default=_uuid)
     request_no   = Column(String(50))
     client_name  = Column(String(200))
     event_name   = Column(String(200))
     status       = Column(String(30))
+    is_funded    = Column(Boolean, default=False)
+    is_fund_pool = Column(Boolean, default=False)
+    created_by   = Column(String(36))
+    created_at   = Column(DateTime)
+    updated_at   = Column(DateTime)
 
 
 class ExpenseItem(Base):

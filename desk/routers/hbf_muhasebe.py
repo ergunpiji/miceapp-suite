@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from auth import get_current_user, get_company_id
 from database import get_db
 from models import (
-    ExpenseReport, ExpenseItem, DeskRequest, User, CashBook, BankAccount,
+    ExpenseReport, ExpenseItem, DeskRequest, Reference, User, CashBook, BankAccount,
     GeneralExpense, CashEntry, BankMovement, CreditCard, CreditCardTxn,
     _uuid,
 )
@@ -98,10 +98,29 @@ def _can_edit(report: ExpenseReport, user: User) -> bool:
     return report.submitted_by == user.id and report.status in ("draft", "rejected")
 
 
-def _active_requests(db: Session):
-    return (db.query(DeskRequest)
-            .filter(DeskRequest.status.notin_(["cancelled", "closed"]))
-            .order_by(DeskRequest.request_no.desc()).all())
+def _active_references(db: Session, cid: str):
+    """Form dropdown'ı için aktif referanslar (desk references — her yerde aynı)."""
+    return (db.query(Reference)
+            .filter(Reference.company_id == cid, Reference.status == "aktif")
+            .order_by(Reference.ref_no.desc()).all())
+
+
+def _request_for_reference(db: Session, ref: Reference, user: User) -> str:
+    """Referansa karşılık gelen event request'inin id'sini döndürür; yoksa oluşturur
+    (expense_reports.request_id FK'sı requests tablosuna bağlı)."""
+    existing = db.query(DeskRequest).filter(DeskRequest.request_no == ref.ref_no).first()
+    if existing:
+        return existing.id
+    now = datetime.utcnow()
+    req = DeskRequest(
+        id=_uuid(), request_no=ref.ref_no,
+        client_name=(ref.title or ref.ref_no), event_name=(ref.title or ref.ref_no),
+        status="confirmed", is_funded=False, is_fund_pool=False,
+        created_by=user.id, created_at=now, updated_at=now,
+    )
+    db.add(req)
+    db.flush()
+    return req.id
 
 
 def _sync_cc(db: Session, report_id: str) -> None:
@@ -174,9 +193,14 @@ def _save_items(db: Session, report_id: str, items_json: str) -> None:
 
 
 def _form_ctx(request, current_user, db, cid, report):
+    cur_ref_no = None
+    if report:
+        rq = db.query(DeskRequest).filter(DeskRequest.id == report.request_id).first()
+        cur_ref_no = rq.request_no if rq else None
     return {
         "request": request, "current_user": current_user, "report": report,
-        "requests": _active_requests(db),
+        "references": _active_references(db, cid),
+        "current_ref_no": cur_ref_no,
         "credit_cards": db.query(CreditCard).filter(CreditCard.company_id == cid).order_by(CreditCard.name).all(),
         "PAYMENT_METHODS": EXP_PAYMENT_METHODS, "DOC_TYPES": EXP_DOC_TYPES,
     }
@@ -194,7 +218,7 @@ async def hbf_muhasebe_new(
 
 @router.post("/new", name="hbf_muhasebe_create")
 async def hbf_muhasebe_create(
-    request_id: str = Form(""),
+    reference_id: str = Form(""),
     title: str = Form(""),
     items_json: str = Form("[]"),
     next_action: str = Form(""),
@@ -202,14 +226,15 @@ async def hbf_muhasebe_create(
     db: Session = Depends(get_db),
     cid: str = Depends(get_company_id),
 ):
-    req = db.query(DeskRequest).filter(DeskRequest.id == request_id).first() if request_id else None
-    if not req:
+    ref = db.query(Reference).filter(Reference.id == reference_id, Reference.company_id == cid).first() if reference_id else None
+    if not ref:
         raise HTTPException(400, detail="Geçerli bir referans seçmelisiniz.")
+    req_id = _request_for_reference(db, ref, current_user)
     now = datetime.utcnow()
     report = ExpenseReport(
-        id=_uuid(), company_id=cid, request_id=req.id,
-        request_ids_json=json.dumps([{"id": req.id, "request_no": req.request_no}], ensure_ascii=False),
-        title=(title.strip() or f"HBF — {req.request_no}"),
+        id=_uuid(), company_id=cid, request_id=req_id,
+        request_ids_json=json.dumps([{"id": req_id, "request_no": ref.ref_no}], ensure_ascii=False),
+        title=(title.strip() or f"HBF — {ref.ref_no}"),
         status="draft", submitted_by=current_user.id, created_at=now, updated_at=now,
     )
     db.add(report)

@@ -16,12 +16,13 @@
         <div class="row g-3">
           <div class="col-md-6">
             <label class="form-label small">Referans (Proje)</label>
-            <select name="request_id" id="requestId" class="form-select" {% if report %}disabled{% endif %} required>
+            <select name="reference_id" id="requestId" class="form-select" {% if report %}disabled{% endif %} required>
               <option value="">— Seçin —</option>
-              {% for r in requests %}
-              <option value="{{ r.id }}" {% if report and report.request_id == r.id %}selected{% endif %}>{{ r.request_no }} — {{ r.event_name or r.client_name or '' }}</option>
+              {% for r in references %}
+              <option value="{{ r.id }}" {% if current_ref_no and current_ref_no == r.ref_no %}selected{% endif %}>{{ r.ref_no }} — {{ r.title or '' }}</option>
               {% endfor %}
             </select>
+            {% if report %}<div class="form-text">Düzenlemede referans değiştirilemez.</div>{% endif %}
           </div>
           <div class="col-md-6">
             <label class="form-label small">Başlık</label>
