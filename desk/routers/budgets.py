@@ -906,17 +906,17 @@ async def budgets_export(
         print(f"[EXCEL ERROR] budget={budget_id}: {exc}\n{_tb.format_exc()}", flush=True)
         raise HTTPException(500, detail="Excel dosyası oluşturulamadı. Lütfen tekrar deneyin.")
 
-    # Dosya adı: Türkçe karakterleri ASCII'ye çevir (HTTP header latin-1 sınırı)
+    # Dosya adı: "Hesap Dökümü" (müşteri belgesi). Türkçe karakter ASCII fallback
+    # (HTTP header latin-1 sınırı) + RFC 5987 UTF-8.
     import unicodedata
-    raw_name = (budget.venue_name or "teklif")[:30]
+    raw_name = "Hesap Dökümü"
     ascii_name = unicodedata.normalize("NFKD", raw_name)
-    ascii_name = "".join(c for c in ascii_name if ord(c) < 128)
-    ascii_name = ascii_name.replace(" ", "_").replace("/", "-").strip("_") or "teklif"
-    filename_ascii = f"{ascii_name}_teklif.xlsx"
+    ascii_name = "".join(c for c in ascii_name if ord(c) < 128).strip() or "Hesap Dokumu"
+    filename_ascii = f"{ascii_name}.xlsx"
 
     # RFC 5987 ile UTF-8 dosya adı (modern tarayıcılar için)
     import urllib.parse
-    filename_utf8 = urllib.parse.quote(f"{raw_name}_teklif.xlsx")
+    filename_utf8 = urllib.parse.quote(f"{raw_name}.xlsx")
     content_disposition = (
         f'attachment; filename="{filename_ascii}"; '
         f"filename*=UTF-8''{filename_utf8}"

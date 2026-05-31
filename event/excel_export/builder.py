@@ -641,7 +641,7 @@ def build_standard(
 
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Teklif"
+    ws.title = "Hesap Dökümü"
     _write_sheet(ws, budget, request, customer, creator, vat_mode, custom_sections)
 
     output = io.BytesIO()

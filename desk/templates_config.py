@@ -89,8 +89,10 @@ def next_day_filter(value: Any) -> Any:
 
 
 templates.env.filters["date_tr"]      = format_date_tr
+templates.env.filters["dateformat"]   = format_date_tr   # alias (bazı şablonlar dateformat kullanıyor)
 templates.env.filters["datetime_tr"]  = format_datetime_tr
 templates.env.filters["money"]        = format_money
+templates.env.filters["currency"]     = format_money   # alias (bazı şablonlar currency kullanıyor)
 templates.env.filters["role_label"]   = role_label
 templates.env.filters["fromjson"]     = fromjson_filter
 templates.env.filters["tojson"]       = tojson_filter
