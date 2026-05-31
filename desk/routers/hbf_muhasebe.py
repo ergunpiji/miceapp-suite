@@ -467,11 +467,12 @@ async def hbf_muhasebe_pay(
     # 4) Gönderene bildirim
     try:
         from notification_helper import notify
+        from auth import EVENT_URL
         notify(
             db, rep.submitted_by,
             title=f"HBF kapandı: {rep.title or 'Harcama Formu'}",
             message=f"{current_user.name} harcama formunuzu ödedi ve kapattı.",
-            link=f"/hbf-muhasebe/{rep.id}", notif_type="success", ref_id=rep.id,
+            link=f"{EVENT_URL}/expenses/{rep.id}", notif_type="success", ref_id=rep.id,
         )
         db.commit()
     except Exception:

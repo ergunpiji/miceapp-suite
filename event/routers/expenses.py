@@ -455,13 +455,14 @@ async def expenses_approve(
     req_obj = db.query(ReqModel).filter(ReqModel.id == report.request_id).first()
     ref_no = req_obj.request_no if req_obj else ""
 
+    to_muhasebe = False
     if report.status == "submitted":
         if _is_gm(current_user):
             # GM/admin doğrudan finalize → muhasebe bekliyor
             report.status = "onaylandi"
             report.approved_by = current_user.id
             report.approved_at = now
-            notify_targets, stage_msg = _find_muhasebe(db), "ödeme/kapatma"
+            notify_targets, stage_msg, to_muhasebe = _find_muhasebe(db), "ödeme/kapatma", True
         else:
             # Müdür onayı → GM onayına gider
             report.status = "mudur_onayladi"
@@ -473,13 +474,15 @@ async def expenses_approve(
         report.status = "onaylandi"
         report.approved_by = current_user.id
         report.approved_at = now
-        notify_targets, stage_msg = _find_muhasebe(db), "ödeme/kapatma"
+        notify_targets, stage_msg, to_muhasebe = _find_muhasebe(db), "ödeme/kapatma", True
     else:
         raise HTTPException(400, detail="Bu HBF bu aşamada onaylanamaz.")
 
     db.commit()
 
-    # Sıradaki onaycı(lar)a bildirim
+    # Sıradaki onaycı(lar)a bildirim. Muhasebe desk'te çalışır → desk linki ver.
+    from auth import DESK_URL
+    notif_link = (f"{DESK_URL}/hbf-muhasebe/{report.id}") if to_muhasebe else f"/expenses/{report.id}"
     for u in notify_targets:
         if u.id == current_user.id:
             continue
@@ -489,7 +492,7 @@ async def expenses_approve(
             notif_type = "hbf_submitted",
             title      = f"HBF {stage_msg} bekliyor — {report.title or 'Harcama Formu'}",
             message    = f"{ref_no} referansına ait harcama formu {stage_msg} aşamasında sizi bekliyor.",
-            link       = f"/expenses/{report.id}",
+            link       = notif_link,
             ref_id     = report.id,
         )
     db.commit()

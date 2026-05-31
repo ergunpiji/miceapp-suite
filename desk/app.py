@@ -297,25 +297,54 @@ async def nav_counts_middleware(request: Request, call_next):
 # Hata yöneticileri
 # ---------------------------------------------------------------------------
 
+def _error_current_user(request: Request):
+    """Hata sayfalarında sidebar düzgün render olsun diye cookie'den kullanıcıyı çöz
+    (departman+modül erişimi eager yüklenir; lazy-load için açık session gerekmez)."""
+    try:
+        from auth import decode_token, COOKIE_NAME
+        from database import SessionLocal
+        from models import User as _U, Department
+        from sqlalchemy.orm import joinedload
+        token = request.cookies.get(COOKIE_NAME)
+        if not token:
+            return None
+        payload = decode_token(token)
+        if not payload:
+            return None
+        db = SessionLocal()
+        try:
+            return (
+                db.query(_U)
+                .options(joinedload(_U.departments).joinedload(Department.module_access))
+                .filter(_U.id == payload.get("sub"))
+                .first()
+            )
+        finally:
+            db.close()
+    except Exception:
+        return None
+
+
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     if exc.status_code == 401:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    _cu = _error_current_user(request)
     if exc.status_code == 403:
         return templates.TemplateResponse(
             "errors/403.html",
-            {"request": request, "current_user": None, "detail": exc.detail},
+            {"request": request, "current_user": _cu, "detail": exc.detail},
             status_code=403,
         )
     if exc.status_code == 404:
         return templates.TemplateResponse(
             "errors/404.html",
-            {"request": request, "current_user": None},
+            {"request": request, "current_user": _cu},
             status_code=404,
         )
     return templates.TemplateResponse(
         "errors/generic.html",
-        {"request": request, "current_user": None,
+        {"request": request, "current_user": _cu,
          "status_code": exc.status_code, "detail": exc.detail},
         status_code=exc.status_code,
     )
