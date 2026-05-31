@@ -1,6 +1,5 @@
 {% extends "base.html" %}
-{% block page_title %}Harcama Formları{% endblock %}
-{% block page_title_block %}Harcama Formları (HBF){% endblock %}
+{% block page_title %}Harcama Formları (HBF){% endblock %}
 
 {% block topbar_actions %}
 <a href="/expenses/new" class="btn btn-primary btn-sm">
@@ -8,7 +7,7 @@
 </a>
 {% endblock %}
 
-{% block extra_head %}
+{% block extra_css %}
 <style>
   .filter-bar { background:#fff; border-radius:10px; padding:14px 18px;
                 box-shadow:0 1px 4px rgba(0,0,0,.06); margin-bottom:18px; }
@@ -70,22 +69,20 @@
           </thead>
           <tbody>
             {% for rpt in reports %}
+            {% set refs = (rpt.request_ids_json | fromjson) if rpt.request_ids_json else [] %}
+            {% set pref = refs[0] if refs else None %}
             <tr>
               <td class="ps-3">
-                <a href="/requests/{{ rpt.request_id }}#tab-financial"
+                {% if pref %}
+                <a href="/references/{{ pref.id }}"
                    class="text-decoration-none fw-semibold text-primary">
-                  {{ rpt.request.request_no if rpt.request else '—' }}
+                  {{ pref.request_no }}
                 </a>
-                {% if rpt.request %}
-                <div class="small text-muted">{{ rpt.request.event_name }}</div>
-                {% endif %}
-              </td>
-              <td>{{ rpt.title or '—' }}</td>
-              <td>
-                {% if rpt.submitter %}
-                  {{ rpt.submitter.name }} {{ rpt.submitter.surname }}
+                {% if pref.event_name %}<div class="small text-muted">{{ pref.event_name }}</div>{% endif %}
                 {% else %}—{% endif %}
               </td>
+              <td>{{ rpt.title or '—' }}</td>
+              <td>{{ user_names.get(rpt.submitted_by, '—') }}</td>
               <td class="text-muted">
                 {{ rpt.created_at.strftime('%d.%m.%Y') if rpt.created_at else '—' }}
               </td>
@@ -96,9 +93,9 @@
                 ₺{{ '{:,.2f}'.format(rpt.grand_total).replace(',', '.') }}
               </td>
               <td class="text-center">
-                <span class="badge bg-{{ rpt.status_color }}
-                  {% if rpt.status_color == 'warning' %}text-dark{% endif %}">
-                  {{ rpt.status_label }}
+                <span class="badge bg-{{ STATUS_COLORS.get(rpt.status, 'secondary') }}
+                  {% if STATUS_COLORS.get(rpt.status) == 'warning' %}text-dark{% endif %}">
+                  {{ STATUS_LABELS.get(rpt.status, rpt.status) }}
                 </span>
                 {% if rpt.status == 'rejected' and rpt.rejection_note %}
                 <div class="small text-danger" style="font-size:10px;"
@@ -113,23 +110,8 @@
                      class="btn btn-sm btn-outline-secondary py-0 px-2" title="Görüntüle">
                     <i class="bi bi-eye" style="font-size:11px;"></i>
                   </a>
-                  {% if rpt.status == 'submitted' and (
-                      current_user.role == 'admin' or
-                      (rpt.request and rpt.request.created_by == current_user.id)
-                  ) %}
-                  <form method="post" action="/expenses/{{ rpt.id }}/approve" class="d-inline">
-                    <button type="submit" class="btn btn-sm btn-success py-0 px-2" title="Onayla"
-                            onclick="return confirm('Bu HBF\'yi onaylıyorsunuz?')">
-                      <i class="bi bi-check2" style="font-size:11px;"></i>
-                    </button>
-                  </form>
-                  <button class="btn btn-sm btn-danger py-0 px-2" title="Reddet"
-                          onclick="openRejectModal('{{ rpt.id }}')">
-                    <i class="bi bi-x" style="font-size:11px;"></i>
-                  </button>
-                  {% endif %}
                   {% if rpt.status in ('draft','rejected') and (
-                      current_user.role == 'admin' or rpt.submitted_by == current_user.id
+                      current_user.is_admin or rpt.submitted_by == current_user.id
                   ) %}
                   <a href="/expenses/{{ rpt.id }}/edit"
                      class="btn btn-sm btn-outline-primary py-0 px-2" title="Düzenle">

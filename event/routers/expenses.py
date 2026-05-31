@@ -415,6 +415,12 @@ async def expenses_view(
         c.id: (c.name + (f" ••{c.last4}" if c.last4 else ""))
         for c in db.query(DeskCreditCard).all()
     }
+    # HBF'yi kim doldurdu (gönderen)
+    submitter_name = None
+    if report.submitted_by:
+        su = db.query(User).filter(User.id == report.submitted_by).first()
+        if su:
+            submitter_name = (f"{su.name} {getattr(su, 'surname', '') or ''}").strip()
     return templates.TemplateResponse("expenses/form.html", {
         "request": request,
         "current_user": current_user,
@@ -424,6 +430,7 @@ async def expenses_view(
         "readonly": True,
         "can_approve": _can_approve(report, current_user, db),
         "card_names": card_names,
+        "submitter_name": submitter_name,
         "page_title": report.title or "HBF Detay",
         "PAYMENT_METHODS": EXPENSE_PAYMENT_METHODS,
         "DOC_TYPES": EXPENSE_DOC_TYPES,

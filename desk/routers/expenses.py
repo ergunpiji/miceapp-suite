@@ -119,6 +119,12 @@ async def expenses_all_list(
         pending_q = pending_q.filter(ExpenseReport.submitted_by == current_user.id)
     pending_count = pending_q.count()
 
+    # Gönderen isimleri (submitted_by → "Ad Soyad")
+    user_names = {
+        u.id: (f"{u.name} {u.surname or ''}").strip()
+        for u in db.query(User).filter(User.company_id == cid).all()
+    }
+
     return templates.TemplateResponse("expenses/list_all.html", {
         "request":       request,
         "current_user":  current_user,
@@ -126,6 +132,7 @@ async def expenses_all_list(
         "reports":       reports,
         "status_filter": status_filter,
         "pending_count": pending_count,
+        "user_names":    user_names,
         "STATUS_LABELS": EXPENSE_STATUS_LABELS,
         "STATUS_COLORS": EXPENSE_STATUS_COLORS,
         "STATUSES":      EXPENSE_STATUSES,
@@ -421,16 +428,34 @@ async def expenses_view(
         raise HTTPException(404)
     card_names = {c.id: (c.name + (f" ••{c.last4}" if c.last4 else ""))
                   for c in _credit_cards(db, cid)}
+    # HBF'yi kim doldurdu (gönderen)
+    submitter_name = None
+    if report.submitted_by:
+        su = db.query(User).filter(User.id == report.submitted_by).first()
+        if su:
+            submitter_name = (f"{su.name} {getattr(su, 'surname', '') or ''}").strip()
+    # Başlık için referans bilgisi (request_ids_json'dan)
+    import json as _json
+    req = None
+    try:
+        _refs = _json.loads(report.request_ids_json or "[]")
+        if _refs:
+            req = {"id": _refs[0].get("id"), "request_no": _refs[0].get("request_no"),
+                   "event_name": _refs[0].get("event_name", ""),
+                   "client_name": _refs[0].get("client_name", "")}
+    except Exception:
+        req = None
     return templates.TemplateResponse("expenses/form.html", {
         "request": request,
         "current_user": current_user,
         "report": report,
-        "req": None,
+        "req": req,
         "all_requests": [],
         "readonly": True,
         # Onay/red birleşik akışta EVENT tarafında yapılır → desk'te salt görüntüleme
         "can_approve": False,
         "card_names": card_names,
+        "submitter_name": submitter_name,
         "page_title": report.title or "HBF Detay",
         "PAYMENT_METHODS": EXPENSE_PAYMENT_METHODS,
         "DOC_TYPES": EXPENSE_DOC_TYPES,

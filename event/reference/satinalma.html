@@ -583,8 +583,8 @@ tr:hover td{background:#f8fafc;}
 // DATABASE LAYER
 // ============================================================
 const DB = {
-  get: k => { try { return JSON.parse(localStorage.getItem('edem_'+k)); } catch(e) { return null; } },
-  set: (k,v) => localStorage.setItem('edem_'+k, JSON.stringify(v)),
+  get: k => { try { return JSON.parse(localStorage.getItem('satinalma_'+k)); } catch(e) { return null; } },
+  set: (k,v) => localStorage.setItem('satinalma_'+k, JSON.stringify(v)),
   getArr: k => DB.get(k) || [],
 
   users:      () => DB.getArr('users'),
@@ -619,7 +619,7 @@ const DB = {
       {id:'u2',email:'manager@miceapp.net',password:'Manager123',role:'project_manager',
        name:'Ahmet',surname:'Yılmaz',title:'Proje Yöneticisi',phone:'0532 111 2233',active:true,
        createdAt:now()},
-      {id:'u3',email:'edem@miceapp.net',password:'Edem123',role:'satinalma',
+      {id:'u3',email:'satinalma@miceapp.net',password:'Satinalma123',role:'satinalma',
        name:'Fatma',surname:'Kaya',title:'Satın Alma Uzmanı',phone:'0543 444 5566',active:true,
        createdAt:now()},
     ]);
