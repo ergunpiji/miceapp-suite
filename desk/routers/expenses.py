@@ -1,5 +1,5 @@
 """
-E-dem — HBF (Harcama Bildirim Formu) & Belgesiz Gelir/Gider
+Satın Alma — HBF (Harcama Bildirim Formu) & Belgesiz Gelir/Gider
 """
 import os
 from datetime import datetime
@@ -85,8 +85,8 @@ async def expenses_all_list(
         query = query.join(ExpenseReport.request).filter(
             ReqModel.created_by == current_user.id
         )
-    # e_dem sadece kendi gönderdiği HBF'leri görür
-    elif current_user.role == "e_dem":
+    # satinalma sadece kendi gönderdiği HBF'leri görür
+    elif current_user.role == "satinalma":
         query = query.filter(ExpenseReport.submitted_by == current_user.id)
 
     if status_filter != "all":
@@ -100,7 +100,7 @@ async def expenses_all_list(
         pending_q = pending_q.join(ExpenseReport.request).filter(
             ReqModel.created_by == current_user.id
         )
-    elif current_user.role == "e_dem":
+    elif current_user.role == "satinalma":
         pending_q = pending_q.filter(ExpenseReport.submitted_by == current_user.id)
     pending_count = pending_q.count()
 

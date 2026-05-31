@@ -26,7 +26,7 @@ _SYSTEM_PROMPT = """Sen bir Excel template analiz uzmanısın.
 Sana bir Excel dosyasının içeriği JSON formatında verilecek (satır × sütun matrisi).
 Bu template bir etkinlik organizasyon şirketinin müşterisine ait RFQ / fiyat teklifi formatıdır.
 
-Görevin: Template'deki hücreleri E-dem bütçe sisteminin alanlarıyla eşleştirerek cell_map JSON döndür.
+Görevin: Template'deki hücreleri Satın Alma bütçe sisteminin alanlarıyla eşleştirerek cell_map JSON döndür.
 
 ──────────────────────────────────────
 E-DEM ALANLARI
@@ -236,7 +236,7 @@ async def _analyze_with_gemini(template_path: str, api_key: str, model: str) -> 
         f"{_SYSTEM_PROMPT}\n\n"
         "Excel template yapısı:\n\n"
         f"```json\n{json.dumps(structure, ensure_ascii=False)}\n```\n\n"
-        "Bu template için E-dem cell_map JSON'ını döndür."
+        "Bu template için Satın Alma cell_map JSON'ını döndür."
     )
     payload = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}],
@@ -294,7 +294,7 @@ async def _analyze_with_claude(template_path: str, api_key: str, model: str) -> 
     user_msg = (
         "Excel template yapısı (satır listesi, her satır hücre değerlerini içerir):\n\n"
         f"```json\n{json.dumps(structure, ensure_ascii=False)}\n```\n\n"
-        "Bu template için E-dem cell_map JSON'ını döndür."
+        "Bu template için Satın Alma cell_map JSON'ını döndür."
     )
 
     raw = ""

@@ -1,7 +1,7 @@
 """
-E-dem Köprü Servisi
+Satın Alma Köprü Servisi
 
-E-dem'in SQLite veritabanını okuyarak referansları (Request) ve onaylı
+Satın Alma'in SQLite veritabanını okuyarak referansları (Request) ve onaylı
 bütçeleri (Budget) katılımcı ajanına sunar.
 
 DB yolu: EDEM_DB_PATH env değişkeninden okunur,
@@ -15,11 +15,11 @@ from pathlib import Path
 from dataclasses import dataclass
 from datetime import date
 
-# E-dem DB yolu
+# Satın Alma DB yolu
 _DEFAULT_DB = Path(__file__).parent.parent.parent.parent / "edem.db"
 EDEM_DB_PATH = os.environ.get("EDEM_DB_PATH", str(_DEFAULT_DB))
 
-# Katılımcı ajanında gösterilecek E-dem statüleri
+# Katılımcı ajanında gösterilecek Satın Alma statüleri
 VISIBLE_STATUSES = {
     "pending":          "Beklemede",
     "in_progress":      "İşlemde",
@@ -59,7 +59,7 @@ class EdemReference:
 
 
 def _connect() -> sqlite3.Connection | None:
-    """E-dem DB bağlantısı açar. Dosya yoksa None döner."""
+    """Satın Alma DB bağlantısı açar. Dosya yoksa None döner."""
     if not Path(EDEM_DB_PATH).exists():
         return None
     conn = sqlite3.connect(EDEM_DB_PATH)
@@ -68,13 +68,13 @@ def _connect() -> sqlite3.Connection | None:
 
 
 def is_available() -> bool:
-    """E-dem DB erişilebilir mi?"""
+    """Satın Alma DB erişilebilir mi?"""
     return Path(EDEM_DB_PATH).exists()
 
 
 def get_references(search: str = "") -> list[EdemReference]:
     """
-    Katılımcı ajanında gösterilebilecek E-dem referanslarını döner.
+    Katılımcı ajanında gösterilebilecek Satın Alma referanslarını döner.
     Sadece aktif / tamamlanmış referanslar listelenir.
     """
     conn = _connect()
@@ -151,7 +151,7 @@ class BudgetRow:
     notes: str
 
 
-# E-dem section → katılımcı ajanı supplier_type eşlemesi
+# Satın Alma section → katılımcı ajanı supplier_type eşlemesi
 SECTION_TO_SUPPLIER_TYPE = {
     "accommodation": "hotel",
     "meeting":       "other",
@@ -163,7 +163,7 @@ SECTION_TO_SUPPLIER_TYPE = {
     "other":         "other",
 }
 
-# E-dem section → SESSION_TYPES eşlemesi
+# Satın Alma section → SESSION_TYPES eşlemesi
 SECTION_TO_SESSION_TYPE = {
     "meeting":  "plenary",
     "fb":       "meal",
@@ -174,7 +174,7 @@ SECTION_TO_SESSION_TYPE = {
 
 def get_budget_rows(edem_request_id: str) -> tuple[str, list[BudgetRow]]:
     """
-    Verilen E-dem referansı için en iyi bütçenin satırlarını döner.
+    Verilen Satın Alma referansı için en iyi bütçenin satırlarını döner.
     Öncelik sırası: approved > pending_manager > draft_edem
     Dönüş: (venue_name, [BudgetRow])
     """

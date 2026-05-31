@@ -1,5 +1,5 @@
 """
-E-dem — Hizmet kataloğu router'ı (Admin only)
+Satın Alma — Hizmet kataloğu router'ı (Admin only)
 """
 
 import io

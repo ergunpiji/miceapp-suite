@@ -1,5 +1,5 @@
 """
-E-dem — Fatura Yönetimi
+Satın Alma — Fatura Yönetimi
 Erişim: admin, muhasebe_muduru, muhasebe
 """
 import json
@@ -210,7 +210,7 @@ async def invoices_list(
     db: Session = Depends(get_db),
 ):
     # Finans rolleri + PM (kendi referanslarının faturalarını görebilir)
-    if current_user.role not in {"admin", "muhasebe_muduru", "muhasebe", "mudur", "yonetici", "asistan", "e_dem"}:
+    if current_user.role not in {"admin", "muhasebe_muduru", "muhasebe", "mudur", "yonetici", "asistan", "satinalma"}:
         raise HTTPException(status_code=403)
 
     query = db.query(Invoice).join(Invoice.request)

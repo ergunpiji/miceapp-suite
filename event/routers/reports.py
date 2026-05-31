@@ -1,5 +1,5 @@
 """
-E-dem — Raporlar (Admin only)
+Satın Alma — Raporlar (Admin only)
 GET /reports  → özet istatistikler, aylık trend, müşteri bazlı tablo
 """
 from collections import defaultdict

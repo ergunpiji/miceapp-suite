@@ -1,5 +1,5 @@
 """
-E-dem — Dashboard router
+Satın Alma — Dashboard router
 GET /dashboard → İstatistikleri sorgula, dashboard.html render et
 """
 
@@ -450,8 +450,8 @@ def _build_pending_tasks(db: Session, current_user) -> list[dict]:
                 "url":     f"/requests/{req.id}",
             })
 
-    # ── E-dem: atanmamış talepler ──────────────────────────────────────────
-    if role == "e_dem":
+    # ── Satın Alma: atanmamış talepler ──────────────────────────────────────────
+    if role == "satinalma":
         pending_reqs = (
             db.query(ReqModel)
             .filter(ReqModel.status == "pending")
@@ -622,7 +622,7 @@ async def dashboard(
             my_q.order_by(ReqModel.created_at.desc()).limit(8).all()
         )
 
-    else:  # e_dem, muhasebe — sadece iş yükü, finansal bilgi yok
+    else:  # satinalma, muhasebe — sadece iş yükü, finansal bilgi yok
         stats = {
             "pending":          db.query(ReqModel).filter(ReqModel.status == "pending").count(),
             "in_progress":      db.query(ReqModel).filter(ReqModel.status == "in_progress").count(),
@@ -650,7 +650,7 @@ async def dashboard(
     if show_team_ytd:
         team_ytd = _build_ytd_team_stats(db)
 
-    # Müşteri YTD grafiği — finansal görüntülemesi olan roller (asistan/e_dem hariç)
+    # Müşteri YTD grafiği — finansal görüntülemesi olan roller (asistan/satinalma hariç)
     customer_ytd = []
     show_customer_ytd = current_user.is_gm or current_user.role in ("admin", "mudur", "muhasebe_muduru", "yonetici")
     if show_customer_ytd:

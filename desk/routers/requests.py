@@ -1,8 +1,8 @@
 """
-E-dem — Talep yönetimi router'ı
+Satın Alma — Talep yönetimi router'ı
 PM:    Yeni talep oluştur, referanslarım
 Admin: Tüm referanslar
-E-dem: Gelen referanslar, durum güncelle
+Satın Alma: Gelen referanslar, durum güncelle
 """
 
 import io
@@ -63,8 +63,8 @@ def _get_subtree_ids(user_id: str, db: Session) -> list[str]:
 
 
 def _check_edem_or_admin(current_user: User):
-    if current_user.role not in ("admin", "e_dem"):
-        raise HTTPException(status_code=403, detail="Bu sayfa E-dem kullanıcılarına özeldir.")
+    if current_user.role not in ("admin", "satinalma"):
+        raise HTTPException(status_code=403, detail="Bu sayfa Satın Alma kullanıcılarına özeldir.")
 
 
 def _check_fund_admin(current_user: User):
@@ -102,7 +102,7 @@ async def requests_list(
         query = query.filter(ReqModel.created_by.in_([current_user.id] + sub_ids))
     elif current_user.role == "asistan":
         query = query.filter(ReqModel.created_by == current_user.id)
-    elif current_user.role == "e_dem":
+    elif current_user.role == "satinalma":
         query = query.filter(
             ReqModel.status.in_(["pending", "in_progress", "venues_contacted", "budget_ready",
                                   "offer_sent", "revision"])
@@ -154,7 +154,7 @@ async def requests_list(
     if not page_title:
         if current_user.role in ("yonetici", "asistan"):
             page_title = "Referanslarım"
-        elif current_user.role == "e_dem":
+        elif current_user.role == "satinalma":
             page_title = "Gelen Referanslar"
         else:
             page_title = "Tüm Referanslar"
@@ -480,7 +480,7 @@ async def get_customer_contacts(
 ):
     # Sadece talep oluşturabilen / yönetebilen roller müşteri kontaktlarını çekebilir
     # (e-posta + telefon bilgisi içeriyor → bilgi sızıntısı korunur)
-    if current_user.role not in ("admin", "mudur", "yonetici", "asistan", "e_dem", "muhasebe", "muhasebe_muduru") \
+    if current_user.role not in ("admin", "mudur", "yonetici", "asistan", "satinalma", "muhasebe", "muhasebe_muduru") \
        and not current_user.is_gm:
         raise HTTPException(403)
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
@@ -667,7 +667,7 @@ async def requests_detail(
 
     # Erişim kontrolü — admin/GM/mudur/muhasebe_muduru tümünü görür;
     # yonetici sadece kendi alt ağacının referanslarını; asistan sadece kendi referansını;
-    # e_dem ve muhasebe ise iş akışı gereği tüm referansları görür.
+    # satinalma ve muhasebe ise iş akışı gereği tüm referansları görür.
     if current_user.role == "yonetici":
         sub_ids = _get_subtree_ids(current_user.id, db)
         if req.created_by not in [current_user.id] + sub_ids:
@@ -741,7 +741,7 @@ async def requests_detail(
     venues      = db.query(Venue).filter(Venue.active == True).all()
     event_types = db.query(EventType).order_by(EventType.sort_order).all()
     et_map      = {et.code: et.label for et in event_types}
-    can_edit_status = current_user.role in ("admin", "e_dem")
+    can_edit_status = current_user.role in ("admin", "satinalma")
     # mudur tüm referansları düzenleyebilir; yonetici/asistan sadece kendi talebini
     can_edit_req = (
         current_user.role == "admin" or
@@ -1164,11 +1164,11 @@ async def requests_update(
 
     db.commit()
 
-    # Bildirim: tüm e_dem kullanıcılarına yeni aktif referans
+    # Bildirim: tüm satinalma kullanıcılarına yeni aktif referans
     if went_active:
         from utils.notifications import create_notification
         edem_users = db.query(User).filter(
-            User.role == "e_dem", User.active == True  # noqa: E712
+            User.role == "satinalma", User.active == True  # noqa: E712
         ).all()
         for eu in edem_users:
             create_notification(
@@ -1186,7 +1186,7 @@ async def requests_update(
 
 
 # ---------------------------------------------------------------------------
-# Durum güncelleme (E-dem)
+# Durum güncelleme (Satın Alma)
 # ---------------------------------------------------------------------------
 
 @router.post("/{req_id}/status", name="requests_update_status")
@@ -1200,9 +1200,9 @@ async def requests_update_status(
     if not req:
         return RedirectResponse(url="/requests", status_code=status.HTTP_302_FOUND)
 
-    # E-dem/Admin: her duruma geçebilir
+    # Satın Alma/Admin: her duruma geçebilir
     # PM direkt yönetim: sadece kendi talebi ve belirli statüler
-    is_edem_or_admin = current_user.role in ("admin", "e_dem")
+    is_edem_or_admin = current_user.role in ("admin", "satinalma")
     is_pm_direct = (
         current_user.role in ("mudur", "yonetici") and
         (req.created_by == current_user.id or current_user.role == "mudur") and

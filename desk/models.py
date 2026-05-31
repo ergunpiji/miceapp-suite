@@ -1,5 +1,5 @@
 """
-E-dem — Ön Muhasebe Sistemi
+Satın Alma — Ön Muhasebe Sistemi
 SQLAlchemy modelleri
 """
 

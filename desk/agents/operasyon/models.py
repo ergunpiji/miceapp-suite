@@ -384,7 +384,7 @@ class SupplierTask(Base):
 
 # ---------------------------------------------------------------------------
 # Kullanıcı Erişim Tokeni
-# E-dem'den davet edilen kullanıcılar bu token ile giriş yapar.
+# Satın Alma'den davet edilen kullanıcılar bu token ile giriş yapar.
 # ---------------------------------------------------------------------------
 USER_ROLES = {
     "manager":     "Yönetici",

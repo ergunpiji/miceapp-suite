@@ -1,5 +1,5 @@
 """
-E-dem — Bildirim yardımcıları
+Satın Alma — Bildirim yardımcıları
 Deduplication ile Notification kaydı oluşturur.
 """
 from __future__ import annotations

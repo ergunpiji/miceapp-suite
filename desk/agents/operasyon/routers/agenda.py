@@ -373,7 +373,7 @@ async def delete_task(
 
 
 # ---------------------------------------------------------------------------
-# E-dem Bütçesinden İçe Aktar
+# Satın Alma Bütçesinden İçe Aktar
 # ---------------------------------------------------------------------------
 
 @router.post("/tasks/import-edem")
@@ -381,7 +381,7 @@ async def import_tasks_from_edem(
     event_id: str,
     db: Session = Depends(get_db)
 ):
-    """E-dem bütçesindeki satırları tedarikçi görevlerine dönüştürür."""
+    """Satın Alma bütçesindeki satırları tedarikçi görevlerine dönüştürür."""
     import uuid
     from datetime import datetime as dt
     from services.edem_bridge import get_budget_rows, SECTION_TO_SUPPLIER_TYPE
@@ -435,7 +435,7 @@ async def import_agenda_from_edem(
     event_id: str,
     db: Session = Depends(get_db)
 ):
-    """E-dem bütçesindeki toplantı / yemek / transfer kalemlerini günlük programa ekler."""
+    """Satın Alma bütçesindeki toplantı / yemek / transfer kalemlerini günlük programa ekler."""
     import uuid
     from services.edem_bridge import get_budget_rows, SECTION_TO_SESSION_TYPE
 

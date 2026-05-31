@@ -1,5 +1,5 @@
 """
-E-dem standart Excel teklif formatı.
+Satın Alma standart Excel teklif formatı.
 
 - Sadece satış fiyatı gösterilir (maliyet/karlılık HİÇ YOK)
 - KDV stratejisi: 'exclusive' (KDV hariç) | 'inclusive' (KDV dahil)

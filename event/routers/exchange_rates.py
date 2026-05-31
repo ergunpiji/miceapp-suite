@@ -1,5 +1,5 @@
 """
-E-dem — Döviz Kuru Endpoint'leri
+Satın Alma — Döviz Kuru Endpoint'leri
 GET /exchange-rates/today  → TCMB'den günlük kurları çek
 """
 from fastapi import APIRouter, Depends

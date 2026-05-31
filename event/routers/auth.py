@@ -1,5 +1,5 @@
 """
-E-dem — Kimlik doğrulama router'ı
+Satın Alma — Kimlik doğrulama router'ı
 GET  /login          → Giriş formu
 POST /login          → Doğrula, cookie set et, dashboard'a yönlendir
 POST /logout         → Cookie sil, login'e yönlendir

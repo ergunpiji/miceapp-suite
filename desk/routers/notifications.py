@@ -1,5 +1,5 @@
 """
-E-dem — Bildirim Endpoint'leri
+Satın Alma — Bildirim Endpoint'leri
 GET  /notifications/count   → {count: int}
 GET  /notifications         → [{id, type, title, message, link, created_at, read_at}, ...]
 POST /notifications/read-all → tümünü okundu işaretle

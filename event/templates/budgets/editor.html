@@ -424,7 +424,7 @@ const NCOLS = (USER_ROLE === 'mudur' || USER_ROLE === 'yonetici' || USER_ROLE ==
 
 let rows = [];
 try { rows = JSON.parse(document.getElementById('rowsJson').value || '[]'); } catch(e) {}
-// Service fee satırlarını filtrele — E-dem editöründe hizmet bedeli yok
+// Service fee satırlarını filtrele — Satın Alma editöründe hizmet bedeli yok
 rows = rows.filter(r => !r.is_service_fee);
 
 // Init rate inputs from stored data (rows'tan sonra çalışmalı)
@@ -860,8 +860,8 @@ function updateTotals() {
 }
 
 function saveRows() {
-  // E-dem satış fiyatı giremez — sadece e_dem rolünde sıfırla
-  const toSave = (USER_ROLE === 'e_dem')
+  // Satın Alma satış fiyatı giremez — sadece satinalma rolünde sıfırla
+  const toSave = (USER_ROLE === 'satinalma')
     ? rows.map(r => r.is_service_fee ? r : {...r, sale_price: 0})
     : rows;
   document.getElementById('rowsJson').value = JSON.stringify(toSave);
@@ -983,7 +983,7 @@ function scheduleAutoSave() {
   _autoSaveTimer = setTimeout(() => _saveCurrentEdem(true), 3000);
 }
 
-// ─── AJAX Sekme Sistemi (E-dem) ───
+// ─── AJAX Sekme Sistemi (Satın Alma) ───
 {% if budget %}
 let _currentBudgetId = '{{ budget.id }}';
 

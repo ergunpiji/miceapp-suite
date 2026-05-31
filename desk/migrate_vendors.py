@@ -1,5 +1,5 @@
 """
-Eski sistemden (e-dem) yeni sisteme (prizmafinans) tedarikçi verisi aktarır.
+Eski sistemden (Satın Alma) yeni sisteme (prizmafinans) tedarikçi verisi aktarır.
 Mevcut kayıtları günceller (address, phone, email, payment_term alanlarını doldurur).
 
 Kullanım:

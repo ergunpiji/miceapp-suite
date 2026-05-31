@@ -1,5 +1,5 @@
 """
-E-dem — JWT tabanlı kimlik doğrulama
+Satın Alma — JWT tabanlı kimlik doğrulama
 HttpOnly cookie ile token saklama
 """
 
@@ -194,19 +194,19 @@ def require_pm_mudur(current_user: User = Depends(get_current_user)) -> User:
 
 
 def require_edem(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role not in ("admin", "e_dem") and not current_user.is_gm:
+    if current_user.role not in ("admin", "satinalma") and not current_user.is_gm:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Bu işlem için E-dem yetkisi gereklidir.",
+            detail="Bu işlem için Satın Alma yetkisi gereklidir.",
         )
     return current_user
 
 
 def require_admin_or_edem(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role not in ("admin", "e_dem", "muhasebe_muduru") and not current_user.is_gm:
+    if current_user.role not in ("admin", "satinalma", "muhasebe_muduru") and not current_user.is_gm:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Bu işlem için Admin, E-dem veya Muhasebe Müdürü yetkisi gereklidir.",
+            detail="Bu işlem için Admin, Satın Alma veya Muhasebe Müdürü yetkisi gereklidir.",
         )
     return current_user
 

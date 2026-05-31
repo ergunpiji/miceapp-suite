@@ -1,5 +1,5 @@
 """
-E-dem — E-posta Şablon Yönetimi (Admin)
+Satın Alma — E-posta Şablon Yönetimi (Admin)
 GET  /email-templates          → liste
 GET  /email-templates/{id}     → düzenleme formu
 POST /email-templates/{id}     → kaydet

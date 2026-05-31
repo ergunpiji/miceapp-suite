@@ -8,14 +8,14 @@
 <div class="card">
   <form method="post" action="{% if event %}/events/{{ event.id }}/edit{% else %}/events/new{% endif %}" id="event-form">
 
-    <!-- Gizli E-dem alanları -->
+    <!-- Gizli Satın Alma alanları -->
     <input type="hidden" name="edem_request_id" id="edem_request_id" value="{{ event.edem_request_id or '' if event else '' }}">
     <input type="hidden" name="edem_request_no" id="edem_request_no" value="{{ event.edem_request_no or '' if event else '' }}">
 
-    <!-- E-dem Referansı Seçici -->
+    <!-- Satın Alma Referansı Seçici -->
     {% if edem_available %}
     <div style="margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid #f1f5f9;">
-      <div class="card-title" style="margin-bottom:10px;">🔗 E-dem Referansı</div>
+      <div class="card-title" style="margin-bottom:10px;">🔗 Satın Alma Referansı</div>
 
       {% if event and event.edem_request_no %}
       <div class="alert alert-info" style="margin-bottom:10px;">
@@ -26,7 +26,7 @@
 
       <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
         <div style="flex:1; min-width:220px;">
-          <label style="display:block; margin-bottom:5px; font-size:12px; font-weight:600; color:#374151;">E-dem Referansı Seç</label>
+          <label style="display:block; margin-bottom:5px; font-size:12px; font-weight:600; color:#374151;">Satın Alma Referansı Seç</label>
           <input type="text" id="ref-search" placeholder="Referans no veya etkinlik adıyla ara..."
                  style="width:100%;" oninput="filterRefs(this.value)">
         </div>
@@ -83,7 +83,7 @@
     </div>
     {% else %}
     <div class="alert alert-warning" style="margin-bottom:16px;">
-      ⚠️ E-dem veritabanına erişilemiyor — etkinlik bilgilerini manuel girin.
+      ⚠️ Satın Alma veritabanına erişilemiyor — etkinlik bilgilerini manuel girin.
     </div>
     {% endif %}
 

@@ -1,5 +1,5 @@
 """
-E-dem — Dosya Kapama Onay Akışı
+Satın Alma — Dosya Kapama Onay Akışı
 
 Akış:
   1. PM / Yönetici → POST /requests/{id}/submit-closure

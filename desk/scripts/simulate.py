@@ -1,5 +1,5 @@
 """
-E-dem Sistem Simülasyonu — Fake Data + Flow Testi
+Satın Alma Sistem Simülasyonu — Fake Data + Flow Testi
 Çalıştır: python scripts/simulate.py
 """
 

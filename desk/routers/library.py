@@ -1,5 +1,5 @@
 """
-E-dem — Kütüphane
+Satın Alma — Kütüphane
 Referans bazlı otomatik belge arşivi ve iş akışı logu.
 
 log_activity()   → diğer router'lardan çağrılan aktivite kaydı

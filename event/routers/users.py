@@ -1,5 +1,5 @@
 """
-E-dem — Kullanıcı yönetimi router'ı (Admin only)
+Satın Alma — Kullanıcı yönetimi router'ı (Admin only)
 GET    /users                    → Kullanıcı listesi
 GET    /users/new                → Yeni kullanıcı formu
 POST   /users/new                → Yeni kullanıcı oluştur

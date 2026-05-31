@@ -1,5 +1,5 @@
 """
-E-dem — Ana FastAPI uygulama girişi
+Satın Alma — Ana FastAPI uygulama girişi
 Çalıştır: uvicorn app:app --reload
 """
 
@@ -56,7 +56,7 @@ else:
 # FastAPI uygulaması
 # ---------------------------------------------------------------------------
 app = FastAPI(
-    title="E-dem — Etkinlik Talep Yönetim Sistemi",
+    title="miceapp",
     version="1.0.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -127,8 +127,8 @@ async def nav_counts_middleware(request: Request, call_next):
                     counts["closure_pending_manager"] = db.execute(
                         _text("SELECT COUNT(*) FROM closure_requests WHERE status='pending_manager'")
                     ).scalar() or 0
-                if role == "e_dem":
-                    # E-dem: atanmamış/bekleyen talepler
+                if role == "satinalma":
+                    # Satın Alma: atanmamış/bekleyen talepler
                     counts["requests_pending"] = db.execute(
                         _text("SELECT COUNT(*) FROM requests WHERE status='pending'")
                     ).scalar() or 0
@@ -298,16 +298,16 @@ os.environ.setdefault("OA_URL_PREFIX", "/operasyon")
 
 def _mount_operasyon():
     """
-    Operasyon agent'ı E-dem modülleriyle çakışmadan yükle.
+    Operasyon agent'ı Satın Alma modülleriyle çakışmadan yükle.
 
-    E-dem ve operasyon her ikisi de 'database', 'models', 'config',
+    Satın Alma ve operasyon her ikisi de 'database', 'models', 'config',
     'templates_config', 'routers' gibi aynı isimli modüller kullanıyor.
-    sys.modules önbelleğinde E-dem'inkiler zaten yüklü olduğundan,
+    sys.modules önbelleğinde Satın Alma'inkiler zaten yüklü olduğundan,
     operasyon yüklenirken geçici olarak saklanıp sonra geri yükleniyor.
     """
     _bare = {"database", "models", "config", "templates_config", "main"}
 
-    # E-dem'in çakışan modüllerini geçici olarak sakla
+    # Satın Alma'in çakışan modüllerini geçici olarak sakla
     _stash: dict = {}
     for _n in list(_sys.modules.keys()):
         if _n in _bare or _n == "routers" or _n.startswith("routers.") or _n.startswith("services."):
@@ -329,7 +329,7 @@ def _mount_operasyon():
             if (_n in _bare or _n == "routers" or
                     _n.startswith("routers.") or _n.startswith("services.")):
                 _sys.modules[f"_oa.{_n}"] = _sys.modules.pop(_n)
-        # E-dem'in orijinal modüllerini geri yükle
+        # Satın Alma'in orijinal modüllerini geri yükle
         _sys.modules.update(_stash)
         if _oa_dir in _sys.path:
             _sys.path.remove(_oa_dir)

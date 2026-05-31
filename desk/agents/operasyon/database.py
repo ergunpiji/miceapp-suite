@@ -39,7 +39,7 @@ def get_db():
 
 def init_db():
     import sys as _sys
-    # E-dem içine mount edilince operasyon modülleri _oa.* adıyla sys.modules'ta,
+    # Satın Alma içine mount edilince operasyon modülleri _oa.* adıyla sys.modules'ta,
     # standalone çalışınca düz "models" adıyla bulunur.
     _models = (
         _sys.modules.get("_oa.models")

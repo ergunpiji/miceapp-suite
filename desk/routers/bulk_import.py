@@ -1,5 +1,5 @@
 """
-E-dem — Toplu İçe Aktarma (Bulk Import) router'ı
+Satın Alma — Toplu İçe Aktarma (Bulk Import) router'ı
 Admin only.
 
 GET  /bulk-import                     → Upload sayfası

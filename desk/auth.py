@@ -1,5 +1,5 @@
 """
-E-dem — JWT tabanlı kimlik doğrulama
+Satın Alma — JWT tabanlı kimlik doğrulama
 HttpOnly cookie ile token saklama
 """
 

@@ -1,5 +1,5 @@
 """
-E-dem — Finansal Tedarikçi Yönetimi (Vendor)
+Satın Alma — Finansal Tedarikçi Yönetimi (Vendor)
 Erişim: admin, muhasebe_muduru, muhasebe  (liste/düzenle)
 Görüntüleme: mudur (GM), muhasebe ekibi
 """

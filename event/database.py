@@ -1,5 +1,5 @@
 """
-E-dem — Veritabanı bağlantısı ve başlangıç verisi (seed)
+Satın Alma — Veritabanı bağlantısı ve başlangıç verisi (seed)
 """
 
 import json
@@ -75,7 +75,7 @@ def seed_data() -> None:
             users = [
                 User(
                     id=_uuid(),
-                    email="admin@edem.com",
+                    email="admin@miceapp.net",
                     password_hash=pwd_ctx.hash("Admin123"),
                     role="admin",
                     name="Admin",
@@ -87,7 +87,7 @@ def seed_data() -> None:
                 ),
                 User(
                     id=_uuid(),
-                    email="manager@edem.com",
+                    email="manager@miceapp.net",
                     password_hash=pwd_ctx.hash("Manager123"),
                     role="yonetici",
                     name="Proje",
@@ -99,10 +99,10 @@ def seed_data() -> None:
                 ),
                 User(
                     id=_uuid(),
-                    email="edem@edem.com",
+                    email="edem@miceapp.net",
                     password_hash=pwd_ctx.hash("Edem123"),
-                    role="e_dem",
-                    name="E-dem",
+                    role="satinalma",
+                    name="Satın Alma",
                     surname="Kullanıcısı",
                     title="Satın Alma Uzmanı",
                     phone="+90 555 000 0003",
@@ -414,7 +414,7 @@ def seed_data() -> None:
         if db.query(Settings).count() == 0:
             db.add(Settings(
                 id=1,
-                company_name="E-dem Etkinlik Yönetimi",
+                company_name="miceapp",
                 company_address="",
                 company_phone="",
                 company_email="",

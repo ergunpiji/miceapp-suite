@@ -1,9 +1,9 @@
 # PrizmaDesk — Finans & İK Yönetim Sistemi
 
 Bu repo (`prizmafinans`) **PrizmaDesk** adlı kapsamlı bir kurumsal yönetim sistemini barındırır.
-Kökeni `E-dem` (etkinlik/RFQ yönetimi) projesi olmasına rağmen evrim sonucu artık ana odak
-**finans + İK + onay akışı + Türkiye e-fatura entegrasyonu**'dur. E-Dem ürünü ayrı bir
-repo'ya (`ergunpiji/e-dem`) ayrılmıştır; bu repo sadece **PrizmaDesk** içindir.
+Kökeni `Satın Alma` (etkinlik/RFQ yönetimi) projesi olmasına rağmen evrim sonucu artık ana odak
+**finans + İK + onay akışı + Türkiye e-fatura entegrasyonu**'dur. Satın Alma ürünü ayrı bir
+repo'ya (`ergunpiji/Satın Alma`) ayrılmıştır; bu repo sadece **PrizmaDesk** içindir.
 
 > **Önemli:** Eski etkinlik yönetimi kodları (Reference, Venue, event_types, budgets RFQ kısmı)
 > hâlâ duruyor — silmeyin, çünkü `Reference` model'i fatura/HBF/avans gibi finans modüllerinde
@@ -98,7 +98,7 @@ railway.json              # NIXPACKS, ON_FAILURE restart
 | `/admin/company-profile` | Firma bilgileri (logo, IBAN, vergi) |
 | `/notifications`, `/settings`, `/teams`, `/exchange-rates`, `/email-templates` | Yardımcı |
 
-### E-Dem mirası (silinmedi, kullanımda)
+### Satın Alma mirası (silinmedi, kullanımda)
 `/references`, `/venues`, `/event-types`, `/requests`, `/services` — etkinlik/proje referansı
 yapısı, finans modülleri tarafından "iş/proje" linki olarak kullanılıyor.
 
@@ -206,7 +206,7 @@ execute aynı fonksiyonu çağırır.
 sadece kod kullanımını kaldır, kolon DB'de kalsın.
 
 **Seed (`seed_data` + `_seed_extra_categories` + `_seed_leave_types` + `_seed_public_holidays_2026`):**
-- Boş DB'de admin user (`admin@edem.com / Admin123`) ve "Ana Kasa" oluşur
+- Boş DB'de admin user (`admin@miceapp.net / Admin123`) ve "Ana Kasa" oluşur
 - Gider kategorileri, izin türleri, 2026 resmi tatilleri seed edilir
 - Hepsi idempotent — tekrar çalıştırınca duplicate üretmez
 
@@ -229,8 +229,8 @@ modelleri, kendi router'ları olan ayrı FastAPI uygulamaları**. Ana app'le ayn
 > Ana PrizmaDesk app'i kanonik. Agent'lar ileride microservice'leşmek üzere ayrılmış prototip
 > niteliğinde. Yeni özellik geliştirirken **ana app'e** ekle, agent'a değil — aksi belirtilmedikçe.
 
-`agents/operasyon` özellikle E-Dem'in eski etkinlik kodunun daha derin halini içeriyor; bu kod
-artık `ergunpiji/e-dem` repo'sunda da var ve ileride buradan tamamen ayrılacak.
+`agents/operasyon` özellikle Satın Alma'in eski etkinlik kodunun daha derin halini içeriyor; bu kod
+artık `ergunpiji/Satın Alma` repo'sunda da var ve ileride buradan tamamen ayrılacak.
 
 ---
 
@@ -283,7 +283,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # değerleri doldur (zaten yapılmışsa atla)
 uvicorn app:app --reload --port 8000
-# http://localhost:8000  →  admin@edem.com / Admin123
+# http://localhost:8000  →  admin@miceapp.net / Admin123
 ```
 
 **`.env` örneği:**

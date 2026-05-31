@@ -45,7 +45,7 @@ def role_label(role: str) -> str:
         "yonetici":        "Proje Yöneticisi",
         "asistan":         "Proje Asistanı",
         "project_manager": "Proje Yöneticisi",   # geriye uyumluluk
-        "e_dem":           "E-dem (Satın Alma)",
+        "satinalma":           "Satın Alma (Satın Alma)",
         "muhasebe_muduru": "Muhasebe Müdürü",
         "muhasebe":        "Muhasebe Yetkilisi",
     }

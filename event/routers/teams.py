@@ -1,5 +1,5 @@
 """
-E-dem — Etkinlik Takımları router'ı
+Satın Alma — Etkinlik Takımları router'ı
 GET  /teams           → Takım listesi
 GET  /teams/new       → Yeni takım formu
 POST /teams/new       → Takım oluştur

@@ -14,7 +14,7 @@ from services import edem_bridge
 def _public_base(request: Request) -> str:
     """
     Tedarikçi / müşteri linklerinde kullanılacak tam URL prefix.
-    Örn: https://e-dem.up.railway.app/operasyon
+    Örn: https://Satın Alma.up.railway.app/operasyon
     """
     oa_prefix = os.getenv("OA_URL_PREFIX", "")
     host = str(request.base_url).rstrip("/")
@@ -61,7 +61,7 @@ async def list_events(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/edem-references", response_class=JSONResponse)
 async def edem_references_api(search: str = Query("")):
-    """E-dem referanslarını JSON olarak döner (form otomatik doldurma için)."""
+    """Satın Alma referanslarını JSON olarak döner (form otomatik doldurma için)."""
     refs = edem_bridge.get_references(search=search)
     return [
         {

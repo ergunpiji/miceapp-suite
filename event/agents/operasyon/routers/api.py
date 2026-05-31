@@ -1,9 +1,9 @@
 """
 Operasyon Ajanı — Dahili API
-E-dem'in modülü aktifleştirmek için çağırdığı endpoint'ler.
+Satın Alma'in modülü aktifleştirmek için çağırdığı endpoint'ler.
 API key ile korunur (OA_API_KEY env değişkeni).
 
-Sub-app olarak mount edilince, E-dem doğrudan _activate_internal() fonksiyonunu
+Sub-app olarak mount edilince, Satın Alma doğrudan _activate_internal() fonksiyonunu
 çağırır — HTTP round-trip gerekmez.
 """
 import os
@@ -21,7 +21,7 @@ from models import Event, UserToken
 router = APIRouter(prefix="/api", tags=["api"])
 
 OA_API_KEY     = os.environ.get("OA_API_KEY", "")
-# Dış iş ortaklarına gösterilecek genel URL (E-dem'in host'u + /operasyon)
+# Dış iş ortaklarına gösterilecek genel URL (Satın Alma'in host'u + /operasyon)
 OA_PUBLIC_BASE = os.environ.get("OA_PUBLIC_BASE", "http://localhost:8000/operasyon")
 
 
@@ -45,7 +45,7 @@ class ActivateRequest(BaseModel):
 def _activate_internal(body: dict, db: Session) -> dict:
     """
     Aktivasyon iş mantığı — HTTP katmanı olmadan doğrudan çağrılabilir.
-    E-dem, sub-app mount sonrasında bunu doğrudan import ederek kullanır.
+    Satın Alma, sub-app mount sonrasında bunu doğrudan import ederek kullanır.
 
     Döner: {event_id, manager_url, coordinator_url,
             transfer_supplier_url, accommodation_supplier_url,
@@ -127,7 +127,7 @@ async def activate_module(
     _: None = Depends(_verify_key),
 ):
     """
-    E-dem'den HTTP ile çağrılır (standalone mod).
+    Satın Alma'den HTTP ile çağrılır (standalone mod).
     Sub-app olarak mount edilince _activate_internal() doğrudan kullanılır.
     """
     data = _activate_internal(body.model_dump(), db)

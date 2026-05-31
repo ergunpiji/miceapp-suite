@@ -1,7 +1,7 @@
 """
 Operasyon Ajanı Konfigürasyonu.
 
-Sub-app olarak E-dem'e mount edilince:
+Sub-app olarak Satın Alma'ya mount edilince:
   OA_URL_PREFIX = "/operasyon"
 
 Standalone çalışınca:

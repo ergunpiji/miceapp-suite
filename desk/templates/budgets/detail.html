@@ -14,7 +14,7 @@
   {% if budget.budget_status == 'approved' %}Düzenle{% else %}Fiyat Gir{% endif %}
 </a>
 {% endif %}
-{% if budget.budget_status == 'confirmed' and current_user.role in ('admin', 'mudur', 'yonetici', 'e_dem') %}
+{% if budget.budget_status == 'confirmed' and current_user.role in ('admin', 'mudur', 'yonetici', 'satinalma') %}
 <a href="/budgets/{{ budget.id }}/revise-price" class="btn btn-outline-primary btn-sm">
   <i class="bi bi-pencil-square me-1"></i> Revize Fiyat
 </a>
@@ -67,7 +67,7 @@
       </div>
       <div class="d-flex gap-2 flex-wrap">
         {% if can_edem_edit %}
-        {# E-dem silebilir sadece draft_edem durumunda #}
+        {# Satın Alma silebilir sadece draft_edem durumunda #}
         {% if budget.budget_status == 'draft_edem' or current_user.role == 'admin' %}
         <form method="post" action="/budgets/{{ budget.id }}/delete"
               onsubmit="return confirm('Bu bütçeyi silmek istediğinizden emin misiniz?')">
@@ -103,7 +103,7 @@
   </div>
 </div>
 
-{% if budget.revision_notes and current_user.role in ('admin', 'e_dem') %}
+{% if budget.revision_notes and current_user.role in ('admin', 'satinalma') %}
 <div class="alert alert-danger mb-3">
   <i class="bi bi-arrow-counterclockwise me-2"></i>
   <strong>Revizyon Talebi:</strong> {{ budget.revision_notes }}
@@ -396,7 +396,7 @@
             <span class="me-3 text-muted">{{ entry.ts }}</span>
             <span class="fw-semibold me-2">{{ entry.user }}</span>
             <span class="badge bg-secondary bg-opacity-15 text-secondary" style="font-size:10px;">
-              {% if entry.role == 'e_dem' %}E-dem{% elif entry.role in ('mudur', 'yonetici', 'asistan', 'project_manager') %}Manager{% else %}Admin{% endif %}
+              {% if entry.role == 'satinalma' %}Satın Alma{% elif entry.role in ('mudur', 'yonetici', 'asistan', 'project_manager') %}Manager{% else %}Admin{% endif %}
             </span>
             <span class="ms-2 text-muted" style="font-size:11px;">{{ entry.changes | length }} değişiklik</span>
           </button>

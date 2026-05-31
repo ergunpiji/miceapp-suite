@@ -1,26 +1,26 @@
 """
-E-dem — Bütçe yönetimi router'ı
+Satın Alma — Bütçe yönetimi router'ı
 
 Workflow:
-  E-dem:   oluştur (draft_edem) → manager'a gönder (pending_manager) → revizyonu düzelt
+  Satın Alma:   oluştur (draft_edem) → manager'a gönder (pending_manager) → revizyonu düzelt
   Manager: satış fiyatı gir (draft_manager) → onayla (approved) / revizyon iste / iptal et
   Admin:   her şeyi görür
 
 Endpoints:
   GET    /budgets                    → liste (role-based)
-  GET    /budgets/new                → E-dem: yeni bütçe formu
-  POST   /budgets/new                → E-dem: oluştur
+  GET    /budgets/new                → Satın Alma: yeni bütçe formu
+  POST   /budgets/new                → Satın Alma: oluştur
   GET    /budgets/{id}               → detay (role-based)
-  GET    /budgets/{id}/edit          → E-dem: maliyet düzenle (draft_edem veya revision_requested)
-  POST   /budgets/{id}/edit          → E-dem: kaydet
-  POST   /budgets/{id}/send-to-manager → E-dem: manager'a gönder
+  GET    /budgets/{id}/edit          → Satın Alma: maliyet düzenle (draft_edem veya revision_requested)
+  POST   /budgets/{id}/edit          → Satın Alma: kaydet
+  POST   /budgets/{id}/send-to-manager → Satın Alma: manager'a gönder
   GET    /budgets/{id}/price         → Manager: satış fiyatı editörü
   POST   /budgets/{id}/price         → Manager: satış fiyatlarını kaydet (draft_manager)
   POST   /budgets/{id}/approve       → Manager: onayla → approved
   POST   /budgets/{id}/request-revision → Manager: revizyon iste
   POST   /budgets/{id}/cancel        → Manager: iptal et
   GET    /budgets/{id}/export        → Manager: Excel export (customer template kullan)
-  POST   /budgets/{id}/delete        → E-dem/Admin: sil (sadece draft_edem)
+  POST   /budgets/{id}/delete        → Satın Alma/Admin: sil (sadece draft_edem)
 """
 
 import io
@@ -87,7 +87,7 @@ def _record_price_changes(budget: "Budget", new_rows: list, current_user: "User"
         budget.price_history_json = json.dumps(history, ensure_ascii=False)
 
 BUDGET_STATUS_LABELS = {
-    "draft_edem":         "Taslak (E-dem)",
+    "draft_edem":         "Taslak (Satın Alma)",
     "pending_manager":    "Manager Onayında",
     "draft_manager":      "Manager Düzenliyor",
     "approved":           "Onaylandı",
@@ -121,7 +121,7 @@ async def budgets_list(
     db: Session = Depends(get_db),
 ):
     query = db.query(Budget)
-    if current_user.role == "e_dem":
+    if current_user.role == "satinalma":
         query = query.filter(Budget.created_by == current_user.id)
     # mudur (Etkinlik Süreç Müdürü) ve GM tüm bütçeleri görür — takım engeli yok
     elif current_user.role in ("yonetici", "asistan"):
@@ -137,14 +137,14 @@ async def budgets_list(
         "request":       request,
         "current_user":  current_user,
         "budgets":       budgets,
-        "page_title":    "Bütçe Yönetimi" if current_user.role == "e_dem" else "Bütçeler",
+        "page_title":    "Bütçe Yönetimi" if current_user.role == "satinalma" else "Bütçeler",
         "status_labels": BUDGET_STATUS_LABELS,
         "status_colors": BUDGET_STATUS_COLORS,
     })
 
 
 def _can_create_budget(user: User) -> bool:
-    return user.role in ("admin", "e_dem", "mudur", "yonetici", "asistan")
+    return user.role in ("admin", "satinalma", "mudur", "yonetici", "asistan")
 
 
 SECTION_ORDER = ["accommodation", "meeting", "fb", "teknik", "dekor", "transfer", "tasarim", "other"]
@@ -273,7 +273,7 @@ async def budgets_create(
     if not _can_create_budget(current_user):
         raise HTTPException(403)
 
-    # Satış fiyatlarını sıfırla — sadece E-dem için (PM/Admin direkt yönetimde sıfırlama)
+    # Satış fiyatlarını sıfırla — sadece Satın Alma için (PM/Admin direkt yönetimde sıfırlama)
     is_direct_manager = current_user.role in ("mudur", "yonetici", "admin")
     if not is_direct_manager:
         try:
@@ -383,7 +383,7 @@ async def budgets_detail(
         "rows_by_section":    rows_by_section,
         "vat_by_rate":        vat_by_rate_sorted,
         "service_categories": SERVICE_CATEGORIES,
-        "can_edem_edit":      _can_edem_edit(budget) and current_user.role in ("admin", "e_dem", "asistan"),
+        "can_edem_edit":      _can_edem_edit(budget) and current_user.role in ("admin", "satinalma", "asistan"),
         "can_manager_price":  _can_manager_price(budget) and current_user.role in ("admin", "mudur", "yonetici"),
         "status_label":       BUDGET_STATUS_LABELS.get(budget.budget_status, budget.budget_status),
         "status_color":       BUDGET_STATUS_COLORS.get(budget.budget_status, "secondary"),
@@ -468,7 +468,7 @@ async def budgets_update(
 
     is_direct_manager = current_user.role in ("mudur", "yonetici", "admin")
 
-    # E-dem satış fiyatı giremez — mevcut sale_price değerlerini sıfırla (PM/Admin hariç)
+    # Satın Alma satış fiyatı giremez — mevcut sale_price değerlerini sıfırla (PM/Admin hariç)
     try:
         new_rows = json.loads(rows_json)
         if not is_direct_manager:
@@ -509,7 +509,7 @@ async def budgets_send_to_manager(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if current_user.role not in ("admin", "e_dem", "asistan"):
+    if current_user.role not in ("admin", "satinalma", "asistan"):
         raise HTTPException(403)
     budget = db.query(Budget).filter(Budget.id == budget_id).first()
     if budget and budget.budget_status in ("draft_edem", "revision_requested"):
@@ -771,7 +771,7 @@ async def budgets_request_revision(
         budget.updated_at     = _now()
         db.commit()
 
-        # Bildirim: E-dem revizyona almalı
+        # Bildirim: Satın Alma revizyona almalı
         if budget.created_by:
             from utils.notifications import create_notification
             req_obj = db.query(ReqModel).filter(ReqModel.id == budget.request_id).first()
@@ -844,7 +844,7 @@ async def budgets_export(
                   .filter(Customer.id == req.customer_id)
                   .first()
                 if req and req.customer_id else None)
-    # Excel'de "Hazırlayan:" = talebi oluşturan PM (manager), bütçeyi hazırlayan E-dem değil
+    # Excel'de "Hazırlayan:" = talebi oluşturan PM (manager), bütçeyi hazırlayan Satın Alma değil
     manager_user_id = req.created_by if req else budget.created_by
     creator  = db.query(User).filter(User.id == manager_user_id).first()
 
@@ -891,7 +891,7 @@ async def budgets_export(
         if False:  # Müşteri template export geçici olarak devre dışı
             pass
         else:
-            # ── E-dem standart format ──────────────────────────────────────
+            # ── Satın Alma standart format ──────────────────────────────────────
             from excel_export import build_standard
             output = build_standard(
                 budget=budget,
@@ -958,7 +958,7 @@ async def budgets_delete(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if current_user.role not in ("admin", "e_dem"):
+    if current_user.role not in ("admin", "satinalma"):
         raise HTTPException(403)
     budget = db.query(Budget).filter(Budget.id == budget_id).first()
     if budget and (budget.budget_status == "draft_edem" or current_user.role == "admin"):
@@ -974,8 +974,8 @@ async def budgets_copy_edem(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """E-dem maliyet kopyası oluşturur → /edit'e yönlendirir"""
-    if current_user.role not in ("admin", "e_dem"):
+    """Satın Alma maliyet kopyası oluşturur → /edit'e yönlendirir"""
+    if current_user.role not in ("admin", "satinalma"):
         raise HTTPException(403)
     budget = db.query(Budget).filter(Budget.id == budget_id).first()
     if not budget:
@@ -1008,7 +1008,7 @@ async def budgets_copy_rows(
     db: Session = Depends(get_db),
 ):
     """Kaynak bütçenin satırlarını bu bütçeye kopyalar (üzerine yazar)"""
-    if current_user.role not in ("admin", "e_dem"):
+    if current_user.role not in ("admin", "satinalma"):
         raise HTTPException(403)
     budget = db.query(Budget).filter(Budget.id == budget_id).first()
     if not budget:
@@ -1065,8 +1065,8 @@ async def budgets_revise_price(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Konfirme bütçenin fiyatlarını revize et (manager veya e_dem)"""
-    if current_user.role not in ("admin", "mudur", "yonetici", "e_dem"):
+    """Konfirme bütçenin fiyatlarını revize et (manager veya satinalma)"""
+    if current_user.role not in ("admin", "mudur", "yonetici", "satinalma"):
         raise HTTPException(403)
     budget = db.query(Budget).filter(Budget.id == budget_id).first()
     if not budget:
@@ -1117,7 +1117,7 @@ async def budgets_revise_price_save(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if current_user.role not in ("admin", "mudur", "yonetici", "e_dem"):
+    if current_user.role not in ("admin", "mudur", "yonetici", "satinalma"):
         raise HTTPException(403)
     budget = db.query(Budget).filter(Budget.id == budget_id).first()
     if not budget or budget.budget_status != "confirmed":

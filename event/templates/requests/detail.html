@@ -150,7 +150,7 @@
       </div>
 
       <div class="d-flex flex-column gap-2 align-items-end">
-        {# E-dem işlemleri #}
+        {# Satın Alma işlemleri #}
         {% if can_edit_status %}
           {% if req.status == 'pending' %}
           <form method="post" action="/requests/{{ req.id }}/status">
@@ -160,7 +160,7 @@
             </button>
           </form>
           {% endif %}
-          {# E-dem/Admin bütçe oluşturabilir #}
+          {# Satın Alma/Admin bütçe oluşturabilir #}
           {% if req.status in ('in_progress', 'venues_contacted', 'budget_ready', 'revision') %}
           <a href="/budgets/new?req_id={{ req.id }}" class="btn btn-success btn-sm">
             <i class="bi bi-calculator me-1"></i>
@@ -219,7 +219,7 @@
         {% endif %}
 
         {# Proje Durumu — aktif statülerde göster, kapama ve sonrasında gizle #}
-        {% if current_user.role in ('admin', 'mudur', 'yonetici', 'e_dem') and req.status not in ('cancelled', 'completed', 'postponed', 'closing', 'closed') %}
+        {% if current_user.role in ('admin', 'mudur', 'yonetici', 'satinalma') and req.status not in ('cancelled', 'completed', 'postponed', 'closing', 'closed') %}
         <button type="button" class="btn btn-primary btn-sm"
                 data-bs-toggle="modal" data-bs-target="#projectStatusModal">
           <i class="bi bi-flag me-1"></i> Proje Durumu
@@ -821,7 +821,7 @@ document.addEventListener('DOMContentLoaded', function() {
         {% set SLABELS = {'accommodation':'🛏 Konaklama','meeting':'🏛 Toplantı','fb':'🍽 F&B',
                           'teknik':'🔧 Teknik','dekor':'🎨 Dekor','transfer':'🚌 Transfer',
                           'tasarim':'🖨 Tasarım','other':'📦 Diğer'} %}
-        {% set show_cost = current_user.role in ('admin', 'e_dem', 'mudur', 'yonetici', 'asistan') %}
+        {% set show_cost = current_user.role in ('admin', 'satinalma', 'mudur', 'yonetici', 'asistan') %}
 
         {# En düşük grand total → vurgu için (TRY bazlı karşılaştırma) #}
         {% set min_grand = namespace(val=999999999) %}
@@ -848,8 +848,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     </span>
                     {% if is_best %}<span class="badge bg-success" style="font-size:9px;">⭐ En İyi</span>{% endif %}
                   </div>
-                  {# E-dem: Managera Gönder butonu #}
-                  {% if req.status != 'closed' and current_user.role in ('admin','e_dem') and bs == 'draft_edem' %}
+                  {# Satın Alma: Managera Gönder butonu #}
+                  {% if req.status != 'closed' and current_user.role in ('admin','satinalma') and bs == 'draft_edem' %}
                   <div style="margin-top:6px; display:flex; gap:4px; justify-content:flex-end;">
                     <form method="post" action="/budgets/{{ b.id }}/send-to-manager" style="margin:0;">
                       <input type="hidden" name="back" value="{{ req.id }}">
@@ -859,8 +859,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     </form>
                   </div>
                   {% endif %}
-                  {# E-dem: Revizyon sonrası tekrar gönder #}
-                  {% if req.status != 'closed' and current_user.role in ('admin','e_dem') and bs == 'revision_requested' %}
+                  {# Satın Alma: Revizyon sonrası tekrar gönder #}
+                  {% if req.status != 'closed' and current_user.role in ('admin','satinalma') and bs == 'revision_requested' %}
                   <div style="margin-top:6px; display:flex; gap:4px; justify-content:flex-end;">
                     <form method="post" action="/budgets/{{ b.id }}/send-to-manager" style="margin:0;">
                       <input type="hidden" name="back" value="{{ req.id }}">
@@ -920,7 +920,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 {% endfor %}
               </tr>
               {% endif %}
-              {% if current_user.role != 'e_dem' %}
+              {% if current_user.role != 'satinalma' %}
               <tr>
                 <td class="ps-3 text-muted" style="padding-left:24px!important;">Satış (KDV hariç)</td>
                 {% for bd in budgets_data %}
@@ -939,7 +939,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 {% set t = bd.totals %}
                 <td class="text-end pe-3">
                   {% if show_cost %}<div style="color:#94a3b8; font-size:11px;">M: {{ t.cost_ex | money | replace('₺', t.offer_sym) }}</div>{% endif %}
-                  {% if current_user.role != 'e_dem' %}<div>S: {{ t.sale_ex | money | replace('₺', t.offer_sym) }}</div>{% endif %}
+                  {% if current_user.role != 'satinalma' %}<div>S: {{ t.sale_ex | money | replace('₺', t.offer_sym) }}</div>{% endif %}
                 </td>
                 {% endfor %}
               </tr>
@@ -1020,7 +1020,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
           {# Tüm onaylıları Excel'e aktar #}
           {% set has_approved = budgets_data | selectattr('budget.budget_status', 'equalto', 'approved') | list %}
-          {% if req.status != 'closed' and has_approved and current_user.role in ('admin','mudur','yonetici','e_dem') %}
+          {% if req.status != 'closed' and has_approved and current_user.role in ('admin','mudur','yonetici','satinalma') %}
           <div class="ms-auto d-flex align-items-center gap-2">
             <div class="btn-group" role="group">
               <a href="/requests/{{ req.id }}/export?vat=exclusive"
@@ -1084,7 +1084,7 @@ document.addEventListener('DOMContentLoaded', function() {
           <a href="/budgets/{{ b.id }}" class="btn btn-outline-primary btn-sm">
             <i class="bi bi-eye me-1"></i>Detay
           </a>
-          {% if current_user.role in ('admin', 'e_dem', 'asistan') and b.budget_status in ('draft_edem', 'revision_requested') %}
+          {% if current_user.role in ('admin', 'satinalma', 'asistan') and b.budget_status in ('draft_edem', 'revision_requested') %}
           <a href="/budgets/{{ b.id }}/edit" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-pencil me-1"></i>Düzenle
           </a>
@@ -1103,7 +1103,7 @@ document.addEventListener('DOMContentLoaded', function() {
         {% endif %}
 
         {# Mini bütçe tablosu #}
-        {% set show_cost = current_user.role in ('admin', 'e_dem', 'mudur', 'yonetici', 'asistan') %}
+        {% set show_cost = current_user.role in ('admin', 'satinalma', 'mudur', 'yonetici', 'asistan') %}
         {% set col_count = 6 if show_cost else 5 %}
         <div class="table-responsive">
           <table class="table table-sm mb-0" style="font-size:12px;">
@@ -2516,7 +2516,7 @@ function buildEmailHtml(venue, contactNames, filterSection) {
   <div style="background:${light};padding:18px 36px;border-radius:0 0 10px 10px;border:1px solid ${border};border-top:none;">
     <p style="margin:0;font-size:12px;color:${tMuted};line-height:1.8;">
       Saygılarımızla,<br>
-      <strong style="color:${tDark};font-size:13px;">E-dem Etkinlik Yönetimi</strong>
+      <strong style="color:${tDark};font-size:13px;">miceapp</strong>
     </p>
   </div>
 
@@ -2626,7 +2626,7 @@ function buildEmailText(venue, contactNames, filterSection) {
   txt += `\n─────────────────────────────────────\n`;
   txt += `Teklif son tarihi: ${deadlineDate()}\n`;
   txt += `Lütfen fiyatlarınıza KDV oranlarını ve KDV'nin dahil olup olmadığını belirtiniz.\n\n`;
-  txt += `Saygılarımızla,\nE-dem Etkinlik Yönetimi`;
+  txt += `Saygılarımızla,\nmiceapp`;
   return txt;
 }
 
@@ -3661,7 +3661,7 @@ function applyVenuePickerSelection(section, emailFilterSection) {
       </div>
       <form method="post" action="/requests/{{ req.id }}/revision">
         <div class="modal-body">
-          <p class="text-muted" style="font-size:13px;">Yeni tarihleri girin. Onaylı bütçeler <strong>E-dem taslağına</strong> döner ve yeniden fiyatlandırılır. Referans no değişmez.</p>
+          <p class="text-muted" style="font-size:13px;">Yeni tarihleri girin. Onaylı bütçeler <strong>Satın Alma taslağına</strong> döner ve yeniden fiyatlandırılır. Referans no değişmez.</p>
           <div class="row g-3">
             <div class="col-6">
               <label class="form-label fw-semibold" style="font-size:12px;">Etkinlik Başlangıç</label>
@@ -3693,7 +3693,7 @@ function applyVenuePickerSelection(section, emailFilterSection) {
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Vazgeç</button>
           <button type="submit" class="btn btn-warning btn-sm"
-                  onclick="return confirm('Tarihler güncellenecek ve onaylı bütçeler yeniden fiyatlandırma için E-dem taslağına dönecek. Emin misiniz?')">
+                  onclick="return confirm('Tarihler güncellenecek ve onaylı bütçeler yeniden fiyatlandırma için Satın Alma taslağına dönecek. Emin misiniz?')">
             <i class="bi bi-calendar-check me-1"></i>Tarihleri Güncelle
           </button>
         </div>

@@ -25,7 +25,7 @@
             <label class="form-label fw-semibold" style="font-size:13px;">Şirket / Ajans Adı</label>
             <input type="text" name="company_name" class="form-control"
                    value="{{ settings.company_name or '' }}"
-                   placeholder="E-dem Etkinlik Yönetimi">
+                   placeholder="miceapp">
           </div>
           <div class="mb-3">
             <label class="form-label fw-semibold" style="font-size:13px;">Adres</label>
@@ -42,7 +42,7 @@
             <label class="form-label fw-semibold" style="font-size:13px;">E-posta</label>
             <input type="email" name="company_email" class="form-control"
                    value="{{ settings.company_email or '' }}"
-                   placeholder="info@edem.com">
+                   placeholder="info@miceapp.net">
           </div>
           <div class="mb-0">
             <label class="form-label fw-semibold" style="font-size:13px;">Logo URL</label>
@@ -78,7 +78,7 @@
           <div class="mb-3">
             <label class="form-label fw-semibold" style="font-size:13px;">E-posta İmzası</label>
             <textarea name="email_signature" class="form-control" rows="5"
-                      placeholder="Saygılarımızla,&#10;E-dem Etkinlik Yönetimi&#10;Tel: ...">{{ settings.email_signature or '' }}</textarea>
+                      placeholder="Saygılarımızla,&#10;miceapp&#10;Tel: ...">{{ settings.email_signature or '' }}</textarea>
             <div class="form-text">RFQ e-postalarının sonuna otomatik eklenir.</div>
           </div>
           <div class="mb-3">

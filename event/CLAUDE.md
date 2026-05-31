@@ -1,4 +1,4 @@
-# E-dem — Etkinlik Talep Yönetim Sistemi
+# miceapp
 ## Python Yeniden Yazım Kılavuzu (Claude Code için)
 
 Bu dosya, mevcut single-page HTML uygulamasının Python tabanlı bir web uygulamasına
@@ -9,11 +9,11 @@ Referans uygulama: `reference/edem.html` (~5000 satır, sıfır dış bağımlı
 
 ## 1. Projeye Genel Bakış
 
-E-dem, etkinlik organizasyon şirketleri için tasarlanmış bir **teklif & bütçe yönetim sistemidir**.
+Satın Alma, etkinlik organizasyon şirketleri için tasarlanmış bir **teklif & bütçe yönetim sistemidir**.
 Üç farklı rol arasındaki iş akışını yönetir:
 
 - **Proje Yöneticisi**: Müşteri adına etkinlik talebi oluşturur; tedarikçi seçer; hazırlanan bütçeyi görüntüler.
-- **E-dem (Satın Alma)**: Gelen talepleri alır; tedarikçilere RFQ e-postası gönderir; bütçe hazırlar.
+- **Satın Alma (Satın Alma)**: Gelen talepleri alır; tedarikçilere RFQ e-postası gönderir; bütçe hazırlar.
 - **Admin**: Kullanıcı, tedarikçi, hizmet kataloğu ve müşteri yönetimini yapar.
 
 ---
@@ -64,7 +64,7 @@ class User:
     id: str          # uid() → Python: str(uuid4())
     email: str       # unique
     password: str    # hash'lenmiş olmalı (bcrypt)
-    role: str        # 'admin' | 'project_manager' | 'e_dem'
+    role: str        # 'admin' | 'project_manager' | 'satinalma'
     name: str
     surname: str
     title: str
@@ -73,9 +73,9 @@ class User:
     created_at: datetime
 
 # Varsayılan kullanıcılar (seed):
-# admin@edem.com / Admin123 / role=admin
-# manager@edem.com / Manager123 / role=project_manager
-# edem@edem.com / Edem123 / role=e_dem
+# admin@miceapp.net / Admin123 / role=admin
+# manager@miceapp.net / Manager123 / role=project_manager
+# edem@miceapp.net / Edem123 / role=satinalma
 ```
 
 ### 3.2 Venue (Tedarikçi / Mekan)
@@ -159,15 +159,15 @@ class Request:
     description: str
     notes: str
     preferred_venues: list[str]   # Venue.id listesi
-    selected_venues: list[str]    # E-dem tarafından seçilen
+    selected_venues: list[str]    # Satın Alma tarafından seçilen
     created_by: str     # User.id
     created_at: datetime
     updated_at: datetime
 
 # REQUEST_STATUSES:
 # 'draft'            → Taslak (PM kaydetti ama göndermedi)
-# 'pending'          → Beklemede (PM gönderdi, E-dem almadı)
-# 'in_progress'      → İşlemde (E-dem üstlendi)
+# 'pending'          → Beklemede (PM gönderdi, Satın Alma almadı)
+# 'in_progress'      → İşlemde (Satın Alma üstlendi)
 # 'venues_contacted' → Mekanlarla iletişime geçildi
 # 'budget_ready'     → Bütçe hazır
 # 'completed'        → Tamamlandı
@@ -218,7 +218,7 @@ class Budget:
     request_id: str      # Request.id
     venue_name: str      # Mekan adı (serbest metin)
     rows: list[BudgetRow]
-    created_by: str      # User.id (E-dem)
+    created_by: str      # User.id (Satın Alma)
     created_at: datetime
     updated_at: datetime
 
@@ -274,7 +274,7 @@ class CustomCategory:
 
 ## 4. Kullanıcı Rolleri ve İzinler
 
-| Sayfa / İşlev               | Admin | Proje Yöneticisi | E-dem |
+| Sayfa / İşlev               | Admin | Proje Yöneticisi | Satın Alma |
 |-----------------------------|-------|-----------------|-------|
 | Dashboard                   | ✅    | ✅              | ✅    |
 | Yeni Talep Oluştur          | ❌    | ✅              | ❌    |
@@ -328,15 +328,15 @@ E_DEM:
         - Etkinlik bilgileri (ad, tip, şehir(ler), tarih, katılımcı)
         - Hizmet kalemleri tab tab (Otel/Mekan, Teknik, Dekor, Transfer, Tasarım, Diğer)
         - Her tab'da tedarikçi seçimi (checkbox, tag tabanlı)
-        - "Taslak Kaydet" veya "E-dem'e Gönder"
+        - "Taslak Kaydet" veya "Satın Alma'ya Gönder"
 
-2. E-dem ← Gelen Referanslar sayfasında "pending" durumdaki talepler
+2. Satın Alma ← Gelen Referanslar sayfasında "pending" durumdaki talepler
         - Talep detayını görüntüle
         - "İşleme Al" → status: in_progress
         - Seçilen tedarikçilere RFQ e-postası gönder (mailto: ile)
         - Bütçe oluştur → Bütçe Editörü açılır
 
-3. E-dem → Bütçe Editörü
+3. Satın Alma → Bütçe Editörü
         - Mekan adı gir
         - Satırları kategoriye göre grupla
         - Her satır: açıklama, birim, miktar, gece, maliyet fiyatı, satış fiyatı, KDV
@@ -384,7 +384,7 @@ CS = {
 ## 8. Bütçe Editörü Detayları
 
 ```
-Bütçe editörü (E-dem kullanır):
+Bütçe editörü (Satın Alma kullanır):
 
 Üst kısım:
   - Mekan adı (serbest metin input)
@@ -545,21 +545,21 @@ USERS:
 
 VENUES:
   GET    /venues           → All roles (filtreli)
-  POST   /venues           → Admin + E-dem
-  PUT    /venues/{id}      → Admin + E-dem
-  DELETE /venues/{id}      → Admin + E-dem
+  POST   /venues           → Admin + Satın Alma
+  PUT    /venues/{id}      → Admin + Satın Alma
+  DELETE /venues/{id}      → Admin + Satın Alma
 
 REQUESTS:
   GET    /requests         → Role bazlı filtreleme (admin=all, pm=mine, edem=pending+)
   POST   /requests         → PM only
-  PUT    /requests/{id}    → PM (draft), E-dem (status update)
+  PUT    /requests/{id}    → PM (draft), Satın Alma (status update)
   DELETE /requests/{id}    → PM (draft only)
 
 BUDGETS:
-  GET    /budgets          → E-dem (all), PM (mine)
-  POST   /budgets          → E-dem only
-  PUT    /budgets/{id}     → E-dem only
-  DELETE /budgets/{id}     → E-dem only
+  GET    /budgets          → Satın Alma (all), PM (mine)
+  POST   /budgets          → Satın Alma only
+  PUT    /budgets/{id}     → Satın Alma only
+  DELETE /budgets/{id}     → Satın Alma only
 
 SERVICES:
   GET    /services         → All roles
@@ -604,7 +604,7 @@ FastAPI backend + React/Vue SPA frontend
 1. **Aynı günlük etkinlik**: checkIn == checkOut → calcNights = 0 (hata değil)
 2. **Konaklama zorunlu değil**: Talep konaklama kalemi içermeyebilir; RFQ e-postasında o bölüm atlanır
 3. **Referans no**: Yıl/ay bazlı sıralı numara, düzenlemede değişmez
-4. **Taslak**: PM taslak kaydedebilir (status='draft'), E-dem'e göründüğünde 'pending' olmalı
+4. **Taslak**: PM taslak kaydedebilir (status='draft'), Satın Alma'ya göründüğünde 'pending' olmalı
 5. **Özel kategoriler**: Admin eklediğinde hem hizmet kataloğunda hem talep formunun sekmelerinde görünür
 6. **Tedarikçi şehir filtresi**: Talep formunda seçilen şehirlere göre tedarikçi dropdown'ı güncellenir
 7. **Müşteri kodu**: 3 harfli, küçük harf, ref no'da kullanılır
@@ -633,6 +633,6 @@ FastAPI backend + React/Vue SPA frontend
 7. Services + CustomCategories (Admin)
 8. New Request form (PM) — en karmaşık sayfa
 9. Request list views (tüm roller)
-10. Budget editor (E-dem)
+10. Budget editor (Satın Alma)
 11. RFQ email modal
 12. Budget view (PM)

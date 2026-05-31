@@ -1,5 +1,5 @@
 """
-E-dem — Etkinlik Talep Yönetim Sistemi
+miceapp
 SQLAlchemy modelleri ve uygulama sabitleri
 """
 
@@ -140,7 +140,7 @@ USER_ROLES = [
     {"value": "mudur",           "label": "Müdür"},
     {"value": "yonetici",        "label": "Proje Yöneticisi"},
     {"value": "asistan",         "label": "Proje Asistanı"},
-    {"value": "e_dem",           "label": "E-dem (Satın Alma)"},
+    {"value": "satinalma",           "label": "Satın Alma (Satın Alma)"},
     {"value": "muhasebe_muduru", "label": "Muhasebe Müdürü"},
     {"value": "muhasebe",        "label": "Muhasebe Yetkilisi"},
 ]
@@ -280,7 +280,7 @@ class EventType(Base):
 
 
 class User(Base):
-    """Kullanıcı modeli — admin / mudur / yonetici / asistan / e_dem / muhasebe_muduru / muhasebe"""
+    """Kullanıcı modeli — admin / mudur / yonetici / asistan / satinalma / muhasebe_muduru / muhasebe"""
     __tablename__ = "users"
 
     id           = Column(String(36), primary_key=True, default=_uuid)
@@ -797,7 +797,7 @@ class Budget(Base):
     created_at           = Column(DateTime, default=_now, nullable=False)
     updated_at           = Column(DateTime, default=_now, onupdate=_now, nullable=False)
     budget_status        = Column(String(32), default="draft_edem", nullable=False)
-    revision_notes       = Column(Text, default="")   # manager → E-dem notları
+    revision_notes       = Column(Text, default="")   # manager → Satın Alma notları
     manager_notes        = Column(Text, default="")   # manager iç notları
     service_fee_pct      = Column(Float, default=0.0) # manager girer
     offer_currency       = Column(String(3), default="TRY")   # teklif para birimi
@@ -1103,7 +1103,7 @@ _EMAIL_TEMPLATE_DEFAULTS = [
     {
         "slug": "budget_to_manager",
         "name": "Bütçe Hazır — Manager Bildirimi",
-        "description": "E-dem bütçeyi manager'a gönderdiğinde oluşturulan bildirim e-postası.",
+        "description": "Satın Alma bütçeyi manager'a gönderdiğinde oluşturulan bildirim e-postası.",
         "subject_tpl": "Yeni Bütçe Hazır: {request_no} — {event_name}",
         "body_tpl": (
             "Merhaba,\n\n"
@@ -1533,7 +1533,7 @@ class Settings(Base):
     __tablename__ = "settings"
 
     id              = Column(Integer, primary_key=True, default=1)
-    company_name    = Column(String(200), default="E-dem Etkinlik Yönetimi")
+    company_name    = Column(String(200), default="miceapp")
     company_address = Column(Text, default="")
     company_phone   = Column(String(50), default="")
     company_email   = Column(String(200), default="")
@@ -1803,7 +1803,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     "mudur":           ["request_create", "budget_view", "report_view"],
     "yonetici":        ["request_create", "budget_view"],
     "asistan":         ["request_create", "budget_view"],
-    "e_dem":           ["budget_edit", "invoice_manage", "venue_edit"],
+    "satinalma":           ["budget_edit", "invoice_manage", "venue_edit"],
     "muhasebe_muduru": ["invoice_manage", "report_view"],
     "muhasebe":        ["invoice_manage", "report_view"],
 }

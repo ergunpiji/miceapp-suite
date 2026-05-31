@@ -1,5 +1,5 @@
 """
-E-dem — Müşteri yönetimi router'ı (Admin only, PM autocomplete)
+Satın Alma — Müşteri yönetimi router'ı (Admin only, PM autocomplete)
 """
 
 import json

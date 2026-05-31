@@ -1,5 +1,5 @@
 """
-Operasyon Ajanı Modülü — E-dem entegrasyonu.
+Operasyon Ajanı Modülü — Satın Alma entegrasyonu.
 Bir referansa Operasyon Ajanı modülünü bağlar / kaldırır.
 
 Sub-app olarak mount edildiğinde HTTP çağrısı yerine doğrudan

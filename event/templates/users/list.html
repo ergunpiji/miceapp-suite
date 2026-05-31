@@ -52,7 +52,7 @@
               {% elif user.role in ('yonetici', 'asistan', 'mudur') %}
                 <span class="badge bg-primary bg-opacity-10 text-primary">Proje Yöneticisi</span>
               {% else %}
-                <span class="badge bg-success bg-opacity-10 text-success">E-dem</span>
+                <span class="badge bg-success bg-opacity-10 text-success">Satın Alma</span>
               {% endif %}
             </td>
             <td style="font-size:12px;">
@@ -122,9 +122,9 @@
 (function(){
   const email = {{ welcome_user.email | tojson }};
   const name  = {{ welcome_user.full_name | tojson }};
-  const subject = encodeURIComponent('E-dem Sistemi — Hesabınız Hazır');
+  const subject = encodeURIComponent('miceapp — Hesabınız Hazır');
   const body = encodeURIComponent(
-    'Merhaba ' + name + ',\n\nE-dem etkinlik yönetim sistemine hoş geldiniz!\n\n'
+    'Merhaba ' + name + ',\n\nSatın Alma etkinlik yönetim sistemine hoş geldiniz!\n\n'
     + 'Giriş bilgileriniz:\nE-posta: ' + email + '\nŞifre: (Yöneticinizden alınız)\n\nİyi çalışmalar.'
   );
   const mailto = 'mailto:' + email + '?subject=' + subject + '&body=' + body;

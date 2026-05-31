@@ -1,5 +1,5 @@
 """
-E-dem — Etkinlik Tipleri yönetimi router'ı (Admin only)
+Satın Alma — Etkinlik Tipleri yönetimi router'ı (Admin only)
 """
 
 from fastapi import APIRouter, Depends, Form, Request, status

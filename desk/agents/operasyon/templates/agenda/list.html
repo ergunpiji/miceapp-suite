@@ -9,9 +9,9 @@
   <div style="display:flex; gap:8px; align-items:center;">
     {% if event.edem_request_id %}
     <form method="post" action="{{ base_url }}/events/{{ event.id }}/agenda/import-edem"
-          onsubmit="return confirm('E-dem bütçesindeki toplantı ve yemek kalemleri programa eklenecek. Devam?')">
+          onsubmit="return confirm('Satın Alma bütçesindeki toplantı ve yemek kalemleri programa eklenecek. Devam?')">
       <button type="submit" class="btn btn-secondary"
-              style="font-size:13px;">📥 E-dem'den Aktar</button>
+              style="font-size:13px;">📥 Satın Alma'den Aktar</button>
     </form>
     {% endif %}
     <a href="{{ base_url }}/events/{{ event.id }}/agenda/new" class="btn btn-primary">+ Oturum Ekle</a>
@@ -21,7 +21,7 @@
 {% if request.query_params.get('imported') %}
 <div style="background:#dcfce7; color:#166534; border-radius:8px; padding:10px 16px;
             margin-bottom:12px; font-size:14px; font-weight:600;">
-  ✅ E-dem bütçesinden kalemler programa eklendi.
+  ✅ Satın Alma bütçesinden kalemler programa eklendi.
 </div>
 {% endif %}
 
@@ -121,8 +121,8 @@
       <a href="{{ base_url }}/events/{{ event.id }}/agenda/new" class="btn btn-primary">+ İlk Oturumu Ekle</a>
       {% if event.edem_request_id %}
       <form method="post" action="{{ base_url }}/events/{{ event.id }}/agenda/import-edem"
-            onsubmit="return confirm('E-dem bütçesindeki kalemler programa eklenecek. Devam?')">
-        <button type="submit" class="btn btn-secondary">📥 E-dem'den Aktar</button>
+            onsubmit="return confirm('Satın Alma bütçesindeki kalemler programa eklenecek. Devam?')">
+        <button type="submit" class="btn btn-secondary">📥 Satın Alma'den Aktar</button>
       </form>
       {% endif %}
     </div>

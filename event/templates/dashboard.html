@@ -25,7 +25,7 @@
 {% block content %}
 
 {# ══════════════════ FİNANSAL ÖZET KARTLARI — sadece admin ve PM ══════════════════ #}
-{% if current_user.role != 'e_dem' %}
+{% if current_user.role != 'satinalma' %}
 <div class="row g-3 mb-4">
   <div class="col-sm-6 col-lg-3">
     <div class="fin-card">
@@ -187,7 +187,7 @@
   </a>
 
   {# ── E-DEM ── #}
-  {% elif current_user.role == 'e_dem' %}
+  {% elif current_user.role == 'satinalma' %}
   <a href="/requests?view=pending_work" class="btn btn-primary btn-sm">
     <i class="bi bi-inbox me-1"></i> Yeni & İşlemdekiler
     {% if nc.requests_pending %}<span class="badge bg-light text-primary ms-1">{{ nc.requests_pending }}</span>{% endif %}
@@ -241,7 +241,7 @@
 </div>
 
 {# ══════════════════ GRAFİK SATIRI — 3 grafik yan yana ══════════════════ #}
-{% if current_user.role != 'e_dem' %}
+{% if current_user.role != 'satinalma' %}
 <div class="row g-3 mb-4">
 
   {# CİRO / KAR GRAFİĞİ — Aylık (son 6 ay) #}
@@ -368,7 +368,7 @@
   {% endif %}
 
 </div>
-{% endif %}{# /e_dem gizle #}
+{% endif %}{# /satinalma gizle #}
 
 {# ══════════════════ BEKLEYENLERİM ══════════════════ #}
 {% if pending_tasks %}
@@ -427,7 +427,7 @@
     <div class="d-flex align-items-center justify-content-between mb-3">
       <h6 class="fw-bold mb-0">
         <i class="bi bi-clock-history text-primary me-2"></i>
-        {% if current_user.role == 'e_dem' %}Son Bekleyen Talepler
+        {% if current_user.role == 'satinalma' %}Son Bekleyen Talepler
         {% else %}Son Talepler{% endif %}
       </h6>
       <a href="/requests" class="btn btn-sm btn-outline-primary">Tümünü Gör</a>
@@ -494,7 +494,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
-{% if current_user.role != 'e_dem' %}
+{% if current_user.role != 'satinalma' %}
 <script>
 (function() {
   const raw = {{ chart_data | safe }};

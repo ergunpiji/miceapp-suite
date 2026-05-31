@@ -1,7 +1,7 @@
 """
-E-dem — Tedarikçi (Vendor) yönetimi router'ı
+Satın Alma — Tedarikçi (Vendor) yönetimi router'ı
 GET    /venues           → Liste (tüm roller)
-GET    /venues/new       → Form (Admin + E-dem)
+GET    /venues/new       → Form (Admin + Satın Alma)
 POST   /venues/new       → Oluştur
 GET    /venues/{id}      → Detay
 GET    /venues/{id}/edit → Düzenleme formu
@@ -47,7 +47,7 @@ async def venues_list(
 
     venues = query.order_by(Vendor.name).all()
 
-    can_edit = current_user.role in ("admin", "e_dem", "muhasebe_muduru")
+    can_edit = current_user.role in ("admin", "satinalma", "muhasebe_muduru")
 
     return templates.TemplateResponse(
         "venues/list.html",
@@ -137,7 +137,7 @@ async def venues_detail(
     if not venue:
         return RedirectResponse(url="/venues", status_code=status.HTTP_302_FOUND)
 
-    can_edit = current_user.role in ("admin", "e_dem", "muhasebe_muduru")
+    can_edit = current_user.role in ("admin", "satinalma", "muhasebe_muduru")
 
     return templates.TemplateResponse(
         "venues/detail.html",

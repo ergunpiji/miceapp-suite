@@ -1,5 +1,5 @@
 """
-Eski sistemden (e-dem) yeni sisteme (prizmafinans) fatura verisi aktarır.
+Eski sistemden (Satın Alma) yeni sisteme (prizmafinans) fatura verisi aktarır.
 
 Eski şema:
   invoices: id(uuid), request_id(uuid), vendor_id(uuid), vendor_name(text),

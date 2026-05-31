@@ -2,7 +2,7 @@
 Finans Ajanı — Veri Modelleri
 
 Modüller:
-  Project            — E-dem referansı ile proje
+  Project            — Satın Alma referansı ile proje
   BudgetLine         — Planlanan bütçe kalemleri
   ActualEntry        — Gerçekleşen gider/gelir
   PaymentPlan        — Ödeme planı takvimi
@@ -126,7 +126,7 @@ CC_STATEMENT_LABELS     = {s["value"]: s["label"] for s in CC_STATEMENT_STATUSES
 
 
 # ===========================================================================
-# 1. Proje (E-dem referansı ile bağlantılı)
+# 1. Proje (Satın Alma referansı ile bağlantılı)
 # ===========================================================================
 class Project(Base):
     __tablename__ = "projects"

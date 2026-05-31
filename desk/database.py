@@ -1,5 +1,5 @@
 """
-E-dem — Veritabanı bağlantısı ve başlangıç verisi
+Satın Alma — Veritabanı bağlantısı ve başlangıç verisi
 """
 
 import os
@@ -70,7 +70,7 @@ def seed_data() -> None:
         if db.query(User).count() == 0:
             db.add(User(
                 name="Admin",
-                email="admin@edem.com",
+                email="admin@miceapp.net",
                 password_hash=_pwd_ctx.hash("Admin123"),
                 role="admin",
                 active=True,
@@ -933,7 +933,7 @@ def _seed_demo_company() -> None:
             db.flush()
 
         # Genel admin kullanıcısını da Demo A.Ş.'ye bağla (company_id yoksa)
-        generic_admin = db.query(User).filter_by(email="admin@edem.com").first()
+        generic_admin = db.query(User).filter_by(email="admin@miceapp.net").first()
         if generic_admin and not generic_admin.company_id:
             generic_admin.company_id = cid
             db.flush()
@@ -1221,14 +1221,14 @@ def _seed_rbac_test_users() -> None:
 
 
 def _promote_admin_to_super_admin() -> None:
-    """admin@edem.com'u super_admin yapar — zaten öyleyse dokunmaz."""
+    """admin@miceapp.net'u super_admin yapar — zaten öyleyse dokunmaz."""
     db = SessionLocal()
     try:
-        user = db.query(User).filter_by(email="admin@edem.com").first()
+        user = db.query(User).filter_by(email="admin@miceapp.net").first()
         if user and user.role != "super_admin":
             user.role = "super_admin"
             db.commit()
-            print("[seed] admin@edem.com → super_admin yapıldı.")
+            print("[seed] admin@miceapp.net → super_admin yapıldı.")
     except Exception:
         db.rollback()
     finally:

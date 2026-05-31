@@ -3,7 +3,7 @@
 {% block page_title_block %}{{ page_title }}{% endblock %}
 
 {% block topbar_actions %}
-{% if current_user.role in ('admin', 'e_dem') %}
+{% if current_user.role in ('admin', 'satinalma') %}
 <a href="/budgets/new" class="btn btn-primary btn-sm">
   <i class="bi bi-plus-circle me-1"></i> Yeni Bütçe
 </a>
@@ -21,7 +21,7 @@
             <th>Referans No</th>
             <th>Etkinlik</th>
             <th>Durum</th>
-            {% if current_user.role in ('admin', 'e_dem') %}
+            {% if current_user.role in ('admin', 'satinalma') %}
             <th>Toplam Maliyet (KDV dahil)</th>
             {% else %}
             <th>Toplam Satış (KDV dahil)</th>
@@ -58,7 +58,7 @@
               </span>
             </td>
             <td>
-              {% if current_user.role in ('admin', 'e_dem') %}
+              {% if current_user.role in ('admin', 'satinalma') %}
               <span class="fw-bold text-secondary" style="font-size:14px;">
                 {{ budget.grand_cost | money }}
               </span>
@@ -76,8 +76,8 @@
                 <i class="bi bi-eye"></i>
               </a>
 
-              {# E-dem / Asistan: düzenle butonu (draft_edem veya revision_requested ise) #}
-              {% if current_user.role in ('admin', 'e_dem', 'asistan') and bs in ('draft_edem', 'revision_requested') %}
+              {# Satın Alma / Asistan: düzenle butonu (draft_edem veya revision_requested ise) #}
+              {% if current_user.role in ('admin', 'satinalma', 'asistan') and bs in ('draft_edem', 'revision_requested') %}
               <a href="/budgets/{{ budget.id }}/edit" class="btn btn-sm btn-outline-primary ms-1" title="Maliyeti Düzenle">
                 <i class="bi bi-pencil"></i>
               </a>
@@ -97,8 +97,8 @@
               </a>
               {% endif %}
 
-              {# Sil (sadece draft_edem, admin veya e_dem) #}
-              {% if current_user.role == 'admin' or (current_user.role == 'e_dem' and bs == 'draft_edem') %}
+              {# Sil (sadece draft_edem, admin veya satinalma) #}
+              {% if current_user.role == 'admin' or (current_user.role == 'satinalma' and bs == 'draft_edem') %}
               <form method="post" action="/budgets/{{ budget.id }}/delete" class="d-inline ms-1"
                     onsubmit="return confirm('Bu bütçeyi silmek istediğinizden emin misiniz?')">
                 <button type="submit" class="btn btn-sm btn-outline-danger">
@@ -113,7 +113,7 @@
             <td colspan="7" class="text-center py-5 text-muted">
               <i class="bi bi-calculator" style="font-size:3rem; opacity:.3;"></i>
               <p class="mt-2 mb-0">Henüz bütçe bulunmuyor.</p>
-              {% if current_user.role in ('admin', 'e_dem') %}
+              {% if current_user.role in ('admin', 'satinalma') %}
               <a href="/budgets/new" class="btn btn-primary btn-sm mt-3">
                 <i class="bi bi-plus-circle me-1"></i> İlk Bütçeyi Oluştur
               </a>

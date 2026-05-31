@@ -1,5 +1,5 @@
 """
-E-dem — Firma & Sistem Ayarları (Admin only)
+Satın Alma — Firma & Sistem Ayarları (Admin only)
 GET  /settings       → form
 POST /settings       → kaydet (multipart: logo dosyası dahil)
 """

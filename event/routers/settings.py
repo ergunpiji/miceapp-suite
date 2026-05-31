@@ -1,5 +1,5 @@
 """
-E-dem — Sistem Ayarları (Admin only)
+Satın Alma — Sistem Ayarları (Admin only)
 GET  /settings       → form
 POST /settings       → kaydet
 """

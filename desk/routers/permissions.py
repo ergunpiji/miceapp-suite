@@ -1,5 +1,5 @@
 """
-E-dem — Rol İzin Yönetimi (Admin only)
+Satın Alma — Rol İzin Yönetimi (Admin only)
 """
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse

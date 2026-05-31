@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>E-dem | Etkinlik Talep Yönetim Sistemi</title>
+<title>Satın Alma | Etkinlik Talep Yönetim Sistemi</title>
 <style>
 :root {
   --primary: #2563eb; --primary-dark: #1d4ed8; --secondary: #7c3aed;
@@ -226,7 +226,7 @@ tr:hover td{background:#f8fafc;}
 <div id="loginPage" class="login-page">
   <div class="login-card">
     <div class="login-logo">
-      <div class="logo-text">E-dem</div>
+      <div class="logo-text">Satın Alma</div>
       <div class="logo-sub">Etkinlik Talep Yönetim Sistemi</div>
     </div>
     <div id="loginAlert"></div>
@@ -254,7 +254,7 @@ tr:hover td{background:#f8fafc;}
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="sidebar-header">
-      <div class="sidebar-logo">E-dem</div>
+      <div class="sidebar-logo">Satın Alma</div>
       <div class="sidebar-subtitle">Etkinlik Talep Sistemi</div>
     </div>
     <div class="sidebar-user">
@@ -613,13 +613,13 @@ const DB = {
     }
     // İlk kurulum: varsayılan kullanıcıları ve tüm veriyi oluştur
     DB.set('users',[
-      {id:'u1',email:'admin@edem.com',password:'Admin123',role:'admin',
+      {id:'u1',email:'admin@miceapp.net',password:'Admin123',role:'admin',
        name:'Admin',surname:'Kullanıcı',title:'Sistem Yöneticisi',phone:'',active:true,
        createdAt:now()},
-      {id:'u2',email:'manager@edem.com',password:'Manager123',role:'project_manager',
+      {id:'u2',email:'manager@miceapp.net',password:'Manager123',role:'project_manager',
        name:'Ahmet',surname:'Yılmaz',title:'Proje Yöneticisi',phone:'0532 111 2233',active:true,
        createdAt:now()},
-      {id:'u3',email:'edem@edem.com',password:'Edem123',role:'e_dem',
+      {id:'u3',email:'edem@miceapp.net',password:'Edem123',role:'satinalma',
        name:'Fatma',surname:'Kaya',title:'Satın Alma Uzmanı',phone:'0543 444 5566',active:true,
        createdAt:now()},
     ]);
@@ -840,7 +840,7 @@ function initials(name, surname) {
   return ((name||'').charAt(0)+(surname||'').charAt(0)).toUpperCase();
 }
 function roleName(r) {
-  const m={admin:'Admin',project_manager:'Proje Yöneticisi',e_dem:'E-dem (Satın Alma)'};
+  const m={admin:'Admin',project_manager:'Proje Yöneticisi',satinalma:'Satın Alma (Satın Alma)'};
   return m[r]||r;
 }
 function statusBadge(s) {
@@ -926,7 +926,7 @@ const NAV_CONFIG = {
     { section: 'Hesap' },
     { id:'profile', icon:'👤', label:'Profilim' },
   ],
-  e_dem: [
+  satinalma: [
     { section: 'Ana Menü' },
     { id:'dashboard', icon:'📊', label:'Dashboard' },
     { section: 'Referanslar' },
@@ -1082,7 +1082,7 @@ function renderDashboard() {
       </div>
       ${af?`<div style="margin-bottom:12px;font-size:12px;color:var(--primary);cursor:pointer;" onclick="setDashFilter('','')">× Filtreyi kaldır</div>`:''}`;
     content = renderRecentRequests(filtered.slice().reverse());
-  } else if(u.role==='e_dem') {
+  } else if(u.role==='satinalma') {
     const filtered = applyDashFilter(reqs, af);
     stats = `
       <div class="stats-grid">
@@ -1188,7 +1188,7 @@ function renderUsers() {
 }
 
 function roleBadge(r) {
-  const m={admin:'badge-red',project_manager:'badge-blue',e_dem:'badge-purple'};
+  const m={admin:'badge-red',project_manager:'badge-blue',satinalma:'badge-purple'};
   return `<span class="badge ${m[r]||'badge-gray'}">${roleName(r)}</span>`;
 }
 
@@ -1213,7 +1213,7 @@ function openUserModal(uid) {
       <select id="uRole">
         <option value="admin" ${u?.role==='admin'?'selected':''}>Admin</option>
         <option value="project_manager" ${u?.role==='project_manager'?'selected':''}>Proje Yöneticisi</option>
-        <option value="e_dem" ${u?.role==='e_dem'?'selected':''}>E-dem (Satın Alma)</option>
+        <option value="satinalma" ${u?.role==='satinalma'?'selected':''}>Satın Alma (Satın Alma)</option>
       </select>
     </div>`;
   document.getElementById('userModalSave').onclick = saveUser;
@@ -2181,7 +2181,7 @@ function renderNewRequest() {
       <div class="form-group"><label>Özel İstekler / Müşteri Notları</label>
         <textarea id="rDesc" placeholder="Etkinlikle ilgili özel istekler, bütçe aralığı vb.">${escHtml(draft?.description||'')}</textarea>
       </div>
-      <div class="form-group"><label>Dahili Not (E-dem için)</label>
+      <div class="form-group"><label>Dahili Not (Satın Alma için)</label>
         <textarea id="rNotes" placeholder="Satın alma departmanına özel notlar...">${escHtml(draft?.notes||'')}</textarea>
       </div>
     </div>
@@ -2190,7 +2190,7 @@ function renderNewRequest() {
       <button class="btn btn-secondary" onclick="_editingReqId=null;navigate('my_requests')">İptal</button>
       <button class="btn btn-outline" onclick="submitNewRequest(true)">💾 Taslak Kaydet</button>
       <button class="btn btn-warning" onclick="previewRequest()">👁 Ön İzleme</button>
-      <button class="btn btn-primary" onclick="submitNewRequest(false)">📤 E-dem'e Gönder</button>
+      <button class="btn btn-primary" onclick="submitNewRequest(false)">📤 Satın Alma'ya Gönder</button>
     </div>
   </div>`;
 }
@@ -2816,7 +2816,7 @@ function submitNewRequest(asDraft) {
     _editingReqId = req.id;
     showAlert('newRequestAlert',`💾 Taslak kaydedildi — ${req.requestNo}. İstediğiniz zaman gönderebilirsiniz.`,'success');
   } else {
-    showAlert('newRequestAlert',`✅ Talep ${req.requestNo} E-dem'e iletildi. (${totalItems} kalem hizmet)`,'success');
+    showAlert('newRequestAlert',`✅ Talep ${req.requestNo} Satın Alma'ya iletildi. (${totalItems} kalem hizmet)`,'success');
     setTimeout(()=>{ _editingReqId=null; navigate('my_requests'); },1800);
   }
 }
@@ -3290,7 +3290,7 @@ function deleteDraft(rid) {
 }
 
 function sendDraftDirect(rid) {
-  openConfirm('Talebi Gönder', 'Talep E-dem\'e gönderilecek. Emin misiniz?', ()=>{
+  openConfirm('Talebi Gönder', 'Talep Satın Alma\'e gönderilecek. Emin misiniz?', ()=>{
     const reqs = DB.requests();
     const r = reqs.find(x=>x.id===rid);
     if(!r) return;
@@ -3331,7 +3331,7 @@ function renderAllRequests() {
 }
 
 // ============================================================
-// INCOMING REQUESTS (E-dem)
+// INCOMING REQUESTS (Satın Alma)
 // ============================================================
 function renderIncomingRequests() {
   const reqs = DB.requests().filter(x=>x.status!=='completed').reverse();
@@ -3359,7 +3359,7 @@ function renderIncomingRequests() {
 }
 
 // ============================================================
-// BUDGETS MANAGE (E-dem)
+// BUDGETS MANAGE (Satın Alma)
 // ============================================================
 function renderBudgetsManage() {
   const budgets = DB.budgets();
@@ -3399,7 +3399,7 @@ function renderBudgetsView() {
     <div class="card-header"><div class="card-title">💰 Bütçe Görüntüle</div></div>
     ${!budgets.length?`<div class="empty-state"><div class="empty-icon">💰</div>
       <div class="empty-title">Henüz bütçe hazırlanmadı</div>
-      <div class="empty-desc">E-dem tarafından hazırlanan bütçeler burada görünecektir.</div>
+      <div class="empty-desc">Satın Alma tarafından hazırlanan bütçeler burada görünecektir.</div>
     </div>`:`<div class="table-wrap"><table>
       <thead><tr><th>Referans No</th><th>Müşteri</th><th>Mekan</th><th>Güncelleme</th><th>İşlem</th></tr></thead>
       <tbody>${budgets.map(b=>{
@@ -3560,7 +3560,7 @@ function openRequestDetail(rid) {
 
   const footer = document.getElementById('rdModalFooter');
   let btns = '<button class="btn btn-secondary" onclick="closeModal(\'requestDetailModal\')">Kapat</button>';
-  if(state.user.role==='e_dem') {
+  if(state.user.role==='satinalma') {
     btns = `<button class="btn btn-secondary" onclick="closeModal('requestDetailModal')">Kapat</button>
       <button class="btn btn-primary" onclick="closeModal('requestDetailModal');openBudgetManage('${r.id}')">💰 Bütçe Yönet</button>`;
   }
@@ -3569,7 +3569,7 @@ function openRequestDetail(rid) {
 }
 
 // ============================================================
-// BUDGET MANAGE (E-dem opens from request)
+// BUDGET MANAGE (Satın Alma opens from request)
 // ============================================================
 function openBudgetManage(rid) {
   const r = DB.requests().find(x=>x.id===rid);
@@ -3577,8 +3577,8 @@ function openBudgetManage(rid) {
   const allVenues = DB.venues().filter(x=>x.active);
   const budgets = DB.budgets().filter(x=>x.requestId===rid);
 
-  // Change request status if pending (only E-dem transitions status automatically)
-  if(r.status==='pending' && state.user.role==='e_dem') {
+  // Change request status if pending (only Satın Alma transitions status automatically)
+  if(r.status==='pending' && state.user.role==='satinalma') {
     const reqs=DB.requests();
     const idx=reqs.findIndex(x=>x.id===rid);
     if(idx>=0) { reqs[idx].status='in_progress'; DB.saveRequests(reqs); }
@@ -3608,7 +3608,7 @@ function openBudgetManage(rid) {
 
   // Preferred venues from manager's request
   const prefVenues = (r.preferredVenues||[]).map(vid=>allVenues.find(v=>v.id===vid)).filter(Boolean);
-  // Venues with existing budgets that are NOT in preferred list (extras added by e_dem)
+  // Venues with existing budgets that are NOT in preferred list (extras added by satinalma)
   const extraBudgets = budgets.filter(b=>!prefVenues.some(v=>v.id===b.venueId));
 
   // Preferred venues table (always shown if any)
@@ -3629,7 +3629,7 @@ function openBudgetManage(rid) {
     </tr>`;
   }).join('');
 
-  // Extra budgets (e_dem added manually, not in preferred list)
+  // Extra budgets (satinalma added manually, not in preferred list)
   const extraRows = extraBudgets.map(b=>`<tr>
     <td><strong>${escHtml(b.venueName)}</strong></td>
     <td><span class="badge badge-green" style="font-size:11px;">Bütçe hazır</span></td>
@@ -4318,7 +4318,7 @@ function renderSalesTablePage() {
     <div class="card-header"><div class="card-title">💹 Satış Tablosu</div></div>
     <div class="empty-state"><div class="empty-icon">💹</div>
       <div class="empty-title">Henüz bütçe hazırlanmadı</div>
-      <div class="empty-desc">E-dem tarafından maliyet fiyatları girilen bütçeler burada görünecektir.</div>
+      <div class="empty-desc">Satın Alma tarafından maliyet fiyatları girilen bütçeler burada görünecektir.</div>
     </div></div>`;
 
   const rows = budgets.map(b=>{

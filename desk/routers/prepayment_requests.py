@@ -1,5 +1,5 @@
 """
-E-dem — Ön Ödeme Talep Sistemi
+Satın Alma — Ön Ödeme Talep Sistemi
 
 Akış:
   PM / Müdür  → oluştur  (status: pending_gm)
