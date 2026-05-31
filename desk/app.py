@@ -177,10 +177,11 @@ async def nav_counts_middleware(request: Request, call_next):
                                         EmployeeAdvance.approval_status == "talep")
                                 .scalar() or 0
                             )
+                            # Birleşik HBF: onay bekleyen (submitted) — desk formu da buraya yazar
                             p_hbf = (
-                                db.query(func.count(HBF.id))
-                                .filter(HBF.company_id == company_id,
-                                        HBF.status.in_(["beklemede", "mudur_onayladi"]))
+                                db.query(func.count(ExpenseReport.id))
+                                .filter(ExpenseReport.company_id == company_id,
+                                        ExpenseReport.status == "submitted")
                                 .scalar() or 0
                             )
                         else:
@@ -206,12 +207,13 @@ async def nav_counts_middleware(request: Request, call_next):
                                             EmployeeAdvance.approval_status == "talep")
                                     .scalar() or 0
                                 )
-                                p_hbf = (
-                                    db.query(func.count(HBF.id))
-                                    .filter(HBF.employee_id.in_(team_ids),
-                                            HBF.status == "beklemede")
-                                    .scalar() or 0
-                                )
+                            # Birleşik HBF: müdür de şirketin onay bekleyen formlarını görür
+                            p_hbf = (
+                                db.query(func.count(ExpenseReport.id))
+                                .filter(ExpenseReport.company_id == company_id,
+                                        ExpenseReport.status == "submitted")
+                                .scalar() or 0
+                            )
                     counts["pending_leaves"]   = p_leaves
                     counts["pending_advances"] = p_adv
                     counts["pending_hbf"]      = p_hbf
@@ -387,6 +389,7 @@ from routers import employees as employees_router
 from routers import reports as reports_router
 from routers import hbf as hbf_router
 from routers import hbf_muhasebe as hbf_muhasebe_router
+from routers import expenses as expenses_router
 from routers import prepayment_odeme as prepayment_odeme_router
 from routers import advances as advances_router
 from routers import fund_pools as fund_pools_router
@@ -428,6 +431,7 @@ app.include_router(employees_router.router)
 app.include_router(reports_router.router)
 app.include_router(hbf_router.router)
 app.include_router(hbf_muhasebe_router.router)
+app.include_router(expenses_router.router)
 app.include_router(prepayment_odeme_router.router)
 app.include_router(advances_router.router)
 app.include_router(fund_pools_router.router)

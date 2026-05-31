@@ -11,16 +11,34 @@ from fastapi import status as http_status
 from sqlalchemy.orm import Session
 
 import storage_helper
-from auth import get_current_user
+from auth import get_current_user, get_company_id, EVENT_URL
 from database import get_db
 from models import (
-    ExpenseReport, ExpenseItem, UndocumentedEntry,
-    Request as ReqModel, User,
-    EXPENSE_STATUSES, EXPENSE_STATUS_LABELS, EXPENSE_STATUS_COLORS,
-    EXPENSE_PAYMENT_METHODS, EXPENSE_DOC_TYPES,
+    ExpenseReport, ExpenseItem,
+    User, Reference, DeskRequest,
+    CreditCard, CreditCardTxn,
     _uuid, _now,
 )
 from templates_config import templates
+# Ortak HBF (expense_reports) — desk referans → backing request + kredi kartı limit senkronu
+# hbf_muhasebe ile aynı yardımcılar + durum etiketleri; tek kaynak.
+from routers.hbf_muhasebe import (
+    _active_references, _request_for_reference, _sync_cc,
+    EXP_STATUS_LABELS as EXPENSE_STATUS_LABELS,
+    EXP_STATUS_COLORS as EXPENSE_STATUS_COLORS,
+)
+
+# Form sabitleri — event ile AYNI şekil (list-of-dict): form JS p.value/p.label, d.value/d.label bekler
+EXPENSE_PAYMENT_METHODS = [
+    {"value": "kredi_karti", "label": "Kredi Kartı"},
+    {"value": "nakit", "label": "Nakit"},
+]
+EXPENSE_DOC_TYPES = [
+    {"value": "fatura", "label": "Fatura"},
+    {"value": "fis", "label": "Fiş"},
+    {"value": "belgesiz", "label": "Belgesiz"},
+]
+EXPENSE_STATUSES = ["draft", "submitted", "mudur_onayladi", "onaylandi", "kapandi", "rejected"]
 
 router = APIRouter(prefix="/expenses", tags=["expenses"])
 
@@ -77,16 +95,14 @@ async def expenses_all_list(
     status_filter: str = "all",  # all | draft | submitted | approved | rejected
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    cid: str = Depends(get_company_id),
 ):
-    query = db.query(ExpenseReport)
+    # Tenant izolasyonu: sadece kendi firmasının HBF'leri
+    query = db.query(ExpenseReport).filter(ExpenseReport.company_id == cid)
 
-    # PM sadece kendi referanslarına ait HBF'leri görür
-    if current_user.role in ("yonetici", "asistan"):
-        query = query.join(ExpenseReport.request).filter(
-            ReqModel.created_by == current_user.id
-        )
-    # satinalma sadece kendi gönderdiği HBF'leri görür
-    elif current_user.role == "satinalma":
+    # Onay yetkisi olmayan kullanıcı yalnızca kendi gönderdiği HBF'leri görür
+    privileged = current_user.is_admin or current_user.role in ("mudur", "yonetici", "genel_mudur")
+    if not privileged:
         query = query.filter(ExpenseReport.submitted_by == current_user.id)
 
     if status_filter != "all":
@@ -95,12 +111,11 @@ async def expenses_all_list(
     reports = query.order_by(ExpenseReport.created_at.desc()).all()
 
     # Onay bekleyen sayısı
-    pending_q = db.query(ExpenseReport).filter(ExpenseReport.status == "submitted")
-    if current_user.role in ("yonetici", "asistan"):
-        pending_q = pending_q.join(ExpenseReport.request).filter(
-            ReqModel.created_by == current_user.id
-        )
-    elif current_user.role == "satinalma":
+    pending_q = db.query(ExpenseReport).filter(
+        ExpenseReport.company_id == cid,
+        ExpenseReport.status == "submitted",
+    )
+    if not privileged:
         pending_q = pending_q.filter(ExpenseReport.submitted_by == current_user.id)
     pending_count = pending_q.count()
 
@@ -121,13 +136,24 @@ async def expenses_all_list(
 # Yeni HBF
 # ---------------------------------------------------------------------------
 
-def _all_requests_for_user(db: Session, user):
-    """Form dropdown için tüm aktif referansları döndür.
-    İptal ve kapanmış referanslar hariç — herkes tüm referanslara harcama yapabilir.
-    """
-    from models import Request as ReqModel
-    q = db.query(ReqModel).filter(ReqModel.status.notin_(["cancelled", "closed"]))
-    return q.order_by(ReqModel.created_at.desc()).all()
+def _ref_options(db: Session, cid: str):
+    """HBF formu dropdown'ı için aktif desk Referansları → form alanlarıyla uyumlu dict.
+    Form JS request_no/event_name/client_name bekliyor → ref_no/title eşlenir."""
+    out = []
+    for r in _active_references(db, cid):
+        out.append({
+            "id": r.id,
+            "request_no": r.ref_no,
+            "event_name": (r.title or ""),
+            "client_name": "",
+        })
+    return out
+
+
+def _credit_cards(db: Session, cid: str):
+    return (db.query(CreditCard)
+            .filter(CreditCard.company_id == cid)
+            .order_by(CreditCard.name).all())
 
 
 @router.get("/new", response_class=HTMLResponse, name="expenses_new")
@@ -136,17 +162,23 @@ async def expenses_new(
     request_id: str = "",
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    cid: str = Depends(get_company_id),
 ):
     req = None
     if request_id:
-        req = db.query(ReqModel).filter(ReqModel.id == request_id).first()
-    all_reqs = _all_requests_for_user(db, current_user)
+        ref = db.query(Reference).filter(
+            Reference.id == request_id, Reference.company_id == cid
+        ).first()
+        if ref:
+            req = {"id": ref.id, "request_no": ref.ref_no,
+                   "event_name": (ref.title or ""), "client_name": ""}
     return templates.TemplateResponse("expenses/form.html", {
         "request": request,
         "current_user": current_user,
         "report": None,
         "req": req,
-        "all_requests": all_reqs,
+        "all_requests": _ref_options(db, cid),
+        "credit_cards": _credit_cards(db, cid),
         "page_title": "Yeni Harcama Bildirim Formu",
         "PAYMENT_METHODS": EXPENSE_PAYMENT_METHODS,
         "DOC_TYPES": EXPENSE_DOC_TYPES,
@@ -161,6 +193,7 @@ async def expenses_create(
     items_json: str = Form("[]"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    cid: str = Depends(get_company_id),
 ):
     import json
     try:
@@ -178,7 +211,7 @@ async def expenses_create(
     primary_id = refs[0]["id"]
     refs_by_id = {r["id"]: r for r in refs}
 
-    # Kalemleri assigned_request_id'ye göre grupla
+    # Kalemleri assigned_request_id'ye göre grupla (referans = desk Reference.id)
     # Atanmamış kalemler birincil referansa gider
     groups: dict[str, list] = {}
     for item in items:
@@ -192,16 +225,21 @@ async def expenses_create(
 
     first_report_id = None
     for ref_id, group_items in groups.items():
-        req_obj = db.query(ReqModel).filter(ReqModel.id == ref_id).first()
-        if not req_obj:
+        ref = db.query(Reference).filter(
+            Reference.id == ref_id, Reference.company_id == cid
+        ).first()
+        if not ref:
             continue
-        ref_no = refs_by_id.get(ref_id, {}).get("request_no", ref_id[:8])
-        report_title = (title.strip() or f"HBF — {req_obj.request_no}")
+        # expense_reports.request_id FK'sı için referansa karşılık gelen backing request
+        backing_req_id = _request_for_reference(db, ref, current_user)
+        ref_no = refs_by_id.get(ref_id, {}).get("request_no", ref.ref_no)
+        report_title = (title.strip() or f"HBF — {ref.ref_no}")
         if len(groups) > 1:
             report_title = f"{report_title} ({ref_no})"
         report = ExpenseReport(
             id=_uuid(),
-            request_id=ref_id,
+            company_id=cid,
+            request_id=backing_req_id,
             request_ids_json=json.dumps(refs, ensure_ascii=False),
             title=report_title,
             status="draft",
@@ -219,6 +257,50 @@ async def expenses_create(
     return RedirectResponse(url=f"/expenses/{first_report_id}/edit", status_code=302)
 
 
+@router.post("/new-draft", name="expenses_new_draft")
+async def expenses_new_draft(
+    request_ids_json: str = Form("[]"),
+    title: str = Form(""),
+    items_json: str = Form("[]"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    cid: str = Depends(get_company_id),
+):
+    """Belge ekinden önce HBF'yi taslak olarak AJAX ile oluşturur; report_id döndürür."""
+    import json as _json
+    try:
+        refs = _json.loads(request_ids_json or "[]")
+    except Exception:
+        refs = []
+    if not refs:
+        return JSONResponse({"ok": False, "error": "En az bir referans seçmelisiniz."}, status_code=400)
+
+    primary_id = refs[0]["id"]
+    ref = db.query(Reference).filter(
+        Reference.id == primary_id, Reference.company_id == cid
+    ).first()
+    if not ref:
+        return JSONResponse({"ok": False, "error": "Referans bulunamadı."}, status_code=404)
+
+    backing_req_id = _request_for_reference(db, ref, current_user)
+    report = ExpenseReport(
+        id=_uuid(),
+        company_id=cid,
+        request_id=backing_req_id,
+        request_ids_json=_json.dumps(refs, ensure_ascii=False),
+        title=(title.strip() or f"HBF — {ref.ref_no}"),
+        status="draft",
+        submitted_by=current_user.id,
+        created_at=_now(),
+        updated_at=_now(),
+    )
+    db.add(report)
+    db.flush()
+    _save_items_from_json(db, report.id, items_json)
+    db.commit()
+    return JSONResponse({"ok": True, "report_id": report.id})
+
+
 # ---------------------------------------------------------------------------
 # HBF Düzenle
 # ---------------------------------------------------------------------------
@@ -229,19 +311,25 @@ async def expenses_edit_get(
     request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    cid: str = Depends(get_company_id),
 ):
-    report = db.query(ExpenseReport).filter(ExpenseReport.id == report_id).first()
+    report = db.query(ExpenseReport).filter(
+        ExpenseReport.id == report_id, ExpenseReport.company_id == cid
+    ).first()
     if not report:
         raise HTTPException(404)
     if not _can_edit(report, current_user):
         raise HTTPException(403)
-    all_reqs = _all_requests_for_user(db, current_user)
+    card_names = {c.id: (c.name + (f" ••{c.last4}" if c.last4 else ""))
+                  for c in _credit_cards(db, cid)}
     return templates.TemplateResponse("expenses/form.html", {
         "request": request,
         "current_user": current_user,
         "report": report,
-        "req": report.request,
-        "all_requests": all_reqs,
+        "req": None,  # desk: referanslar request_ids_json'dan yüklenir
+        "all_requests": _ref_options(db, cid),
+        "credit_cards": _credit_cards(db, cid),
+        "card_names": card_names,
         "page_title": report.title or "HBF Düzenle",
         "PAYMENT_METHODS": EXPENSE_PAYMENT_METHODS,
         "DOC_TYPES": EXPENSE_DOC_TYPES,
@@ -258,9 +346,12 @@ async def expenses_edit_post(
     next_action: str = Form(""),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    cid: str = Depends(get_company_id),
 ):
     import json as _json
-    report = db.query(ExpenseReport).filter(ExpenseReport.id == report_id).first()
+    report = db.query(ExpenseReport).filter(
+        ExpenseReport.id == report_id, ExpenseReport.company_id == cid
+    ).first()
     if not report:
         raise HTTPException(404)
     if not _can_edit(report, current_user):
@@ -289,22 +380,25 @@ async def expenses_edit_post(
 
     if next_action == "submit":
         back_id = report.request_id
-        # Bildirim: gönderenin bir üstüne git
+        # Onay event tarafında yapılır (birleşik akış) → bildirim EVENT linkiyle
         approver = _find_hbf_approver(report.submitted_by, db)
-        req_obj = db.query(ReqModel).filter(ReqModel.id == back_id).first() if back_id else None
+        req_obj = db.query(DeskRequest).filter(DeskRequest.id == back_id).first() if back_id else None
         if approver:
-            from utils.notifications import create_notification
-            create_notification(
-                db,
-                user_id    = approver.id,
-                notif_type = "hbf_submitted",
-                title      = f"HBF onayı bekleniyor — {report.title or 'Harcama Formu'}",
-                message    = f"{req_obj.request_no if req_obj else ''} referansına ait harcama formu onayınızı bekliyor.",
-                link       = f"/expenses/{report.id}",
-                ref_id     = report.id,
-            )
-            db.commit()
-        return RedirectResponse(url=f"/requests/{back_id}", status_code=302)
+            try:
+                from utils.notifications import create_notification
+                create_notification(
+                    db,
+                    user_id    = approver.id,
+                    notif_type = "hbf_submitted",
+                    title      = f"HBF onayı bekleniyor — {report.title or 'Harcama Formu'}",
+                    message    = f"{req_obj.request_no if req_obj else ''} referansına ait harcama formu onayınızı bekliyor.",
+                    link       = f"{EVENT_URL}/expenses/{report.id}",
+                    ref_id     = report.id,
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
+        return RedirectResponse(url="/expenses", status_code=302)
     return RedirectResponse(url=f"/expenses/{report_id}/edit", status_code=302)
 
 
@@ -318,18 +412,25 @@ async def expenses_view(
     request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    cid: str = Depends(get_company_id),
 ):
-    report = db.query(ExpenseReport).filter(ExpenseReport.id == report_id).first()
+    report = db.query(ExpenseReport).filter(
+        ExpenseReport.id == report_id, ExpenseReport.company_id == cid
+    ).first()
     if not report:
         raise HTTPException(404)
+    card_names = {c.id: (c.name + (f" ••{c.last4}" if c.last4 else ""))
+                  for c in _credit_cards(db, cid)}
     return templates.TemplateResponse("expenses/form.html", {
         "request": request,
         "current_user": current_user,
         "report": report,
-        "req": report.request,
+        "req": None,
         "all_requests": [],
         "readonly": True,
-        "can_approve": _can_approve(report, current_user, db),
+        # Onay/red birleşik akışta EVENT tarafında yapılır → desk'te salt görüntüleme
+        "can_approve": False,
+        "card_names": card_names,
         "page_title": report.title or "HBF Detay",
         "PAYMENT_METHODS": EXPENSE_PAYMENT_METHODS,
         "DOC_TYPES": EXPENSE_DOC_TYPES,
@@ -473,119 +574,6 @@ async def expenses_doc_download(
 
 
 # ---------------------------------------------------------------------------
-# Belgesiz Gelir/Gider (inline AJAX — request detail'den çağrılır)
-# ---------------------------------------------------------------------------
-
-undoc_router = APIRouter(prefix="/undocumented", tags=["undocumented"])
-
-
-@undoc_router.get("", response_class=HTMLResponse, name="undocumented_list")
-async def undocumented_list(
-    request: Request,
-    type_filter: str = "all",   # all | gelir | gider
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    if current_user.role not in ("admin", "mudur", "muhasebe_muduru", "muhasebe", "yonetici"):
-        raise HTTPException(403)
-
-    query = db.query(UndocumentedEntry)
-    if type_filter != "all":
-        query = query.filter(UndocumentedEntry.entry_type == type_filter)
-
-    # mudur (Etkinlik Süreç Müdürü), GM, admin, muhasebe_muduru: tüm belgesiz kayıtları görür
-
-    entries = query.order_by(UndocumentedEntry.entry_date.desc(), UndocumentedEntry.created_at.desc()).all()
-
-    gelir_total = sum(e.amount for e in entries if e.entry_type == "gelir")
-    gider_total = sum(e.amount for e in entries if e.entry_type == "gider")
-    can_manage = current_user.role in ("admin", "muhasebe_muduru", "muhasebe")
-
-    # Ekleme formu için aktif referanslar (iptal ve kapalı hariç)
-    all_requests = []
-    if can_manage:
-        all_requests = db.query(ReqModel).filter(
-            ReqModel.status.notin_(["cancelled", "closed"])
-        ).order_by(ReqModel.created_at.desc()).all()
-
-    from datetime import date as _date
-    today = _date.today().isoformat()
-
-    return templates.TemplateResponse("undocumented/list.html", {
-        "request":       request,
-        "current_user":  current_user,
-        "entries":       entries,
-        "type_filter":   type_filter,
-        "gelir_total":   gelir_total,
-        "gider_total":   gider_total,
-        "can_manage":    can_manage,
-        "all_requests":  all_requests,
-        "today":         today,
-    })
-
-
-@undoc_router.post("/add", name="undocumented_add")
-async def undocumented_add(
-    request: Request,
-    request_id: str = Form(...),
-    entry_type: str = Form(...),    # gelir | gider
-    description: str = Form(""),
-    amount: float = Form(0.0),
-    entry_date: str = Form(""),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    if current_user.role not in ("admin", "muhasebe_muduru", "muhasebe"):
-        raise HTTPException(403, detail="Bu işlem için yetkiniz yok.")
-    req = db.query(ReqModel).filter(ReqModel.id == request_id).first()
-    if not req:
-        raise HTTPException(404)
-    if entry_type not in ("gelir", "gider"):
-        raise HTTPException(400)
-    if amount <= 0:
-        return JSONResponse({"ok": False, "error": "Tutar 0'dan büyük olmalı."}, status_code=400)
-
-    entry = UndocumentedEntry(
-        id=_uuid(),
-        request_id=request_id,
-        entry_type=entry_type,
-        description=description.strip(),
-        amount=round(amount, 2),
-        entry_date=entry_date.strip(),
-        created_by=current_user.id,
-        created_at=_now(),
-    )
-    db.add(entry)
-    db.commit()
-    db.refresh(entry)
-    return JSONResponse({
-        "ok": True,
-        "id": entry.id,
-        "entry_type": entry.entry_type,
-        "description": entry.description,
-        "amount": entry.amount,
-        "entry_date": entry.entry_date,
-    })
-
-
-@undoc_router.delete("/{entry_id}", name="undocumented_delete")
-async def undocumented_delete(
-    entry_id: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    entry = db.query(UndocumentedEntry).filter(UndocumentedEntry.id == entry_id).first()
-    if not entry:
-        raise HTTPException(404)
-    # Sadece muhasebe rolü veya admin silebilir
-    if current_user.role not in ("admin", "muhasebe_muduru", "muhasebe"):
-        raise HTTPException(403, detail="Bu işlem için yetkiniz yok.")
-    db.delete(entry)
-    db.commit()
-    return JSONResponse({"ok": True})
-
-
-# ---------------------------------------------------------------------------
 # Yardımcı
 # ---------------------------------------------------------------------------
 
@@ -611,13 +599,16 @@ def _save_items_from_json(db: Session, report_id: str, items_json: str):
             vat_amount = round(amount * vat_rate / 100, 2)
             total_amount = round(amount + vat_amount, 2)
 
+        pay_method = it.get("payment_method", "nakit")
         item = ExpenseItem(
             id=_uuid(),
             report_id=report_id,
             assigned_request_id=it.get("assigned_request_id") or None,
             item_date=it.get("item_date", "") or "",
             description=it.get("description", "") or "",
-            payment_method=it.get("payment_method", "nakit"),
+            payment_method=pay_method,
+            credit_card_id=((it.get("credit_card_id") or None)
+                            if pay_method == "kredi_karti" else None),
             document_type=doc_type,
             amount=round(amount, 2),
             vat_rate=round(vat_rate, 2),
@@ -630,3 +621,7 @@ def _save_items_from_json(db: Session, report_id: str, items_json: str):
             created_at=_now(),
         )
         db.add(item)
+
+    db.flush()
+    # Kredi kartı kalemlerini kartın limitinden düş (CreditCardTxn senkron)
+    _sync_cc(db, report_id)

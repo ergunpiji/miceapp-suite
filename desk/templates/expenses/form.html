@@ -1,8 +1,7 @@
 {% extends "base.html" %}
 {% block page_title %}{{ page_title }}{% endblock %}
-{% block page_title_block %}{{ page_title }}{% endblock %}
 
-{% block extra_head %}
+{% block extra_css %}
 <style>
 /* ── HBF Formu ─────────────────────────────────────────────── */
 .hbf-header {
@@ -116,10 +115,10 @@
 {% block content %}
 
 <div class="mb-3">
-  <a href="{{ '/requests/' + req.id if req else '/requests' }}"
+  <a href="/expenses"
      class="text-muted text-decoration-none" style="font-size:13px;">
     <i class="bi bi-arrow-left me-1"></i>
-    {% if req %}{{ req.request_no }} — {{ req.event_name }}{% else %}Geri{% endif %}
+    {% if req %}{{ req.request_no }} — {{ req.event_name }}{% else %}Harcama Formları{% endif %}
   </a>
 </div>
 
@@ -287,6 +286,11 @@
                   <span class="pay-badge pay-{{ item.payment_method }}">
                     {{ item.payment_label }}
                   </span>
+                  {% if item.payment_method == 'kredi_karti' and item.credit_card_id and card_names.get(item.credit_card_id) %}
+                  <div class="text-muted" style="font-size:11px; margin-top:2px;">
+                    <i class="bi bi-credit-card"></i> {{ card_names[item.credit_card_id] }}
+                  </div>
+                  {% endif %}
                 </td>
                 <td>
                   <span class="pay-badge doc-{{ item.document_type }}">
@@ -366,13 +370,16 @@
                 onclick="submitForm('')">
           <i class="bi bi-floppy me-2"></i>Taslak Kaydet
         </button>
-        <a href="{{ '/requests/' + req.id if req else '/expenses' }}"
+        <a href="/expenses"
            class="btn btn-link text-muted p-0" style="font-size:13px;">İptal</a>
       </div>
       {% else %}
         {# Onay/Red butonları — sadece yetkili kişiye göster #}
-        {% if can_approve and report and report.status == 'submitted' %}
+        {% if can_approve and report and report.status in ('submitted', 'mudur_onayladi') %}
         <div class="d-flex flex-column gap-2 mt-auto">
+          <div class="small text-muted">
+            {% if report.status == 'submitted' %}Müdür onayı aşaması{% else %}Genel Müdür onayı aşaması{% endif %}
+          </div>
           <form method="post" action="/expenses/{{ report.id }}/approve" style="margin:0;">
             <button type="submit" class="btn btn-success px-4 w-100"
                     onclick="return confirm('HBF onaylanacak. Emin misiniz?')">
@@ -389,6 +396,14 @@
                         style="font-size:13px;" placeholder="Red nedeni..."></textarea>
               <button type="submit" class="btn btn-danger btn-sm w-100">Reddi Onayla</button>
             </form>
+          </div>
+        </div>
+        {% elif report and report.status in ('submitted', 'mudur_onayladi') and report.submitted_by == current_user.id %}
+        <div class="mt-auto">
+          <div class="alert alert-info py-2 mb-0" style="font-size:13px;">
+            <i class="bi bi-info-circle me-1"></i>
+            Bu HBF'yi siz gönderdiniz; <strong>kendi HBF'nizi onaylayamazsınız</strong>.
+            {% if report.status == 'submitted' %}Müdürünüz{% else %}Genel Müdür / başka bir yönetici{% endif %} onayını bekliyor.
           </div>
         </div>
         {% elif report and report.status == 'draft' and report.submitted_by == current_user.id %}
@@ -412,9 +427,9 @@
 
 {% endblock %}
 
-{% block extra_scripts %}
+{% block extra_js %}
 <script>
-const REPORT_ID = '{{ report.id if report else "" }}';
+let REPORT_ID = '{{ report.id if report else "" }}';
 const READONLY  = {{ 'true' if readonly else 'false' }};
 
 // ─── Referans listesi ───────────────────────────────────────────
@@ -538,6 +553,7 @@ let rows = [
     item_date:            '{{ item.item_date or '' }}',
     description:          {{ item.description | tojson }},
     payment_method:       '{{ item.payment_method }}',
+    credit_card_id:       '{{ item.credit_card_id or '' }}',
     document_type:        '{{ item.document_type }}',
     total_amount:         {{ item.total_amount }},
     vat_amount:           {{ item.vat_amount }},
@@ -551,6 +567,15 @@ let rows = [
 
 const PAYMENT_METHODS = {{ PAYMENT_METHODS | tojson }};
 const DOC_TYPES       = {{ DOC_TYPES | tojson }};
+const CREDIT_CARDS    = [
+  {% for cc in credit_cards %}{ id: '{{ cc.id }}', name: {{ (cc.name or '') | tojson }}, last4: '{{ cc.last4 or '' }}' },{% endfor %}
+];
+
+function toggleCC(i, val) {
+  const sel = document.querySelector('.cc-sel-' + i);
+  if (sel) sel.style.display = (val === 'kredi_karti') ? '' : 'none';
+  if (val !== 'kredi_karti') rows[i].credit_card_id = '';
+}
 
 function fmt(n) {
   return '₺' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.').replace(/\.(\d{2})$/, ',$1');
@@ -567,6 +592,9 @@ function renderTable() {
     ).join('');
     const docOpts = DOC_TYPES.map(d =>
       `<option value="${d.value}" ${row.document_type === d.value ? 'selected' : ''}>${d.label}</option>`
+    ).join('');
+    const ccOpts = `<option value="">Kart seç…</option>` + CREDIT_CARDS.map(c =>
+      `<option value="${c.id}" ${row.credit_card_id === c.id ? 'selected' : ''}>${c.name}${c.last4 ? ' ••' + c.last4 : ''}</option>`
     ).join('');
     const isBelgesiz = row.document_type === 'belgesiz';
     const vatAmtVal = isBelgesiz ? 0 : (row.vat_amount || 0);
@@ -604,8 +632,10 @@ function renderTable() {
                  placeholder="Açıklama" style="width:100%; min-width:160px;"
                  oninput="rows[${i}].description=this.value;"></td>
       <td>
-        <select onchange="rows[${i}].payment_method=this.value; updateTotals();"
+        <select onchange="rows[${i}].payment_method=this.value; toggleCC(${i}, this.value); updateTotals();"
                 style="width:100px;">${payOpts}</select>
+        <select class="cc-sel-${i}" style="width:130px; font-size:11px; margin-top:3px; ${row.payment_method === 'kredi_karti' ? '' : 'display:none;'}"
+                onchange="rows[${i}].credit_card_id=this.value;">${ccOpts}</select>
       </td>
       <td>
         <select onchange="onDocTypeChange(${i}, this.value);" style="width:100px;">${docOpts}</select>
@@ -668,7 +698,7 @@ function setEl(id, val) {
 
 function addRow() {
   rows.push({
-    id: '', item_date: '', description: '', payment_method: 'nakit',
+    id: '', item_date: '', description: '', payment_method: 'nakit', credit_card_id: '',
     document_type: 'fis', total_amount: 0, vat_amount: 0, document_path: '', document_name: ''
   });
   renderTable();
@@ -700,11 +730,31 @@ function submitForm(action) {
 async function uploadDoc(rowIdx, input) {
   const file = input.files[0];
   if (!file) return;
-  const rid = REPORT_ID;
-  if (!rid) {
-    alert('Önce "Taslak Kaydet" ile formu kaydedin, sonra belge yükleyin.');
-    return;
+
+  // REPORT_ID yoksa → taslak olarak otomatik kaydet
+  if (!REPORT_ID) {
+    if (selectedRefs.length === 0) {
+      alert('Belge yüklemeden önce en az bir referans numarası seçmelisiniz.');
+      input.value = '';
+      return;
+    }
+    saveItems();
+    syncRefHidden();
+    const draftFd = new FormData();
+    draftFd.append('request_ids_json', document.getElementById('requestIdsJson').value);
+    draftFd.append('title', document.getElementById('reportTitle')?.value || '');
+    draftFd.append('items_json', JSON.stringify(rows));
+    const draftRes = await fetch('/expenses/new-draft', { method: 'POST', body: draftFd });
+    const draftData = await draftRes.json();
+    if (!draftData.ok) { alert(draftData.error || 'Taslak kaydedilemedi.'); return; }
+    // REPORT_ID ve form action'ı güncelle (let değişkenini doğrudan ata —
+    // window.REPORT_ID let binding'i güncellemez, sync-rows boş id'yle 404 olurdu)
+    REPORT_ID = draftData.report_id;
+    document.getElementById('hbfForm').action = `/expenses/${draftData.report_id}/edit`;
+    history.replaceState(null, '', `/expenses/${draftData.report_id}/edit`);
   }
+
+  const rid = REPORT_ID;
 
   // Satır henüz kaydedilmemişse önce sync-rows ile kaydet
   if (!rows[rowIdx].id) {
@@ -722,8 +772,14 @@ async function uploadDoc(rowIdx, input) {
 
   const fd = new FormData();
   fd.append('file', file);
-  const res = await fetch(`/expenses/${rid}/upload/${itemId}`, { method: 'POST', body: fd });
-  const data = await res.json();
+  let data;
+  try {
+    const res = await fetch(`/expenses/${rid}/upload/${itemId}`, { method: 'POST', body: fd });
+    data = await res.json();
+  } catch (e) {
+    alert('Yükleme hatası — sunucu yanıt vermedi. Lütfen tekrar deneyin.');
+    return;
+  }
   if (data.ok) {
     rows[rowIdx].document_path = data.path;
     rows[rowIdx].document_name = data.name;
