@@ -3,8 +3,8 @@
 {% block page_title_block %}{{ page_title }}{% endblock %}
 
 {% block topbar_actions %}
-{# ── Compact durum güncelle ── #}
-{% if can_edit_status or can_direct_manage %}
+{# ── Compact durum güncelle — onaylı referansta KİLİTLİ (gizli) ── #}
+{% if (can_edit_status or can_direct_manage) and req.status != 'confirmed' %}
 <form method="post" action="/requests/{{ req.id }}/status"
       class="d-flex align-items-center gap-1">
   <select name="new_status" class="form-select form-select-sm"
@@ -17,6 +17,15 @@
   </select>
   <button type="submit" class="btn btn-warning btn-sm" style="font-size:12px; white-space:nowrap;">
     <i class="bi bi-arrow-repeat me-1"></i>Güncelle
+  </button>
+</form>
+{% endif %}
+{# Onaylı referans kilitli — SADECE GM/admin değişiklik talebiyle açabilir #}
+{% if req.status == 'confirmed' and (current_user.is_gm or current_user.role in ('admin','super_admin')) %}
+<form method="post" action="/requests/{{ req.id }}/reopen"
+      onsubmit="return confirm('Onaylı referansı değişiklik için tekrar açmak istiyor musunuz?')">
+  <button type="submit" class="btn btn-outline-warning btn-sm" style="font-size:12px; white-space:nowrap;">
+    <i class="bi bi-unlock me-1"></i> Değişiklik Talebi
   </button>
 </form>
 {% endif %}
@@ -200,7 +209,7 @@
           {# Tüm taslak bütçeleri toplu manager'a gönder #}
           {% set ns_draft = namespace(count=0) %}
           {% for b in req.budgets %}{% if b.budget_status == 'draft_satinalma' %}{% set ns_draft.count = ns_draft.count + 1 %}{% endif %}{% endfor %}
-          {% if ns_draft.count > 0 %}
+          {% if ns_draft.count > 0 and req.status != 'confirmed' %}
           <form method="post" action="/requests/{{ req.id }}/send-all-to-manager" style="margin:0;">
             <button type="submit" class="btn btn-primary btn-sm"
                     onclick="return confirm('{{ ns_draft.count }} taslak bütçe manager onayına gönderilsin mi?')">
@@ -219,7 +228,7 @@
         {% endif %}
 
         {# Proje Durumu — aktif statülerde göster, kapama ve sonrasında gizle #}
-        {% if current_user.role in ('admin', 'mudur', 'yonetici', 'satinalma') and req.status not in ('cancelled', 'completed', 'postponed', 'closing', 'closed') %}
+        {% if current_user.role in ('admin', 'mudur', 'yonetici', 'satinalma') and req.status not in ('cancelled', 'completed', 'postponed', 'closing', 'closed', 'confirmed') %}
         <button type="button" class="btn btn-primary btn-sm"
                 data-bs-toggle="modal" data-bs-target="#projectStatusModal">
           <i class="bi bi-flag me-1"></i> Proje Durumu

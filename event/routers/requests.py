@@ -1508,6 +1508,34 @@ async def requests_confirm(
     return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
 
 
+@router.post("/{req_id}/reopen", name="requests_reopen")
+async def requests_reopen(
+    req_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Değişiklik talebi: SADECE GM/admin onaylanmış referansı tekrar düzenlenebilir yapar.
+    Onaylı referans kilitlidir; değişiklik için GM/admin bu butonla kilidi açar."""
+    if not (current_user.is_gm or current_user.role in ("admin", "super_admin")):
+        raise HTTPException(status_code=403, detail="Sadece Genel Müdür veya Admin değişiklik talebinde bulunabilir.")
+    req = db.query(ReqModel).filter(ReqModel.id == req_id).first()
+    if not req:
+        return RedirectResponse(url="/requests", status_code=status.HTTP_302_FOUND)
+    if req.status == "confirmed":
+        if req.confirmed_budget_id:
+            bgt = db.query(Budget).filter(Budget.id == req.confirmed_budget_id).first()
+            if bgt:
+                bgt.budget_status = "approved"
+        req.confirmed_budget_id = None
+        req.status = "budget_ready"
+        req.updated_at = _now()
+        log_activity(db, req.id, "request_reopened",
+                     f"Değişiklik talebi: {current_user.name} onaylı referansı tekrar açtı",
+                     user_id=current_user.id)
+        db.commit()
+    return RedirectResponse(url=f"/requests/{req_id}", status_code=status.HTTP_302_FOUND)
+
+
 @router.post("/{req_id}/cancel-job", name="requests_cancel_job")
 async def requests_cancel_job(
     req_id: str,

@@ -340,10 +340,10 @@
     </div>
     {% endif %}
 
-    {% if hbf.status == 'onaylandi' and current_user.is_admin %}
+    {% if hbf.status == 'onaylandi' and (current_user.is_admin or current_user.role in ('muhasebe','muhasebe_muduru')) %}
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-body">
-        <h6 class="mb-3">Ödeme Kaydı</h6>
+        <h6 class="mb-3">Muhasebe — Ödeme &amp; Kapat</h6>
         <form method="post" action="/hbf/{{ hbf.id }}/pay">
           <div class="mb-2">
             <label class="form-label small">Ödeme Tarihi</label>

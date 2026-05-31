@@ -621,8 +621,9 @@ async def hbf_pay(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403)
+    # miceapp suite: HBF kapatma/ödeme adımı MUHASEBE'ye ait (admin de yapabilir)
+    if not current_user.is_admin and current_user.role not in ("muhasebe", "muhasebe_muduru"):
+        raise HTTPException(status_code=403, detail="Bu adım muhasebe tarafından yapılır.")
     cid = current_user.company_id
     hbf = db.query(HBF).filter(HBF.id == hbf_id, HBF.company_id == cid).first()
     if not hbf or hbf.status != "onaylandi":

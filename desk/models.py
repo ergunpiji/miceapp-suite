@@ -1206,9 +1206,9 @@ HBF_STATUS_LABELS = {
     "taslak":          "Taslak",
     "beklemede":       "Beklemede",
     "mudur_onayladi":  "Müdür Onayladı",
-    "onaylandi":       "Onaylandı",
+    "onaylandi":       "GM Onayladı",
     "reddedildi":      "Reddedildi",
-    "odendi":          "Ödendi",
+    "odendi":          "Kapandı",
 }
 
 
