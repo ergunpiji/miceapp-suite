@@ -13,6 +13,13 @@
     {% endfor %}
   </select>
   {% endif %}
+  {% if ref_status_options is defined %}
+  <select name="ref_status" class="form-select form-select-sm" style="width:150px;height:30px;font-size:12px;padding:2px 6px;">
+    {% for val, lbl in ref_status_options %}
+    <option value="{{ val }}" {% if selected_ref_status == val %}selected{% endif %}>{{ lbl }}</option>
+    {% endfor %}
+  </select>
+  {% endif %}
   <select onchange="dashQuick(this.value)" class="form-select form-select-sm" style="width:104px;height:30px;font-size:12px;padding:2px 6px;">
     <option value="">Dönem…</option>
     <option value="today">Bugün</option>

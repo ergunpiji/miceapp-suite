@@ -31,7 +31,7 @@ def _last_n_months(n: int = 6) -> list[str]:
     return months
 
 
-def _build_financial_stats(db: Session, req_id_filter=None, d_from=None, d_to=None, customer_id=None):
+def _build_financial_stats(db: Session, req_id_filter=None, d_from=None, d_to=None, customer_id=None, ref_status=None):
     """Onaylı faturalardan ciro/kar/aylık veri hesapla — sadece gerçek rakamlar.
 
     Fon havuzu ana referanslarının `kesilen` faturaları ciro'ya dahil EDİLMEZ
@@ -85,6 +85,8 @@ def _build_financial_stats(db: Session, req_id_filter=None, d_from=None, d_to=No
         if not _in_range(_eff(inv.request.check_in if inv.request else None, inv.invoice_date, inv.created_at)):
             continue
         if customer_id and (not inv.request or inv.request.customer_id != customer_id):
+            continue
+        if ref_status and (not inv.request or inv.request.status not in ref_status):
             continue
         if inv.invoice_type == "kesilen":
             total_sale += inv.amount
@@ -144,6 +146,8 @@ def _build_financial_stats(db: Session, req_id_filter=None, d_from=None, d_to=No
             continue
         if customer_id and (not t.related_request or t.related_request.customer_id != customer_id):
             continue
+        if ref_status and (not t.related_request or t.related_request.status not in ref_status):
+            continue
         val = t.amount_try_excl_vat
         sign = +1 if t.direction == "out" else -1
         total_sale += sign * val
@@ -173,6 +177,8 @@ def _build_financial_stats(db: Session, req_id_filter=None, d_from=None, d_to=No
         if not _in_range(_eff(r.request.check_in if r.request else None, r.created_at)):
             continue
         if customer_id and (not r.request or r.request.customer_id != customer_id):
+            continue
+        if ref_status and (not r.request or r.request.status not in ref_status):
             continue
         amt = r.grand_excl_vat or 0
         hbf_gider += amt
@@ -575,12 +581,23 @@ async def dashboard(
     date_from: str = None,
     date_to: str = None,
     customer_id: str = None,
+    ref_status: str = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     from datetime import date as _date
     _today = _date.today()
     cust_id = customer_id.strip() if customer_id and customer_id.strip() else None
+    # İş durumu filtresi (referans status)
+    _REF_STATUS_MAP = {
+        "ongoing":   ["confirmed"],
+        "completed": ["completed"],
+        "closing":   ["closing"],
+        "closed":    ["closed"],
+        "cancelled": ["cancelled"],
+    }
+    ref_status = (ref_status or "").strip()
+    ref_status_set = _REF_STATUS_MAP.get(ref_status)
     try:
         d_from = _date.fromisoformat(date_from) if date_from else _date(_today.year, 1, 1)
     except Exception:
@@ -610,7 +627,7 @@ async def dashboard(
                                      "budget_ready", "offer_sent", "revision"])
             ).count(),
         }
-        financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to, customer_id=cust_id)
+        financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to, customer_id=cust_id, ref_status=ref_status_set)
         recent_requests = (
             base_q.order_by(ReqModel.created_at.desc()).limit(8).all()
         )
@@ -630,7 +647,7 @@ async def dashboard(
                 "my_confirmed":   base_q.filter(ReqModel.status == "confirmed").count(),
                 "total_budgets":  db.query(Budget).filter(Budget.request_id.in_(req_id_filter)).count(),
             }
-            financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to, customer_id=cust_id)
+            financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to, customer_id=cust_id, ref_status=ref_status_set)
             recent_requests = base_q.order_by(ReqModel.created_at.desc()).limit(8).all()
         else:
             # Normal birim müdürü: sadece kendi takımının istatistikleri
@@ -647,7 +664,7 @@ async def dashboard(
                 ).count() if current_user.team_id else 0,
                 "total_budgets":   db.query(Budget).filter(Budget.request_id.in_(req_id_filter)).count(),
             }
-            financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to, customer_id=cust_id)
+            financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to, customer_id=cust_id, ref_status=ref_status_set)
             recent_requests = base_q.order_by(ReqModel.created_at.desc()).limit(8).all()
 
     elif current_user.role == "yonetici":
@@ -672,7 +689,7 @@ async def dashboard(
                                      "budget_ready", "offer_sent", "revision"])
             ).count(),
         }
-        financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to, customer_id=cust_id)
+        financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to, customer_id=cust_id, ref_status=ref_status_set)
         recent_requests = (
             base_q.order_by(ReqModel.created_at.desc()).limit(8).all()
         )
@@ -749,6 +766,14 @@ async def dashboard(
             "d_to":            d_to.isoformat(),
             "customers":       db.query(Customer).order_by(Customer.name).all(),
             "selected_customer_id": cust_id,
+            "ref_status_options": [
+                ("", "Tüm İşler"),
+                ("ongoing", "Aktif İşler"),
+                ("completed", "Tamamlanan"),
+                ("closed", "Kapalı Referanslar"),
+                ("cancelled", "İptal Olan"),
+            ],
+            "selected_ref_status": ref_status,
             "chart_data":      json.dumps({
                 "labels": financial.get("chart_labels", []),
                 "sale":   financial.get("chart_sale", []),
