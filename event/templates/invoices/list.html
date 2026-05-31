@@ -192,9 +192,8 @@
                 </span>
               </td>
               <td class="text-muted">
-                {% if inv.invoice_date %}
-                  {{ inv.invoice_date[8:10] }}.{{ inv.invoice_date[5:7] }}.{{ inv.invoice_date[0:4] }}
-                {% else %}—{% endif %}
+                {% set _d = inv.invoice_date %}
+                {% if _d %}{% if _d is string %}{{ _d[8:10] }}.{{ _d[5:7] }}.{{ _d[0:4] }}{% else %}{{ _d.strftime('%d.%m.%Y') }}{% endif %}{% else %}—{% endif %}
               </td>
               <td class="text-end">
                 ₺{{ '{:,.2f}'.format(inv.amount).replace(',', '.') }}

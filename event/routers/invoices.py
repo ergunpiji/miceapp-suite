@@ -209,8 +209,8 @@ async def invoices_list(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    # Finans rolleri + PM (kendi referanslarının faturalarını görebilir)
-    if current_user.role not in {"admin", "muhasebe_muduru", "muhasebe", "mudur", "yonetici", "asistan", "satinalma"}:
+    # Finans rolleri + PM (kendi referanslarının faturalarını görebilir) + GM/super_admin
+    if current_user.role not in {"admin", "super_admin", "genel_mudur", "muhasebe_muduru", "muhasebe", "mudur", "yonetici", "asistan", "satinalma"} and not current_user.is_gm:
         raise HTTPException(status_code=403)
 
     query = db.query(Invoice).join(Invoice.request)
