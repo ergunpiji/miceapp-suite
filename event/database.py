@@ -546,6 +546,9 @@ def migrate_db():
         _safe_add_column(conn, "requests",  "contact_person_json", "TEXT", "'{}'")
         _safe_add_column(conn, "users",     "org_title_id",        "TEXT")
         _safe_add_column(conn, "services",  "sort_order",          "INTEGER", "0")
+        # miceapp suite: desk role_permissions'ı 'enabled' kolonuyla yaratmış olabilir;
+        # event 'allowed' okuyor → ortak tabloda ikisi de bulunsun.
+        _safe_add_column(conn, "role_permissions", "allowed", "BOOLEAN", "TRUE")
 
         # role_permissions tablosu — yoksa oluştur
         if _is_sqlite:

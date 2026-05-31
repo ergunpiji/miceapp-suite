@@ -263,7 +263,7 @@ def can_approve_closure_final(user: User) -> bool:
 def has_permission(user: User, permission_key: str, db: Session) -> bool:
     """Kullanıcının belirli bir izne sahip olup olmadığını DB'den kontrol eder.
     Admin her zaman izinlidir. DB'de satır yoksa DEFAULT_ROLE_PERMISSIONS'a fallback yapar."""
-    if user.role == "admin":
+    if user.role in ("admin", "super_admin"):   # miceapp suite: super_admin = en üst yetki
         return True
     rp = db.query(RolePermission).filter(
         RolePermission.role == user.role,

@@ -38,7 +38,7 @@ def _get_oa_module(request_id: str, db: Session):
 
 
 def _check_pm_or_admin(current_user: User, db: Session = None):
-    if current_user.role == "admin":
+    if current_user.role in ("admin", "super_admin"):
         return
     if db is not None and not has_permission(current_user, "request_create", db):
         raise HTTPException(status_code=403, detail="Talep oluşturma yetkiniz bulunmuyor.")
