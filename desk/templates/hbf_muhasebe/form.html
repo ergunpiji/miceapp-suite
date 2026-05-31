@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block page_title %}{% if report %}HBF Düzenle{% else %}Yeni HBF{% endif %}{% endblock %}
+{% block topbar_actions %}
+<a href="/hbf-muhasebe" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Liste</a>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+  <form method="post" id="hbfForm"
+        action="{% if report %}/hbf-muhasebe/{{ report.id }}/edit{% else %}/hbf-muhasebe/new{% endif %}">
+    <input type="hidden" name="items_json" id="itemsJson">
+    <input type="hidden" name="next_action" id="nextAction" value="">
+
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label small">Referans (Proje)</label>
+            <select name="request_id" id="requestId" class="form-select" {% if report %}disabled{% endif %} required>
+              <option value="">— Seçin —</option>
+              {% for r in requests %}
+              <option value="{{ r.id }}" {% if report and report.request_id == r.id %}selected{% endif %}>{{ r.request_no }} — {{ r.event_name or r.client_name or '' }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small">Başlık</label>
+            <input type="text" name="title" id="reportTitle" class="form-control"
+                   value="{{ report.title if report else '' }}" placeholder="Harcama formu başlığı">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0">Harcama Kalemleri</h6>
+          <button type="button" class="btn btn-sm btn-outline-primary" onclick="addRow()"><i class="bi bi-plus-lg"></i> Satır Ekle</button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead class="table-light">
+              <tr>
+                <th style="width:130px">Tarih</th>
+                <th>Açıklama</th>
+                <th style="width:230px">Ödeme</th>
+                <th style="width:110px">Belge</th>
+                <th style="width:120px" class="text-end">Tutar (KDV dahil)</th>
+                <th style="width:100px" class="text-end">KDV</th>
+                <th style="width:140px">Belge Eki</th>
+                <th style="width:40px"></th>
+              </tr>
+            </thead>
+            <tbody id="rowsBody"></tbody>
+            <tfoot>
+              <tr class="fw-bold table-light">
+                <td colspan="4" class="text-end">Genel Toplam</td>
+                <td class="text-end" id="grandTotal">₺0,00</td>
+                <td colspan="3"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div class="d-flex gap-2 justify-content-end mt-3">
+          <button type="button" class="btn btn-outline-secondary" onclick="doSave('')"><i class="bi bi-save me-1"></i>Kaydet</button>
+          <button type="button" class="btn btn-success" onclick="doSave('submit')"><i class="bi bi-send me-1"></i>Onaya Gönder</button>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+let REPORT_ID = '{{ report.id if report else "" }}';
+const CREDIT_CARDS = [{% for cc in credit_cards %}{ id: '{{ cc.id }}', name: '{{ cc.name }}', last4: '{{ cc.last4 or "" }}' },{% endfor %}];
+const DOC_TYPES = [{% for v,l in DOC_TYPES %}{ v: '{{ v }}', l: '{{ l }}' },{% endfor %}];
+let rows = [
+{% if report %}{% for it in report.items %}
+  { id: '{{ it.id }}', item_date: '{{ it.item_date }}', description: {{ (it.description or '') | tojson }},
+    payment_method: '{{ it.payment_method }}', credit_card_id: '{{ it.credit_card_id or "" }}',
+    document_type: '{{ it.document_type }}', total_amount: {{ it.total_amount or 0 }}, vat_amount: {{ it.vat_amount or 0 }},
+    document_name: {{ (it.document_name or '') | tojson }} },
+{% endfor %}{% endif %}
+];
+
+function ccOptions(sel){
+  let o = '<option value="">Kart seç</option>';
+  CREDIT_CARDS.forEach(c => { o += `<option value="${c.id}" ${c.id===sel?'selected':''}>${c.name}${c.last4?(' ••'+c.last4):''}</option>`; });
+  return o;
+}
+function docOptions(sel){
+  return DOC_TYPES.map(d => `<option value="${d.v}" ${d.v===sel?'selected':''}>${d.l}</option>`).join('');
+}
+function fmt(n){ return '₺' + (Number(n)||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+function render(){
+  const tb = document.getElementById('rowsBody');
+  tb.innerHTML = '';
+  let grand = 0;
+  rows.forEach((r,i) => {
+    grand += Number(r.total_amount)||0;
+    const isCC = r.payment_method === 'kredi_karti';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="date" class="form-control form-control-sm" value="${r.item_date||''}" onchange="rows[${i}].item_date=this.value"></td>
+      <td><input type="text" class="form-control form-control-sm" value="${(r.description||'').replace(/"/g,'&quot;')}" onchange="rows[${i}].description=this.value"></td>
+      <td>
+        <select class="form-select form-select-sm mb-1" onchange="rows[${i}].payment_method=this.value; render()">
+          <option value="nakit" ${!isCC?'selected':''}>Nakit</option>
+          <option value="kredi_karti" ${isCC?'selected':''}>Kredi Kartı</option>
+        </select>
+        ${isCC ? `<select class="form-select form-select-sm" onchange="rows[${i}].credit_card_id=this.value">${ccOptions(r.credit_card_id)}</select>` : ''}
+      </td>
+      <td><select class="form-select form-select-sm" onchange="rows[${i}].document_type=this.value; render()">${docOptions(r.document_type||'fis')}</select></td>
+      <td><input type="number" step="0.01" class="form-control form-control-sm text-end" value="${r.total_amount||0}" onchange="rows[${i}].total_amount=parseFloat(this.value)||0; render()"></td>
+      <td><input type="number" step="0.01" class="form-control form-control-sm text-end" value="${r.vat_amount||0}" ${r.document_type==='belgesiz'?'disabled':''} onchange="rows[${i}].vat_amount=parseFloat(this.value)||0"></td>
+      <td>${ r.id ? (r.document_name ? `<span class="small text-success" title="${r.document_name}"><i class="bi bi-paperclip"></i> ekli</span> ` : '') + `<input type="file" class="form-control form-control-sm" style="font-size:11px" onchange="uploadDoc(${i}, this)">` : '<span class="small text-muted">önce kaydet</span>' }</td>
+      <td class="text-center"><button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="rows.splice(${i},1); render()"><i class="bi bi-x-lg"></i></button></td>`;
+    tb.appendChild(tr);
+  });
+  document.getElementById('grandTotal').textContent = fmt(grand);
+}
+function addRow(){ rows.push({ item_date:'', description:'', payment_method:'nakit', credit_card_id:'', document_type:'fis', total_amount:0, vat_amount:0 }); render(); }
+
+async function doSave(action){
+  const reqSel = document.getElementById('requestId');
+  if (!REPORT_ID && !reqSel.value){ alert('Referans seçmelisiniz.'); return; }
+  document.getElementById('itemsJson').value = JSON.stringify(rows);
+  document.getElementById('nextAction').value = action;
+  document.getElementById('hbfForm').submit();
+}
+
+async function uploadDoc(i, input){
+  const file = input.files[0]; if(!file) return;
+  if(!rows[i].id){ alert('Bu satır henüz kaydedilmemiş.'); input.value=''; return; }
+  const fd = new FormData(); fd.append('file', file);
+  const res = await fetch(`/hbf-muhasebe/${REPORT_ID}/upload/${rows[i].id}`, { method:'POST', body:fd });
+  const data = await res.json();
+  if(data.ok){ rows[i].document_name = data.name; render(); } else { alert(data.error||'Yüklenemedi'); }
+}
+
+render();
+if (rows.length === 0) addRow();
+</script>
+{% endblock %}

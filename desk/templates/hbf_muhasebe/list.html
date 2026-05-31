@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block page_title %}HBF — Muhasebe{% endblock %}
+{% block topbar_actions %}
+<a href="/hbf-muhasebe/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Yeni HBF</a>
+{% endblock %}
 
 {% block content %}
 <div class="container-fluid px-0">
@@ -13,6 +16,8 @@
        class="btn btn-sm {% if status_filter == 'kapandi' %}btn-success{% else %}btn-outline-success{% endif %}">Kapandı</a>
     <a href="/hbf-muhasebe?status_filter=all"
        class="btn btn-sm {% if status_filter == 'all' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Hepsi</a>
+    <a href="/hbf-muhasebe?status_filter=mine"
+       class="btn btn-sm {% if status_filter == 'mine' %}btn-dark{% else %}btn-outline-dark{% endif %}">Benim Doldurduklarım</a>
   </div>
 
   {% if reports %}
@@ -42,9 +47,13 @@
               <span class="badge bg-{{ STATUS_COLORS.get(r.status,'secondary') }}">{{ STATUS_LABELS.get(r.status, r.status) }}</span>
             </td>
             <td class="text-end pe-3">
+              {% if r.status in ('draft','rejected') and r.submitted_by == current_user.id %}
+              <a href="/hbf-muhasebe/{{ r.id }}/edit" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil me-1"></i>Düzenle</a>
+              {% else %}
               <a href="/hbf-muhasebe/{{ r.id }}" class="btn btn-sm {% if r.status == 'onaylandi' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
                 {% if r.status == 'onaylandi' %}<i class="bi bi-cash-coin me-1"></i>Öde & Kapat{% else %}<i class="bi bi-eye me-1"></i>Görüntüle{% endif %}
               </a>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}

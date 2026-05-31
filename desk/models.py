@@ -420,6 +420,7 @@ class CreditCardTxn(Base):
     ref_id = Column(String(36), ForeignKey("references.id"), nullable=True)
     invoice_id = Column(String(36), ForeignKey("invoices.id"), nullable=True)
     instruction_id = Column(String(36), ForeignKey("payment_instructions.id"), nullable=True)
+    expense_report_id = Column(String(36), nullable=True)  # HBF kredi kartı kalemi bağı (limit düşüşü)
 
     card = relationship("CreditCard", back_populates="txns")
     statement = relationship("CreditCardStatement", back_populates="txns")
@@ -1351,6 +1352,18 @@ class ExpenseReport(Base):
     @property
     def grand_vat(self) -> float:
         return round(sum((i.vat_amount or 0) for i in self.items), 2)
+
+
+class DeskRequest(Base):
+    """event'in requests tablosunu okumak için bridge (HBF referans seçimi)."""
+    __tablename__ = "requests"
+    __table_args__ = {"extend_existing": True}
+
+    id           = Column(String(36), primary_key=True)
+    request_no   = Column(String(50))
+    client_name  = Column(String(200))
+    event_name   = Column(String(200))
+    status       = Column(String(30))
 
 
 class ExpenseItem(Base):
