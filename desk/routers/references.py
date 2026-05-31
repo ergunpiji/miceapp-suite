@@ -98,24 +98,9 @@ async def reference_new_get(
     db: Session = Depends(get_db),
     cid: int = Depends(get_company_id),
 ):
-    from access_policy import visible_customers_query
-    customers = (
-        visible_customers_query(db, current_user)
-        .filter(Customer.code.is_not(None), Customer.active == True)  # noqa: E712
-        .order_by(Customer.name)
-        .all()
-    )
-    return templates.TemplateResponse(
-        "references/form.html",
-        {
-            "request": request,
-            "current_user": current_user,
-            "ref": None,
-            "customers": customers,
-            "event_types": SALES_EVENT_TYPES,
-            "page_title": "Yeni Referans",
-        },
-    )
+    # miceapp suite: Referans yaratma SADECE event (miceapp/satış) tarafında yapılır.
+    # micedesk referans OLUŞTURMAZ — yalnızca görüntüler. Bu yüzden form devre dışı.
+    return RedirectResponse(url="/references", status_code=303)
 
 
 @router.post("/new", name="reference_new_post")
@@ -131,61 +116,9 @@ async def reference_new_post(
     db: Session = Depends(get_db),
     cid: int = Depends(get_company_id),
 ):
-    from access_policy import visible_customers_query
-    customers = (
-        visible_customers_query(db, current_user)
-        .filter(Customer.code.is_not(None), Customer.active == True)  # noqa: E712
-        .order_by(Customer.name)
-        .all()
-    )
-
-    customer = db.query(Customer).filter(Customer.id == customer_id, Customer.company_id == cid).first()
-    if not customer:
-        return templates.TemplateResponse(
-            "references/form.html",
-            {
-                "request": request, "current_user": current_user,
-                "ref": None, "customers": customers,
-                "event_types": SALES_EVENT_TYPES, "page_title": "Yeni Referans",
-                "error": "Geçersiz müşteri seçimi.",
-            },
-            status_code=422,
-        )
-
-    ci = date.fromisoformat(check_in) if check_in else date.today()
-    co = date.fromisoformat(check_out) if check_out else ci
-
-    # Ref no otomatik üretilir: TIP-MUS-DDMMYYYY-a
-    try:
-        ref_no = generate_ref_no(db, event_type, customer.code, ci, str(cid))
-    except ValueError as exc:
-        return templates.TemplateResponse(
-            "references/form.html",
-            {
-                "request": request, "current_user": current_user,
-                "ref": None, "customers": customers,
-                "event_types": SALES_EVENT_TYPES, "page_title": "Yeni Referans",
-                "error": str(exc),
-            },
-            status_code=422,
-        )
-
-    ref = Reference(
-        ref_no=ref_no,
-        customer_id=customer_id,
-        title=title.strip(),
-        event_type=event_type,
-        check_in=ci,
-        check_out=co,
-        status="aktif",
-        notes=notes.strip(),
-        created_by=current_user.id,
-        owner_id=current_user.id,  # RBAC v2: proje sahibi
-        company_id=cid,
-    )
-    db.add(ref)
-    db.commit()
-    return RedirectResponse(url=f"/references/{ref.id}", status_code=status.HTTP_302_FOUND)
+    # miceapp suite: micedesk referans OLUŞTURMAZ — referanslar event (satış) tarafında açılır.
+    # Doğrudan POST denense bile engellenir.
+    return RedirectResponse(url="/references", status_code=303)
 
 
 @router.get("/{ref_id}", response_class=HTMLResponse, name="reference_detail")

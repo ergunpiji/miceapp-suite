@@ -2,9 +2,7 @@
 {% block page_title %}Referanslar{% endblock %}
 
 {% block topbar_actions %}
-{% if can_edit(request, 'references') %}
-<a href="/references/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Yeni Referans</a>
-{% endif %}
+{# miceapp suite: Referans event (satış/miceapp) tarafında açılır — micedesk yalnızca görüntüler, yaratmaz #}
 {% endblock %}
 
 {% block content %}

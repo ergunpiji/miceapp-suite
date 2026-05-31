@@ -248,11 +248,7 @@ function setThisYear() {
         <i class="bi bi-cash-stack me-1"></i>Gider Ekle
       </a>
       {% endif %}
-      {% if can_edit(request, 'references') %}
-      <a href="/references/new" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-folder-plus me-1"></i>Yeni Referans
-      </a>
-      {% endif %}
+      {# miceapp suite: Yeni Referans butonu kaldırıldı — referans event tarafında açılır #}
       {% if can_edit(request, 'employees') %}
       <a href="/employees/new" class="btn btn-sm btn-outline-info">
         <i class="bi bi-person-plus me-1"></i>Yeni Çalışan
