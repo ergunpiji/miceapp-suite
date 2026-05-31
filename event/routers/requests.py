@@ -38,12 +38,8 @@ def _get_oa_module(request_id: str, db: Session):
 
 
 def _check_pm_or_admin(current_user: User, db: Session = None):
-    if current_user.role in ("admin", "super_admin"):
-        return
-    if db is not None and not has_permission(current_user, "request_create", db):
-        raise HTTPException(status_code=403, detail="Talep oluşturma yetkiniz bulunmuyor.")
-    elif db is None and current_user.role not in ("mudur", "yonetici", "asistan", "project_manager"):
-        raise HTTPException(status_code=403, detail="Bu sayfa Proje Yöneticilerine özeldir.")
+    # miceapp suite: event'te TÜM kullanıcılar referans/talep oluşturabilir (yetki kısıtı yok).
+    return
 
 
 def _ensure_reference(db: Session, req, current_user: User) -> None:

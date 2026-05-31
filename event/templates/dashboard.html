@@ -104,6 +104,11 @@
 {% set nc = request.state.nav_counts %}
 <div class="mb-4 d-flex flex-wrap gap-2">
 
+  {# miceapp suite: TÜM kullanıcılar referans açabilir — koşulsuz hızlı tuş #}
+  <a href="/requests/new" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-circle me-1"></i> Yeni Referans
+  </a>
+
   {# ── ADMIN / GM ── #}
   {% if current_user.role == 'admin' or current_user.is_gm %}
   <a href="/requests" class="btn btn-outline-secondary btn-sm">
@@ -130,9 +135,6 @@
 
   {# ── BİRİM MÜDÜRÜ (mudur, GM değil) ── #}
   {% elif current_user.role == 'mudur' %}
-  <a href="/requests/new" class="btn btn-primary btn-sm">
-    <i class="bi bi-plus-circle me-1"></i> Yeni Talep
-  </a>
   <a href="/requests" class="btn btn-outline-secondary btn-sm">
     <i class="bi bi-list-ul me-1"></i> Tüm Referanslar
   </a>
@@ -151,9 +153,6 @@
 
   {# ── YÖNETİCİ (PM) ── #}
   {% elif current_user.role == 'yonetici' %}
-  <a href="/requests/new" class="btn btn-primary btn-sm">
-    <i class="bi bi-plus-circle me-1"></i> Yeni Talep
-  </a>
   <a href="/requests" class="btn btn-outline-secondary btn-sm">
     <i class="bi bi-list-ul me-1"></i> Referanslarım
   </a>
@@ -173,9 +172,6 @@
 
   {# ── ASİSTAN ── #}
   {% elif current_user.role == 'asistan' %}
-  <a href="/requests/new" class="btn btn-primary btn-sm">
-    <i class="bi bi-plus-circle me-1"></i> Yeni Talep
-  </a>
   <a href="/requests" class="btn btn-outline-secondary btn-sm">
     <i class="bi bi-list-ul me-1"></i> Referanslarım
   </a>
