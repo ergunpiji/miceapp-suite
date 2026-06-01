@@ -200,8 +200,20 @@
     </div>
     {% endif %}
 
+    {# ── Muhasebe: GM onayı bekleniyor uyarısı ── #}
+    {% if invoice.approval_status == 'onay_bekliyor' and is_accounting and invoice.current_approver_id %}
+    <div class="alert d-flex align-items-center gap-2 mb-3"
+         style="background:#fffbeb; border:1px solid #fcd34d; border-radius:8px;">
+      <i class="bi bi-hourglass-split text-warning fs-5"></i>
+      <div>
+        <div class="fw-semibold" style="font-size:14px; color:#92400e;">GM Onayı Bekleniyor</div>
+        <div class="text-muted" style="font-size:12px;">Fatura onay zinciri tamamlanmadan kesilemez.</div>
+      </div>
+    </div>
+    {% endif %}
+
     {# ── Muhasebe: Fatura Kes Paneli ── #}
-    {% if invoice.approval_status == 'onay_bekliyor' and is_accounting %}
+    {% if invoice.approval_status == 'onay_bekliyor' and is_accounting and not invoice.current_approver_id %}
     <div class="card border-0 shadow-sm mb-3" id="muhasebeKesPanel"
          style="border-left: 4px solid #16a34a !important;">
       <div class="card-body">

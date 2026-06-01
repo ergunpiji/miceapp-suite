@@ -847,6 +847,9 @@ async def invoice_muhasebe_cut(
         raise HTTPException(404, "Fatura bulunamadı.")
     if inv.approval_status == "approved":
         raise HTTPException(400, "Fatura zaten kesilmiş.")
+    # GM onayı tamamlanmadan kesilemez
+    if inv.current_approver_id is not None:
+        raise HTTPException(400, "Fatura onay zinciri tamamlanmadan kesilemez. Lütfen GM onayını bekleyin.")
 
     if invoice_no.strip():
         inv.invoice_no = invoice_no.strip()

@@ -85,10 +85,14 @@
           </td>
           {% if not show_archived %}
           <td class="text-end pe-2">
-            {% if inv.approval_status == 'onay_bekliyor' %}
+            {% if inv.approval_status == 'onay_bekliyor' and not inv.current_approver_id %}
             <a href="/invoices/{{ inv.id }}?cut=1" class="btn btn-success btn-sm">
               <i class="bi bi-check-lg me-1"></i>Fatura Kes
             </a>
+            {% elif inv.approval_status == 'onay_bekliyor' and inv.current_approver_id %}
+            <span class="text-muted" style="font-size:11px; white-space:nowrap;">
+              <i class="bi bi-hourglass-split me-1"></i>GM Onayı Bekleniyor
+            </span>
             {% elif inv.is_split_parent %}
             <span class="badge bg-light text-muted border" title="Bölünmüş fatura">Bölündü</span>
             {% elif inv.split_parent_id %}
