@@ -282,7 +282,17 @@
        class="sidebar-link {% if cp == '/taleplerim' %}active{% endif %}">
       <i class="bi bi-list-ul nav-icon"></i> Taleplerim
     </a>
-    {% if nc.inv_my_pending %}
+
+    {# Müdür / GM / Admin: Fatura Talep Onayları — her zaman görünür #}
+    {% if current_user.role in ('admin', 'mudur', 'muhasebe_muduru') or current_user.is_gm %}
+    <a href="/invoices?view=my_pending"
+       class="sidebar-link {% if request.query_params.get('view') == 'my_pending' %}active{% endif %}">
+      <i class="bi bi-clipboard2-check nav-icon"></i> Fatura Talep Onayları
+      {% if nc.inv_my_pending %}
+      <span class="nav-badge ms-auto" style="background:#f59e0b;">{{ nc.inv_my_pending }}</span>
+      {% endif %}
+    </a>
+    {% elif nc.inv_my_pending %}
     <a href="/invoices?view=my_pending"
        class="sidebar-link {% if request.query_params.get('view') == 'my_pending' %}active{% endif %}">
       <i class="bi bi-hourglass-split nav-icon" style="color:#f59e0b;"></i>
