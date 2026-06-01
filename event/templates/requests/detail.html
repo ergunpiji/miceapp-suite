@@ -1514,7 +1514,7 @@ document.addEventListener('DOMContentLoaded', function() {
             {% for inv in pending_invoices %}
             {% set _row_approve = inv.id in approvable_invoice_ids %}
             {% set _approver = inv.current_approver or (inv.request.creator if inv.request else None) %}
-            <tr>
+            <tr style="cursor:pointer;" onclick="window.location.href='/invoices/{{ inv.id }}/detail'">
               {% set type_colors = {
                 'kesilen':      ('bg-success',  'text-success'),
                 'gelen':        ('bg-danger',   'text-danger'),
@@ -1533,7 +1533,8 @@ document.addEventListener('DOMContentLoaded', function() {
               <td class="text-end fw-semibold">₺{{ '{:,.2f}'.format(inv.total_amount).replace(',', '.') }}</td>
               <td>
                 {% if inv.document_path %}
-                <a href="/invoices/{{ inv.id }}/document" target="_blank" class="btn btn-xs btn-outline-secondary py-0 px-1" style="font-size:11px;">
+                <a href="/invoices/{{ inv.id }}/document" target="_blank" class="btn btn-xs btn-outline-secondary py-0 px-1" style="font-size:11px;"
+                   onclick="event.stopPropagation()">
                   <i class="bi bi-file-earmark"></i>
                 </a>
                 {% else %}<span class="text-muted" style="font-size:11px;">—</span>{% endif %}
@@ -1551,12 +1552,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 {% endif %}
               </td>
               <td class="text-end" style="white-space:nowrap;">
-                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 me-1"
-                        title="Fatura İçeriğini Görüntüle"
-                        data-invoice='{{ inv.to_dict() | tojson }}'
-                        onclick="openInvoiceDetailModal(JSON.parse(this.dataset.invoice))">
-                  <i class="bi bi-eye"></i>
-                </button>
+                <a href="/invoices/{{ inv.id }}/detail" class="btn btn-sm btn-outline-secondary py-0 px-1 me-1"
+                   title="Fatura Talep Formunu Aç" onclick="event.stopPropagation()">
+                  <i class="bi bi-arrow-right"></i>
+                </a>
                 {% if _row_approve %}
                 <form method="post" action="/invoices/{{ inv.id }}/approve" class="d-inline">
                   <button type="submit" class="btn btn-sm btn-primary py-0 px-2"

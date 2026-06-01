@@ -203,7 +203,6 @@ async def invoice_detail(
     from models import INVOICE_LOG_ACTIONS
     inv = _get_invoice_or_404(db, invoice_id)
 
-    # Fatura kalemlerini form.html'nin beklediği formata çevir
     req = db.query(ReqModel).filter(ReqModel.id == inv.request_id).first() if inv.request_id else None
     undoc_entries = req.undocumented_entries if req else []
 
@@ -221,6 +220,21 @@ async def invoice_detail(
     except Exception:
         pass
 
+    # Referansın tüm faturaları — cari finansal özet için
+    req_gelirler, req_giderler = [], []
+    req_gelir_total, req_gider_total = 0.0, 0.0
+    if req:
+        req_all_invoices = (
+            db.query(Invoice)
+            .filter(Invoice.request_id == req.id)
+            .order_by(Invoice.invoice_date)
+            .all()
+        )
+        req_gelirler = [i for i in req_all_invoices if i.invoice_type in ("kesilen", "komisyon")]
+        req_giderler = [i for i in req_all_invoices if i.invoice_type in ("gelen",)]
+        req_gelir_total = round(sum(i.total_amount or 0 for i in req_gelirler), 2)
+        req_gider_total = round(sum(i.total_amount or 0 for i in req_giderler), 2)
+
     return templates.TemplateResponse("invoices/form.html", {
         "request":          request,
         "current_user":     current_user,
@@ -231,12 +245,16 @@ async def invoice_detail(
         "undoc_entries":    undoc_entries,
         "invoice_types":    INVOICE_TYPES,
         "edit_mode":        False,
-        "view_mode":        True,          # read-only, onay paneli göster
+        "view_mode":        True,
         "statement_prefill": None,
         "from_statement":   None,
         "can_approve_this": can_approve_this,
         "logs":             logs,
         "log_actions":      INVOICE_LOG_ACTIONS,
+        "req_gelirler":     req_gelirler,
+        "req_giderler":     req_giderler,
+        "req_gelir_total":  req_gelir_total,
+        "req_gider_total":  req_gider_total,
     })
 
 

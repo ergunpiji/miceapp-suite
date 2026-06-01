@@ -3,7 +3,16 @@
 {% block page_title_block %}{{ page_title }}{% endblock %}
 
 {% block topbar_actions %}
-{% if edit_mode and invoice %}
+{% if view_mode %}
+<a href="/taleplerim" class="btn btn-outline-secondary btn-sm">
+  <i class="bi bi-arrow-left me-1"></i> Taleplerim
+</a>
+{% if selected_req %}
+<a href="/requests/{{ selected_req.id }}#tab-talepler" class="btn btn-outline-secondary btn-sm ms-1">
+  <i class="bi bi-folder2 me-1"></i> Referans
+</a>
+{% endif %}
+{% elif edit_mode and invoice %}
 {% if invoice.request_id %}
 <a href="/requests/{{ invoice.request_id }}#tab-financial" class="btn btn-outline-secondary btn-sm">
   <i class="bi bi-arrow-left me-1"></i> Geri
@@ -127,12 +136,95 @@
         <div class="mb-3 px-1">
           <div class="text-muted small fw-semibold mb-1">İşlem Geçmişi</div>
           {% for log in logs %}
+          {% set _lact = log_actions.get(log.action, ('', 'bi-dot', 'secondary')) %}
           <div class="d-flex align-items-center gap-2 small text-muted mb-1">
-            <i class="bi {{ log_actions.get(log.action, ('','bi-dot',''))[1] }}"></i>
-            <span>{{ log.created_at.strftime('%d.%m.%Y %H:%M') if log.created_at else '' }}</span>
-            <span>{{ log.note or log.action }}</span>
+            <i class="bi {{ _lact[1] }}" style="color:{{ {'success':'#16a34a','danger':'#dc2626','warning':'#d97706','info':'#0284c7','primary':'#4f46e5'}.get(_lact[2], '#64748b') }};"></i>
+            <span class="text-muted">{{ log.created_at.strftime('%d.%m.%Y %H:%M') if log.created_at else '' }}</span>
+            {% if log.actor %}<span class="fw-semibold" style="color:#334155;">{{ log.actor.full_name }}</span>{% endif %}
+            <span>{{ log.note or _lact[0] or log.action }}</span>
           </div>
           {% endfor %}
+        </div>
+        {% endif %}
+
+        {# ── Cari / Referans Finansal Özet ── sadece view_mode'da ve referans varsa ── #}
+        {% if view_mode and selected_req and (req_gelirler is defined and (req_gelirler or req_giderler)) %}
+        <div class="row g-2 mb-4">
+          <div class="col-12">
+            <div class="fw-semibold small text-muted mb-2">
+              <i class="bi bi-bar-chart-line me-1"></i>
+              {{ selected_req.request_no }} — Referans Finansal Özet
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="card" style="border:1px solid #86efac;">
+              <div class="card-header py-1 px-3" style="background:#f0fdf4; border-bottom:1px solid #86efac;">
+                <span class="fw-bold text-success" style="font-size:12px;"><i class="bi bi-arrow-down-circle me-1"></i>Gelirler (Müşteriye Kesilen)</span>
+              </div>
+              <div class="card-body p-0">
+                <table class="table table-sm mb-0" style="font-size:12px;">
+                  <thead><tr style="background:#f8fafc;">
+                    <th class="ps-3">Fatura No</th><th>Tarih</th><th class="text-end pe-3">Tutar</th>
+                  </tr></thead>
+                  <tbody>
+                  {% for gi in req_gelirler %}
+                  <tr>
+                    <td class="ps-3 text-muted">{{ gi.invoice_no or '—' }}</td>
+                    <td class="text-muted">{{ gi.invoice_date or '—' }}</td>
+                    <td class="text-end pe-3 fw-semibold">₺{{ '{:,.0f}'.format(gi.total_amount or 0).replace(',','.') }}</td>
+                  </tr>
+                  {% else %}
+                  <tr><td colspan="3" class="ps-3 text-muted py-2" style="font-size:11px;">Henüz kesilen fatura yok</td></tr>
+                  {% endfor %}
+                  </tbody>
+                </table>
+                <div class="d-flex justify-content-between align-items-center px-3 py-1 border-top" style="background:#f0fdf4;">
+                  <span class="text-muted" style="font-size:11px;">Toplam</span>
+                  <span class="fw-bold text-success" style="font-size:13px;">₺{{ '{:,.0f}'.format(req_gelir_total).replace(',','.') }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="card" style="border:1px solid #fca5a5;">
+              <div class="card-header py-1 px-3" style="background:#fef2f2; border-bottom:1px solid #fca5a5;">
+                <span class="fw-bold text-danger" style="font-size:12px;"><i class="bi bi-arrow-up-circle me-1"></i>Giderler (Tedarikçiden Gelen)</span>
+              </div>
+              <div class="card-body p-0">
+                <table class="table table-sm mb-0" style="font-size:12px;">
+                  <thead><tr style="background:#f8fafc;">
+                    <th class="ps-3">Fatura No</th><th>Tarih</th><th class="text-end pe-3">Tutar</th>
+                  </tr></thead>
+                  <tbody>
+                  {% for gi in req_giderler %}
+                  <tr>
+                    <td class="ps-3 text-muted">{{ gi.invoice_no or '—' }}</td>
+                    <td class="text-muted">{{ gi.invoice_date or '—' }}</td>
+                    <td class="text-end pe-3 fw-semibold">₺{{ '{:,.0f}'.format(gi.total_amount or 0).replace(',','.') }}</td>
+                  </tr>
+                  {% else %}
+                  <tr><td colspan="3" class="ps-3 text-muted py-2" style="font-size:11px;">Henüz gelen fatura yok</td></tr>
+                  {% endfor %}
+                  </tbody>
+                </table>
+                <div class="d-flex justify-content-between align-items-center px-3 py-1 border-top" style="background:#fef2f2;">
+                  <span class="text-muted" style="font-size:11px;">Toplam</span>
+                  <span class="fw-bold text-danger" style="font-size:13px;">₺{{ '{:,.0f}'.format(req_gider_total).replace(',','.') }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          {% if req_gelir_total or req_gider_total %}
+          <div class="col-12">
+            <div class="d-flex justify-content-end gap-4 px-2 py-1 rounded" style="background:#f8fafc; font-size:13px;">
+              <span class="text-muted">Net Kar/Zarar:</span>
+              {% set _net = req_gelir_total - req_gider_total %}
+              <span class="fw-bold {{ 'text-success' if _net >= 0 else 'text-danger' }}">
+                {{ '+' if _net >= 0 else '' }}₺{{ '{:,.0f}'.format(_net).replace(',','.')  }}
+              </span>
+            </div>
+          </div>
+          {% endif %}
         </div>
         {% endif %}
         {% endif %}
