@@ -567,6 +567,11 @@ def migrate_db():
         _safe_add_column(conn, "expense_reports", "general_expense_id",  "VARCHAR(36)")
         # Ön ödeme talebi: tenant + ödeme/ihtiyaç tarihi (desk muhasebe akışı için)
         _safe_add_column(conn, "prepayment_requests", "company_id",  "VARCHAR(36)")
+        # ── Multi-tenant: Request, Invoice, Budget, VendorPrepayment ──────────
+        _safe_add_column(conn, "requests",           "company_id", "VARCHAR(36)")
+        _safe_add_column(conn, "invoices",           "company_id", "VARCHAR(36)")
+        _safe_add_column(conn, "budgets",            "company_id", "VARCHAR(36)")
+        _safe_add_column(conn, "vendor_prepayments", "company_id", "VARCHAR(36)")
         _safe_add_column(conn, "prepayment_requests", "needed_date", "VARCHAR(10)")
         _safe_add_column(conn, "prepayment_requests", "document_path", "VARCHAR(500)")
         _safe_add_column(conn, "prepayment_requests", "document_name", "VARCHAR(255)")
@@ -1492,6 +1497,50 @@ def migrate_db():
         print(f"  [migrate] Satın Alma unvanları eklenemedi: {e}")
     finally:
         db.close()
+
+
+def _seed_event_company() -> None:
+    """Event app için varsayılan şirket kaydı oluşturur ve mevcut verileri atar.
+    Idempotent: companies tablosunda 'event' slug'ı varsa tekrar yazmaz."""
+    from sqlalchemy import text as _text
+    EVENT_COMPANY_ID = "00000000-0000-0000-0000-000000000001"
+    with engine.begin() as conn:
+        # companies tablosu yoksa oluşturma — desk zaten oluşturmuştur
+        try:
+            # Şirket var mı?
+            row = conn.execute(_text(
+                "SELECT id FROM companies WHERE id = :cid"
+            ), {"cid": EVENT_COMPANY_ID}).fetchone()
+            if not row:
+                conn.execute(_text("""
+                    INSERT INTO companies (id, name, short_name, email, active, created_at)
+                    VALUES (:id, :name, :sname, :email, TRUE, NOW())
+                    ON CONFLICT (id) DO NOTHING
+                """), {
+                    "id": EVENT_COMPANY_ID,
+                    "name": "miceapp Event",
+                    "sname": "event",
+                    "email": "event@miceapp.net",
+                })
+                print(f"  [seed] Event şirketi oluşturuldu (id={EVENT_COMPANY_ID})")
+            # Mevcut verileri event şirketine ata (company_id NULL olanları)
+            for tbl in ("requests", "invoices", "budgets", "vendor_prepayments"):
+                result = conn.execute(_text(
+                    f"UPDATE {tbl} SET company_id = :cid WHERE company_id IS NULL"
+                ), {"cid": EVENT_COMPANY_ID})
+                if result.rowcount:
+                    print(f"  [seed] {tbl}: {result.rowcount} kayıt event şirketine atandı.")
+            # Kullanıcılar: event'e ait olanlar (company_id NULL) → event şirketine
+            result = conn.execute(_text(
+                "UPDATE users SET company_id = :cid WHERE company_id IS NULL"
+            ), {"cid": EVENT_COMPANY_ID})
+            if result.rowcount:
+                print(f"  [seed] users: {result.rowcount} kullanıcı event şirketine atandı.")
+        except Exception as e:
+            print(f"  [seed] Event şirketi seed hatası (atlandı): {e}")
+
+
+EVENT_COMPANY_ID = "00000000-0000-0000-0000-000000000001"
 
 
 if __name__ == "__main__":

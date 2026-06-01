@@ -163,6 +163,14 @@ def get_current_user(
     return user
 
 
+def get_company_id(
+    current_user: User = Depends(get_current_user),
+) -> str:
+    """Tenant company_id — user'ın şirketi, yoksa varsayılan event şirketi."""
+    from database import EVENT_COMPANY_ID
+    return current_user.company_id or EVENT_COMPANY_ID
+
+
 def get_current_user_optional(
     request: Request,
     db: Session = Depends(get_db),

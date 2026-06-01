@@ -561,6 +561,7 @@ class Request(Base):
     __tablename__ = "requests"
 
     id               = Column(String(36), primary_key=True, default=_uuid)
+    company_id       = Column(String(36), nullable=True, index=True)   # tenant
     request_no       = Column(String(50), unique=True, nullable=False, index=True)
     client_name      = Column(String(255), nullable=False)
     customer_id      = Column(String(36), ForeignKey("customers.id"), nullable=True)
@@ -790,6 +791,7 @@ class Budget(Base):
     __tablename__ = "budgets"
 
     id                   = Column(String(36), primary_key=True, default=_uuid)
+    company_id           = Column(String(36), nullable=True, index=True)   # tenant
     request_id           = Column(String(36), ForeignKey("requests.id"), nullable=False)
     venue_name           = Column(String(255), default="")
     venue_id             = Column(String(36), nullable=True)   # Venue.id bağlantısı (isteğe bağlı)
@@ -1148,6 +1150,7 @@ class VendorPrepayment(Base):
     __tablename__ = "vendor_prepayments"
 
     id             = Column(String(36), primary_key=True, default=_uuid)
+    company_id     = Column(String(36), nullable=True, index=True)   # tenant
     vendor_id      = Column(String(36), ForeignKey("vendors.id"), nullable=False, index=True)
     request_id     = Column(String(36), ForeignKey("requests.id"), nullable=True, index=True)
     amount         = Column(Float, default=0.0)           # ön ödeme tutarı
@@ -1174,6 +1177,7 @@ class Invoice(Base):
     __tablename__ = "invoices"
 
     id            = Column(String(36), primary_key=True, default=_uuid)
+    company_id    = Column(String(36), nullable=True, index=True)   # tenant
     request_id    = Column(String(36), ForeignKey("requests.id"), nullable=True, index=True)
     vendor_id     = Column(String(36), ForeignKey("vendors.id"), nullable=True, index=True)
     invoice_type  = Column(String(32), nullable=False)   # kesilen|gelen|komisyon|iade_kesilen|iade_gelen

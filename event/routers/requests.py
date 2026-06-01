@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 
-from auth import get_current_user, has_permission
+from auth import get_current_user, has_permission, get_company_id
 from database import generate_ref_no, get_db
 from models import (
     Budget, Customer, CustomCategory, EmailTemplate, EventType, PrepaymentRequest,
@@ -113,10 +113,12 @@ async def requests_list(
     view: str = "",
 ):
     """Rol bazlı talep listesi"""
-    query = db.query(ReqModel)
-
-    # NOT: requests tablosunda company_id kolonu henüz YOK (model tanımlıyor ama DB'de yok).
-    # Tenant filtresi, kolon eklenip backfill yapıldıktan sonra eklenmeli (bkz. denetim raporu).
+    from database import EVENT_COMPANY_ID
+    from sqlalchemy import or_ as _or_cid
+    _cid = current_user.company_id or EVENT_COMPANY_ID
+    query = db.query(ReqModel).filter(
+        _or_cid(ReqModel.company_id == _cid, ReqModel.company_id.is_(None))
+    )
 
     # ── ADIM 1: Rol bazlı BASE SCOPE — tüm view filtreleri bunun üstüne eklenir ──
     if current_user.is_gm:
@@ -679,6 +681,7 @@ async def requests_create(
         funding_source=funding_source.strip(),
         parent_fund_request_id=parent_fund_request_id or None,
         team_id=_team_id,
+        company_id=current_user.company_id,
         created_by=current_user.id,
         created_at=_now(),
         updated_at=_now(),

@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from storage import save_upload, delete_upload, serve_upload as _serve_upload
 from sqlalchemy.orm import Session
 
-from auth import get_current_user
+from auth import get_current_user, get_company_id
 from database import get_db
 from models import Budget, Customer, Invoice, InvoiceLog, VendorPrepayment, INVOICE_TYPES, INVOICE_TYPE_LABELS, BELGESIZ_TYPES, Request as ReqModel, UndocumentedEntry, Vendor, User, _uuid, _now
 from routers.library import log_activity
@@ -278,7 +278,12 @@ async def invoices_list(
     if current_user.role not in {"admin", "super_admin", "genel_mudur", "muhasebe_muduru", "muhasebe", "mudur", "yonetici", "asistan", "satinalma"} and not current_user.is_gm:
         raise HTTPException(status_code=403)
 
-    query = db.query(Invoice).outerjoin(Invoice.request)
+    from database import EVENT_COMPANY_ID
+    from sqlalchemy import or_ as _or_cid
+    _cid = current_user.company_id or EVENT_COMPANY_ID
+    query = db.query(Invoice).outerjoin(Invoice.request).filter(
+        _or_cid(Invoice.company_id == _cid, Invoice.company_id.is_(None))
+    )
 
     # "Onaylarım" görünümü — sadece benim onayımı bekleyen faturalar
     if view == "my_pending":
@@ -612,6 +617,7 @@ async def invoices_create(
         total_amount        = incl,
         status              = "pending",
         current_approver_id = _initial_approver_id,
+        company_id          = current_user.company_id,
         created_by          = current_user.id,
         created_at          = _now(),
         updated_at          = _now(),

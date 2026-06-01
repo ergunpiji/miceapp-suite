@@ -20,7 +20,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from database import Base, engine, seed_data, migrate_db
+from database import Base, engine, seed_data, migrate_db, _seed_event_company
 from templates_config import templates
 
 # ---------------------------------------------------------------------------
@@ -52,6 +52,7 @@ else:
     Base.metadata.create_all(bind=engine)
     migrate_db()
     seed_data()
+    _seed_event_company()
 
 # ---------------------------------------------------------------------------
 # FastAPI uygulaması
