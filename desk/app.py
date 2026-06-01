@@ -422,6 +422,7 @@ from routers import help as help_router
 from routers import admin_departments as admin_departments_router
 from routers import admin_approval_limits as admin_approval_limits_router
 from routers import sales_requests as sales_requests_router
+from routers import teams as teams_router
 
 app.include_router(auth_router.router)
 app.include_router(dashboard_router.router)
@@ -464,6 +465,7 @@ app.include_router(help_router.router)
 app.include_router(admin_departments_router.router)
 app.include_router(admin_approval_limits_router.router)
 app.include_router(sales_requests_router.router)
+app.include_router(teams_router.router)
 
 # E-Fatura modülünü mount et (router /einvoice/* prefix'ile eklenir).
 # Endpoint'ler her zaman erişilebilir; aktif/pasif kontrolü feature flag ile

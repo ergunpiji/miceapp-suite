@@ -215,6 +215,27 @@ class ModuleAccess(Base):
 
 
 # ---------------------------------------------------------------------------
+# Takım (event app ile aynı 'teams' tablosunu paylaşır)
+# ---------------------------------------------------------------------------
+
+class Team(Base):
+    """Etkinlik / operasyon takımı — event app ile ortak tablo."""
+    __tablename__ = "teams"
+
+    id              = Column(String(36), primary_key=True, default=_uuid)
+    name            = Column(String(200), nullable=False)
+    code            = Column(String(50), default="")
+    description     = Column(Text, default="")
+    active          = Column(Boolean, default=True, nullable=False)
+    is_support_team = Column(Boolean, default=False, nullable=False)
+    created_at      = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    @property
+    def active_members(self):
+        return []   # desk User'da team_id yoksa boş döner
+
+
+# ---------------------------------------------------------------------------
 # Müşteri & Tedarikçi
 # ---------------------------------------------------------------------------
 
