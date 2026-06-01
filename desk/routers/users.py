@@ -129,7 +129,7 @@ async def users_list(
 @router.get("/new", response_class=HTMLResponse, name="user_new_get")
 async def user_new_get(
     request: Request,
-    company_id: Optional[int] = None,
+    company_id: Optional[str] = None,
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -147,9 +147,9 @@ async def user_new_post(
     email: str = Form(...),
     password: str = Form(...),
     role: str = Form("kullanici"),
-    manager_id: Optional[int] = Form(None),
+    manager_id: Optional[str] = Form(None),
     employee_id: str = Form(""),
-    company_id: Optional[int] = Form(None),
+    company_id: Optional[str] = Form(None),
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -228,10 +228,10 @@ async def user_edit_post(
     email: str = Form(...),
     password: str = Form(""),
     role: str = Form("kullanici"),
-    manager_id: Optional[int] = Form(None),
+    manager_id: Optional[str] = Form(None),
     active: str = Form("1"),
     employee_id: str = Form(""),
-    company_id: Optional[int] = Form(None),
+    company_id: Optional[str] = Form(None),
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
