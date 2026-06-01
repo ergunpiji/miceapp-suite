@@ -82,17 +82,24 @@
           </td>
           {% if not show_archived %}
           <td class="text-end pe-2">
-            {% if not inv.is_split_parent and not inv.split_parent_id and inv.status not in ('cancelled',) %}
+            {% if inv.approval_status == 'onay_bekliyor' %}
+            <form method="post" action="/invoices/{{ inv.id }}/approve-step" class="d-inline">
+              <input type="hidden" name="next_url" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+              <button type="submit" class="btn btn-success btn-sm">
+                <i class="bi bi-check-lg me-1"></i>Fatura Kes
+              </button>
+            </form>
+            {% elif inv.is_split_parent %}
+            <span class="badge bg-light text-muted border" title="Bölünmüş fatura">Bölündü</span>
+            {% elif inv.split_parent_id %}
+            <span class="badge bg-light text-muted border" title="Bu fatura bir bölünme parçasıdır">Parça</span>
+            {% elif not inv.is_split_parent and not inv.split_parent_id and inv.status not in ('cancelled',) %}
             {% set party = inv.customer.name if inv.invoice_type in ('kesilen','iade_gelen') else (inv.vendor.name if inv.vendor else '') %}
             <button type="button" class="btn btn-outline-secondary btn-sm"
               title="Faturayı Böl"
               onclick="openSplitModal({id:{{ inv.id }}, party_name:'{{ party | e }}', invoice_no:'{{ (inv.invoice_no or '') | e }}', total_amount:{{ inv.total_with_vat }}, vat_rate:{{ (inv.vat_rate or 0.20) * 100 }}})">
               <i class="bi bi-scissors"></i>
             </button>
-            {% elif inv.is_split_parent %}
-            <span class="badge bg-light text-muted border" title="Bölünmüş fatura">Bölündü</span>
-            {% elif inv.split_parent_id %}
-            <span class="badge bg-light text-muted border" title="Bu fatura bir bölünme parçasıdır">Parça</span>
             {% endif %}
           </td>
           {% endif %}

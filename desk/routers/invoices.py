@@ -790,6 +790,7 @@ async def invoice_approve_step(
     invoice_id: str,
     request: Request,
     note: str = Form(""),
+    next_url: str = Form(""),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     cid: int = Depends(get_company_id),
@@ -804,7 +805,8 @@ async def invoice_approve_step(
         db.rollback()
         raise HTTPException(400, msg)
     db.commit()
-    return RedirectResponse(url=f"/invoices/{inv.id}?approved=1", status_code=302)
+    redirect = next_url.strip() if next_url.strip().startswith("/") else f"/invoices/{inv.id}?approved=1"
+    return RedirectResponse(url=redirect, status_code=302)
 
 
 @router.post("/{invoice_id}/reject-step", name="invoice_reject_step")
