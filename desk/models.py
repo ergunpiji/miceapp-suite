@@ -83,6 +83,7 @@ class User(Base):
     role = Column(String(20), default="kullanici", nullable=False)
     company_id = Column(String(36), ForeignKey("companies.id"), nullable=True, index=True)
     manager_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    team_id    = Column(String(36), nullable=True)
     active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 

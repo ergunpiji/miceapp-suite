@@ -587,6 +587,9 @@ def _migrate(engine) -> None:
         "ALTER TABLE departments DROP CONSTRAINT IF EXISTS departments_pkey",
         "ALTER TABLE departments ALTER COLUMN id TYPE VARCHAR(36) USING id::VARCHAR",
         "ALTER TABLE departments ADD PRIMARY KEY (id)",
+        # ── Takım sistemi ─────────────────────────────────────────────────────
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS team_id VARCHAR(36)",
+        "ALTER TABLE customers ADD COLUMN IF NOT EXISTS team_id VARCHAR(36)",
     ]
 
     # --- Eski schema type-cast düzeltmeleri ---
