@@ -2394,8 +2394,10 @@ const REQ_DATA = {
 };
 
 // ─── E-posta Şablonları (Admin tarafından yönetilir) ───
-const EMAIL_TEMPLATES = {{ email_templates_json | tojson }};
-const SETTINGS_CTX    = {{ settings_ctx | tojson }};
+const EMAIL_TEMPLATES    = {{ email_templates_json | tojson }};
+const SETTINGS_CTX       = {{ settings_ctx | tojson }};
+const CURRENT_USER_NAME  = {{ current_user.full_name | tojson }};
+const CURRENT_USER_TITLE = {{ (current_user.title or '') | tojson }};
 
 // Müşteri kontak bilgisi
 const CUSTOMER_CONTACTS = {{ (customer.contacts if customer else []) | tojson }};
@@ -2670,9 +2672,12 @@ function buildEmailHtml(venue, contactNames, filterSection) {
   </div>
 
   <div style="background:${light};padding:18px 36px;border-radius:0 0 10px 10px;border:1px solid ${border};border-top:none;">
-    <p style="margin:0;font-size:12px;color:${tMuted};line-height:1.8;">
+    <p style="margin:0;font-size:12px;color:${tMuted};line-height:1.9;">
       Saygılarımızla,<br>
-      <strong style="color:${tDark};font-size:13px;">miceapp</strong>
+      <strong style="color:${tDark};font-size:13px;">${escH(CURRENT_USER_NAME)}</strong>
+      ${CURRENT_USER_TITLE ? `<span style="color:${tMuted};font-size:12px;"> — ${escH(CURRENT_USER_TITLE)}</span>` : ''}
+      <br>
+      <span style="color:${tMuted};font-size:12px;">${escH(SETTINGS_CTX.company_name || 'miceapp')}</span>
     </p>
   </div>
 
@@ -2782,7 +2787,7 @@ function buildEmailText(venue, contactNames, filterSection) {
   txt += `\n─────────────────────────────────────\n`;
   txt += `Teklif son tarihi: ${deadlineDate()}\n`;
   txt += `Lütfen fiyatlarınıza KDV oranlarını ve KDV'nin dahil olup olmadığını belirtiniz.\n\n`;
-  txt += `Saygılarımızla,\nmiceapp`;
+  txt += `Saygılarımızla,\n${CURRENT_USER_NAME}${CURRENT_USER_TITLE ? ' — ' + CURRENT_USER_TITLE : ''}\n${SETTINGS_CTX.company_name || 'miceapp'}`;
   return txt;
 }
 
@@ -3383,9 +3388,15 @@ async function saveNewVendorAndAddToRfq() {
     });
     const data = await resp.json();
     if (!resp.ok) { errEl.textContent = data.error||'Hata oluştu.'; errEl.style.display='block'; return; }
+    // Section'a göre supplier_type belirle
+    const _sectionTypeMap = {
+      accommodation:'otel', meeting:'otel', fb:'otel',
+      teknik:'teknik', dekor:'dekor', transfer:'transfer', tasarim:'tasarim', other:'diger'
+    };
+    const _newType = _sectionTypeMap[_rfqCurrentSection] || 'diger';
     // ALL_VENUES dizisine ekle (aynı oturumda tekrar aramada görünsün)
     ALL_VENUES.push({id:data.id, name:data.name, email:data.email, phone:data.phone,
-                     supplier_type:'diger', city:'', cities:[],
+                     supplier_type: _newType, city:'', cities:[],
                      contacts:[{name:contact||data.name, title, email, phone}]});
     addVenueToRfq(data.id);
     document.getElementById('rfqNewVendorForm').style.display = 'none';
@@ -3489,7 +3500,15 @@ function updateRfqCard(vi) {
   const body    = encodeURIComponent(eText);
 
   const mailEl = document.getElementById(`rfqMailto${vi}`);
-  if (mailEl) mailEl.href = `mailto:${emails.join(',')}?subject=${subject}&body=${body}`;
+  if (mailEl) {
+    mailEl.href = `mailto:${emails.join(',')}?subject=${subject}&body=${body}`;
+    if (emails.length) {
+      mailEl.removeAttribute('disabled');
+      mailEl.style.background = '#16a34a';
+      mailEl.style.color = '#fff';
+      mailEl.style.cursor = 'pointer';
+    }
+  }
 
   const prevEl = document.getElementById(`rfqPreview${vi}`);
   if (prevEl) prevEl.innerHTML = eHtml;
@@ -3543,9 +3562,14 @@ function buildRfqCard(venue, vi, emailFilterSection) {
         </button>
         ${contacts.length ? `
         <a id="rfqMailto${vi}" href="${escH(initMailto)}"
-          style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#f59e0b;color:#ffffff;border-radius:7px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">
-          <i class="bi bi-envelope-arrow-up"></i> Mail Aç
-        </a>` : ''}
+          style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#16a34a;color:#ffffff;border-radius:7px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">
+          <i class="bi bi-send-fill"></i> Gönder
+        </a>` : `
+        <button type="button" disabled
+          style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#e2e8f0;color:#94a3b8;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:not-allowed;white-space:nowrap;"
+          title="E-posta göndermek için kontak ekleyin">
+          <i class="bi bi-send"></i> Gönder
+        </button>`}
       </div>
     </div>
 
