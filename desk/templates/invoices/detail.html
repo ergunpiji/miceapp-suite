@@ -132,6 +132,7 @@
               ·
               {% if h.action == 'created' %}<i class="bi bi-pencil-square text-primary"></i> {{ h.user_name }} kaydetti
               {% elif h.action == 'approved' %}<i class="bi bi-check-circle text-success"></i> {{ h.user_name }} onayladı
+              {% elif h.action == 'muhasebe_cut' %}<i class="bi bi-scissors text-success"></i> {{ h.user_name }} faturayı kesti{% if h.einvoice_requested %} <span class="badge bg-primary" style="font-size:10px;">e-Fatura</span>{% endif %}
               {% elif h.action == 'escalated' %}<i class="bi bi-arrow-up-right text-warning"></i> üst kademeye iletildi
               {% elif h.action == 'rejected' %}<i class="bi bi-x-circle text-danger"></i> {{ h.user_name }} reddetti
               {% endif %}
@@ -195,6 +196,44 @@
           </div>
         </div>
         {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# ── Muhasebe: Fatura Kes Paneli ── #}
+    {% if invoice.approval_status == 'onay_bekliyor' and is_accounting %}
+    <div class="card border-0 shadow-sm mb-3" id="muhasebeKesPanel"
+         style="border-left: 4px solid #16a34a !important;">
+      <div class="card-body">
+        <h6 class="fw-bold mb-3">
+          <i class="bi bi-scissors text-success me-2"></i>Fatura Kes
+        </h6>
+        <form method="post" action="/invoices/{{ invoice.id }}/muhasebe-cut">
+          <input type="hidden" name="next_url" value="/invoices?approval=pending">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Fatura No <span class="text-danger">*</span></label>
+            <input type="text" name="invoice_no" id="muhasebeInvoiceNo"
+                   class="form-control form-control-lg"
+                   value="{{ invoice.invoice_no or '' }}"
+                   placeholder="örn. 2024/00123" required autocomplete="off">
+            <div class="form-text">Sisteminizden kestiğiniz faturanın numarasını yazın.</div>
+          </div>
+          {% if module_enabled(request, 'einvoice') %}
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="send_einvoice" value="1" id="sendEinvoiceCheck">
+            <label class="form-check-label" for="sendEinvoiceCheck">
+              <i class="bi bi-cloud-arrow-up text-primary me-1"></i>
+              E-Fatura olarak GİB'e gönder
+            </label>
+          </div>
+          {% endif %}
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-success px-4">
+              <i class="bi bi-check-lg me-1"></i>Kesildi
+            </button>
+            <a href="/invoices?approval=pending" class="btn btn-outline-secondary">Geri Dön</a>
+          </div>
+        </form>
       </div>
     </div>
     {% endif %}
@@ -500,5 +539,18 @@ if (payDisplay) {
 </script>
 
 {% include "invoices/_split_modal.html" %}
+
+{% if cut_mode and is_accounting %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const panel = document.getElementById('muhasebeKesPanel');
+  if (panel) {
+    panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const inp = document.getElementById('muhasebeInvoiceNo');
+    if (inp) setTimeout(() => inp.focus(), 400);
+  }
+});
+</script>
+{% endif %}
 
 {% endblock %}

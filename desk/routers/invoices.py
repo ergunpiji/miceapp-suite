@@ -447,6 +447,12 @@ async def invoice_detail(
         .options(joinedload(Invoice.reference))
         .all()
     ) if inv.is_split_parent else []
+    is_accounting = (
+        current_user.has_department_key("accounting")
+        or current_user.role in ("muhasebe", "muhasebe_muduru")
+        or current_user.is_admin
+    )
+    cut_mode = request.query_params.get("cut") == "1"
     return templates.TemplateResponse(
         "invoices/detail.html",
         {
@@ -456,6 +462,8 @@ async def invoice_detail(
             "payment_methods": PAYMENT_METHODS,
             "split_children_ctx": split_children,
             "page_title": f"Fatura — {inv.invoice_no or inv.id}",
+            "is_accounting": is_accounting,
+            "cut_mode": cut_mode,
         },
     )
 
@@ -819,6 +827,7 @@ async def invoice_muhasebe_cut(
     request: Request,
     invoice_no: str = Form(""),
     next_url: str = Form(""),
+    send_einvoice: str = Form(""),   # "1" → efatura modülü aktifse gönder
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     cid: int = Depends(get_company_id),
@@ -843,6 +852,7 @@ async def invoice_muhasebe_cut(
     inv.approval_status = "approved"
 
     import json as _json
+    from datetime import datetime as _dt
     try:
         history = _json.loads(inv.approval_history or "[]")
     except Exception:
@@ -852,11 +862,28 @@ async def invoice_muhasebe_cut(
         "user_id": current_user.id,
         "user_name": f"{current_user.name} {current_user.surname or ''}".strip(),
         "user_role": current_user.role,
-        "ts": __import__("datetime").datetime.utcnow().isoformat(),
+        "ts": _dt.utcnow().isoformat(),
+        "einvoice_requested": send_einvoice == "1",
     })
     inv.approval_history = _json.dumps(history, ensure_ascii=False)
 
+    # E-fatura hazırlığı: modül aktifse ve istenirse kuyruğa al
+    if send_einvoice == "1":
+        if hasattr(inv, "einvoice_status") and not inv.einvoice_status:
+            inv.einvoice_status = "queued"
+
     db.commit()
+
+    # E-fatura modülü aktifse ve kuyruğa alındıysa gönder
+    if send_einvoice == "1" and getattr(inv, "einvoice_status", None) == "queued":
+        try:
+            from packages.prizma_einvoice import get_module
+            em = get_module()
+            if em:
+                await em.send_invoice(inv.id, db)
+        except Exception:
+            pass  # Modül yoksa sessizce geç
+
     redirect = next_url.strip() if next_url.strip().startswith("/") else "/invoices?approval=pending"
     return RedirectResponse(url=redirect, status_code=302)
 
