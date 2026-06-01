@@ -563,6 +563,9 @@
     <a href="/users" class="sidebar-link {% if '/users' in request.url.path and '/admin' not in request.url.path %}active{% endif %}">
       <i class="bi bi-people"></i> Kullanıcılar
     </a>
+    <a href="/teams" class="sidebar-link {% if '/teams' in request.url.path %}active{% endif %}">
+      <i class="bi bi-diagram-2"></i> Takımlar
+    </a>
     <a href="/admin/roles" class="sidebar-link {% if '/admin/roles' in request.url.path %}active{% endif %}">
       <i class="bi bi-shield-lock"></i> Rol & İzinler
     </a>
