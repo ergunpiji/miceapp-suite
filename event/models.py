@@ -1415,6 +1415,7 @@ EXPENSE_DOC_TYPES = [
 #   rejected: her aşamada mümkün
 EXPENSE_STATUSES = [
     {"value": "draft",          "label": "Taslak",          "color": "secondary"},
+    {"value": "owner_onayi",    "label": "Dosya Sahibi Onayında", "color": "warning"},
     {"value": "submitted",      "label": "Müdür Onayında",  "color": "warning"},
     {"value": "mudur_onayladi", "label": "GM Onayında",     "color": "info"},
     {"value": "onaylandi",      "label": "Muhasebe Bekliyor","color": "primary"},
@@ -1439,6 +1440,9 @@ class ExpenseReport(Base):
     title            = Column(String(300), default="")
     status           = Column(String(16), default="draft")   # bkz. EXPENSE_STATUSES
     submitted_by     = Column(String(36), ForeignKey("users.id"), nullable=False)
+    # Dosya sahibi onayı (0. aşama — gönderen ≠ referans sahibi ise)
+    owner_approved_by = Column(String(36), nullable=True)
+    owner_approved_at = Column(DateTime, nullable=True)
     # Müdür onayı (1. aşama)
     manager_approved_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     manager_approved_at = Column(DateTime, nullable=True)

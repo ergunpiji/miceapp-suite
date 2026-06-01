@@ -162,33 +162,38 @@
   {# Durum çubuğu #}
   {% if report %}
   {% set s = report.status %}
+  {% set in_approval = s in ('owner_onayi','submitted','mudur_onayladi') %}
+  {% set done = s in ('onaylandi','kapandi') %}
   <div class="hbf-status-bar">
-    <div class="status-step {{ 'done' if s in ('submitted','approved','rejected') else 'active' if s == 'draft' else '' }}">
-      <div class="status-dot {{ 'done' if s in ('submitted','approved','rejected') else 'active' if s == 'draft' else '' }}">
-        {% if s in ('submitted','approved','rejected') %}<i class="bi bi-check"></i>{% else %}1{% endif %}
+    <div class="status-step {{ 'done' if s != 'draft' else 'active' }}">
+      <div class="status-dot {{ 'done' if s != 'draft' else 'active' }}">
+        {% if s != 'draft' %}<i class="bi bi-check"></i>{% else %}1{% endif %}
       </div>
       Taslak
     </div>
     <div class="status-arrow"><i class="bi bi-chevron-right"></i></div>
-    <div class="status-step {{ 'done' if s in ('approved','rejected') else 'active' if s == 'submitted' else '' }}">
-      <div class="status-dot {{ 'done' if s == 'approved' else 'rejected' if s == 'rejected' else 'active' if s == 'submitted' else '' }}">
-        {% if s == 'approved' %}<i class="bi bi-check"></i>
+    <div class="status-step {{ 'done' if done else 'active' if in_approval else '' }}">
+      <div class="status-dot {{ 'done' if done else 'rejected' if s == 'rejected' else 'active' if in_approval else '' }}">
+        {% if done %}<i class="bi bi-check"></i>
         {% elif s == 'rejected' %}<i class="bi bi-x"></i>
         {% else %}2{% endif %}
       </div>
-      Onay Bekliyor
+      Onay Sürecinde
     </div>
     <div class="status-arrow"><i class="bi bi-chevron-right"></i></div>
-    <div class="status-step {{ 'done' if s == 'approved' else '' }}">
-      <div class="status-dot {{ 'done' if s == 'approved' else '' }}">
-        {% if s == 'approved' %}<i class="bi bi-check"></i>{% else %}3{% endif %}
+    <div class="status-step {{ 'done' if s == 'kapandi' else 'active' if s == 'onaylandi' else '' }}">
+      <div class="status-dot {{ 'done' if done else '' }}">
+        {% if done %}<i class="bi bi-check"></i>{% else %}3{% endif %}
       </div>
-      Onaylandı
+      {% if s == 'kapandi' %}Kapandı{% else %}Onaylandı{% endif %}
     </div>
-    {% if report.approved_at %}
+    {% if in_approval and current_approver_name %}
+    <span class="ms-auto badge bg-warning text-dark" style="font-size:11px;">
+      <i class="bi bi-hourglass-split me-1"></i>Şu an: {{ current_approver_name }} onayında
+    </span>
+    {% elif report.approved_at %}
     <span class="ms-auto text-muted" style="font-size:11px;">
-      {{ report.approver.full_name if report.approver else '—' }}
-      &bull; {{ report.approved_at.strftime('%d.%m.%Y') if report.approved_at else '' }}
+      {{ report.approved_at | date_tr }}
     </span>
     {% endif %}
   </div>
@@ -386,10 +391,10 @@
       </div>
       {% else %}
         {# Onay/Red butonları — sadece yetkili kişiye göster #}
-        {% if can_approve and report and report.status in ('submitted', 'mudur_onayladi') %}
+        {% if can_approve and report and report.status in ('owner_onayi', 'submitted', 'mudur_onayladi') %}
         <div class="d-flex flex-column gap-2 mt-auto">
           <div class="small text-muted">
-            {% if report.status == 'submitted' %}Müdür onayı aşaması{% else %}Genel Müdür onayı aşaması{% endif %}
+            {% if report.status == 'owner_onayi' %}Dosya sahibi onayı aşaması{% elif report.status == 'submitted' %}Müdür onayı aşaması{% else %}Genel Müdür onayı aşaması{% endif %}
           </div>
           <form method="post" action="/expenses/{{ report.id }}/approve" style="margin:0;">
             <button type="submit" class="btn btn-success px-4 w-100"
@@ -409,12 +414,13 @@
             </form>
           </div>
         </div>
-        {% elif report and report.status in ('submitted', 'mudur_onayladi') and report.submitted_by == current_user.id %}
+        {% elif report and report.status in ('owner_onayi', 'submitted', 'mudur_onayladi') %}
         <div class="mt-auto">
           <div class="alert alert-info py-2 mb-0" style="font-size:13px;">
-            <i class="bi bi-info-circle me-1"></i>
-            Bu HBF'yi siz gönderdiniz; <strong>kendi HBF'nizi onaylayamazsınız</strong>.
-            {% if report.status == 'submitted' %}Müdürünüz{% else %}Genel Müdür / başka bir yönetici{% endif %} onayını bekliyor.
+            <i class="bi bi-hourglass-split me-1"></i>
+            {% if current_approver_name %}<strong>{{ current_approver_name }}</strong> onayında.{% else %}Onay bekleniyor.{% endif %}
+            {% if report.submitted_by == current_user.id %} (Bu HBF'yi siz gönderdiniz.){% endif %}
+            <div class="small text-muted mt-1">Onay/red işlemleri miceapp (event) üzerinden yapılır.</div>
           </div>
         </div>
         {% elif report and report.status == 'draft' and report.submitted_by == current_user.id %}

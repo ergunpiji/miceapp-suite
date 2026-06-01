@@ -555,6 +555,8 @@ def migrate_db():
         # HBF tam onay zinciri (müdür→GM→muhasebe→kapandı) + tenant + ödeme kayıtları
         _safe_add_column(conn, "users",           "company_id",          "VARCHAR(36)")
         _safe_add_column(conn, "expense_reports", "company_id",          "VARCHAR(36)")
+        _safe_add_column(conn, "expense_reports", "owner_approved_by",   "VARCHAR(36)")
+        _safe_add_column(conn, "expense_reports", "owner_approved_at",   "TIMESTAMP")
         _safe_add_column(conn, "expense_reports", "manager_approved_by", "VARCHAR(36)")
         _safe_add_column(conn, "expense_reports", "manager_approved_at", "TIMESTAMP")
         _safe_add_column(conn, "expense_reports", "paid_by",             "VARCHAR(36)")

@@ -1324,6 +1324,8 @@ class ExpenseReport(Base):
     title               = Column(String(300))
     status              = Column(String(16), default="draft")
     submitted_by        = Column(String(36))
+    owner_approved_by   = Column(String(36))
+    owner_approved_at   = Column(DateTime)
     manager_approved_by = Column(String(36))
     manager_approved_at = Column(DateTime)
     approved_by         = Column(String(36))

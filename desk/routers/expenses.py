@@ -38,7 +38,7 @@ EXPENSE_DOC_TYPES = [
     {"value": "fis", "label": "Fiş"},
     {"value": "belgesiz", "label": "Belgesiz"},
 ]
-EXPENSE_STATUSES = ["draft", "submitted", "mudur_onayladi", "onaylandi", "kapandi", "rejected"]
+EXPENSE_STATUSES = ["draft", "owner_onayi", "submitted", "mudur_onayladi", "onaylandi", "kapandi", "rejected"]
 
 router = APIRouter(prefix="/expenses", tags=["expenses"])
 
@@ -72,6 +72,31 @@ def _find_hbf_approver(submitted_by: str | None, db: Session) -> User | None:
         current = mgr
     # Fallback: herhangi bir aktif mudur
     return db.query(User).filter(User.role == "mudur", User.active == True).first()
+
+
+def _reference_owner(report: ExpenseReport, db: Session) -> "User | None":
+    """HBF'nin (birincil) referans/dosya sahibini döndürür (desk Reference.owner_id).
+    Sahip yoksa None → eski davranış (zincir gönderene göre)."""
+    import json as _json
+    try:
+        refs = _json.loads(report.request_ids_json or "[]")
+    except Exception:
+        refs = []
+    ref_no = refs[0].get("request_no") if refs else None
+    if not ref_no:
+        return None
+    ref = db.query(Reference).filter(Reference.ref_no == ref_no).first()
+    if ref and ref.owner_id:
+        return db.query(User).filter(
+            User.id == ref.owner_id, User.active == True  # noqa: E712
+        ).first()
+    return None
+
+
+def _chain_anchor_id(report: ExpenseReport, db: Session):
+    """Onay zincirinin demir attığı kişi: dosya sahibi varsa O, yoksa gönderen."""
+    owner = _reference_owner(report, db)
+    return owner.id if owner else report.submitted_by
 
 
 def _can_approve(report: ExpenseReport, user: User, db: Session) -> bool:
@@ -380,25 +405,37 @@ async def expenses_edit_post(
     db.flush()
     _save_items_from_json(db, report.id, items_json)
 
+    first_approver = None
     if next_action == "submit":
-        report.status = "submitted"
+        # Sahip-onayı kuralı: gönderen ≠ referans sahibi ise önce SAHİP onaylar
+        owner = _reference_owner(report, db)
+        if owner and owner.id != report.submitted_by:
+            report.status = "owner_onayi"
+            first_approver = owner
+        else:
+            report.status = "submitted"
+            first_approver = _find_hbf_approver(_chain_anchor_id(report, db), db)
 
     db.commit()
 
     if next_action == "submit":
-        back_id = report.request_id
         # Onay event tarafında yapılır (birleşik akış) → bildirim EVENT linkiyle
-        approver = _find_hbf_approver(report.submitted_by, db)
-        req_obj = db.query(DeskRequest).filter(DeskRequest.id == back_id).first() if back_id else None
-        if approver:
+        refs = []
+        try:
+            refs = _json.loads(report.request_ids_json or "[]")
+        except Exception:
+            refs = []
+        ref_no = refs[0].get("request_no") if refs else ""
+        if first_approver:
+            stage = "dosya sahibi onayı" if report.status == "owner_onayi" else "onayı"
             try:
                 from utils.notifications import create_notification
                 create_notification(
                     db,
-                    user_id    = approver.id,
+                    user_id    = first_approver.id,
                     notif_type = "hbf_submitted",
-                    title      = f"HBF onayı bekleniyor — {report.title or 'Harcama Formu'}",
-                    message    = f"{req_obj.request_no if req_obj else ''} referansına ait harcama formu onayınızı bekliyor.",
+                    title      = f"HBF {stage} bekleniyor — {report.title or 'Harcama Formu'}",
+                    message    = f"{ref_no} referansına ait harcama formu {stage} aşamasında sizi bekliyor.",
                     link       = f"{EVENT_URL}/expenses/{report.id}",
                     ref_id     = report.id,
                 )
@@ -434,6 +471,18 @@ async def expenses_view(
         su = db.query(User).filter(User.id == report.submitted_by).first()
         if su:
             submitter_name = (f"{su.name} {getattr(su, 'surname', '') or ''}").strip()
+    # Şu an kimin onayında (durum çubuğu için)
+    def _uname(u):
+        return (f"{u.name} {getattr(u, 'surname', '') or ''}").strip() if u else None
+    current_approver_name = None
+    if report.status == "owner_onayi":
+        current_approver_name = _uname(_reference_owner(report, db)) or "Dosya sahibi"
+    elif report.status == "submitted":
+        current_approver_name = _uname(_find_hbf_approver(_chain_anchor_id(report, db), db)) or "Müdür"
+    elif report.status == "mudur_onayladi":
+        current_approver_name = "Genel Müdür"
+    elif report.status == "onaylandi":
+        current_approver_name = "Muhasebe"
     # Başlık için referans bilgisi (request_ids_json'dan)
     import json as _json
     req = None
@@ -456,6 +505,7 @@ async def expenses_view(
         "can_approve": False,
         "card_names": card_names,
         "submitter_name": submitter_name,
+        "current_approver_name": current_approver_name,
         "page_title": report.title or "HBF Detay",
         "PAYMENT_METHODS": EXPENSE_PAYMENT_METHODS,
         "DOC_TYPES": EXPENSE_DOC_TYPES,

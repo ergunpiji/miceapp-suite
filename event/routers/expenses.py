@@ -16,7 +16,7 @@ from auth import get_current_user
 from database import get_db
 from models import (
     ExpenseReport, ExpenseItem, UndocumentedEntry,
-    DeskCreditCard, DeskCreditCardTxn,
+    DeskCreditCard, DeskCreditCardTxn, DeskReference,
     Request as ReqModel, User,
     EXPENSE_STATUSES, EXPENSE_STATUS_LABELS, EXPENSE_STATUS_COLORS,
     EXPENSE_PAYMENT_METHODS, EXPENSE_DOC_TYPES,
@@ -63,6 +63,27 @@ def _find_hbf_approver(submitted_by: str | None, db: Session) -> User | None:
     return db.query(User).filter(User.role == "mudur", User.active == True).first()
 
 
+def _reference_owner(report: ExpenseReport, db: Session) -> User | None:
+    """HBF'nin (birincil) referans/dosya sahibini döndürür (desk Reference.owner_id).
+    Sahip yoksa None → eski davranış (zincir gönderene göre)."""
+    req = db.query(ReqModel).filter(ReqModel.id == report.request_id).first()
+    if not req or not req.request_no:
+        return None
+    ref = db.query(DeskReference).filter(DeskReference.ref_no == req.request_no).first()
+    if ref and ref.owner_id:
+        return db.query(User).filter(
+            User.id == ref.owner_id, User.active == True  # noqa: E712
+        ).first()
+    return None
+
+
+def _chain_anchor_id(report: ExpenseReport, db: Session) -> str | None:
+    """Onay zincirinin demir attığı kişi: dosya sahibi varsa O, yoksa gönderen.
+    Müdür aşaması bu kişinin yönetici zincirinden bulunur."""
+    owner = _reference_owner(report, db)
+    return owner.id if owner else report.submitted_by
+
+
 def _is_gm(user: User) -> bool:
     """Genel Müdür yetkisi: admin/super_admin/genel_mudur veya org grade 1."""
     return getattr(user, "is_gm", False) or user.role in ("admin", "super_admin", "genel_mudur")
@@ -104,17 +125,23 @@ def _other_approver_exists(report: ExpenseReport, user: User, db: Session) -> bo
     if _gm_level_users(db, report.company_id, exclude_id=user.id):
         return True
     if report.status == "submitted":
-        approver = _find_hbf_approver(report.submitted_by, db)
+        approver = _find_hbf_approver(_chain_anchor_id(report, db), db)
         return approver is not None and approver.id != user.id
     return False
 
 
 def _can_approve(report: ExpenseReport, user: User, db: Session) -> bool:
     """HBF onay zinciri — mevcut aşamada bu kullanıcı işlem yapabilir mi?
-      submitted       → müdür (gönderenin müdürü) veya GM/admin onaylar
+      owner_onayi     → SADECE dosya/referans sahibi (gönderen ≠ sahip ise)
+      submitted       → müdür (SAHİBİN müdürü) veya GM/admin onaylar
       mudur_onayladi  → sadece GM/admin onaylar
     Kural: kimse kendi HBF'sini onaylayamaz. İSTİSNA: en üst yetkili (GM/admin) ve
     onaylayacak BAŞKA kimse yoksa kendi HBF'sini onaylayabilir (takılma olmasın)."""
+    # 0. aşama: dosya sahibi onayı — yalnızca referans sahibi
+    if report.status == "owner_onayi":
+        owner = _reference_owner(report, db)
+        return bool(owner and owner.id == user.id)
+
     is_self = bool(report.submitted_by and report.submitted_by == user.id)
     if is_self:
         # Yalnızca GM seviyesi + başka onaylayıcı yoksa kendi formunu onaylayabilir
@@ -125,8 +152,8 @@ def _can_approve(report: ExpenseReport, user: User, db: Session) -> bool:
         # GM/admin her zaman onaylayabilir (müdür adımını atlayarak)
         if _is_gm(user):
             return True
-        # Aksi halde gönderenin zincirideki müdür/yönetici
-        approver = _find_hbf_approver(report.submitted_by, db)
+        # Aksi halde SAHİBİN (anchor) zincirindeki müdür/yönetici
+        approver = _find_hbf_approver(_chain_anchor_id(report, db), db)
         return approver is not None and approver.id == user.id
     if report.status == "mudur_onayladi":
         # 2. aşama: yalnızca GM/admin
@@ -135,28 +162,17 @@ def _can_approve(report: ExpenseReport, user: User, db: Session) -> bool:
 
 
 def hbf_pending_count_for(db: Session, user: User) -> int:
-    """Bu kullanıcının onayını bekleyen HBF sayısı (sidebar badge + çan için)."""
+    """Bu kullanıcının onayını bekleyen HBF sayısı (sidebar badge + çan için).
+    Sahip-onayı kuralıyla zincir karmaşıklaştığından, aktif aşamadaki formları
+    _can_approve ile değerlendiriyoruz (rapor sayısı küçük)."""
     if not user:
         return 0
-    cnt = 0
-    # Müdür aşaması: doğrudan ekibinin gönderdiği (submitted) formlar
-    if user.role in ("mudur", "yonetici", "genel_mudur", "admin", "super_admin"):
-        team_ids = [
-            r[0] for r in db.query(User.id).filter(
-                User.manager_id == user.id, User.active == True  # noqa: E712
-            ).all()
-        ]
-        if team_ids:
-            cnt += db.query(ExpenseReport).filter(
-                ExpenseReport.status == "submitted",
-                ExpenseReport.submitted_by.in_(team_ids),
-            ).count()
-    # GM aşaması: müdürü onaylamış, GM onayı bekleyen tüm formlar
-    if _is_gm(user):
-        cnt += db.query(ExpenseReport).filter(
-            ExpenseReport.status == "mudur_onayladi"
-        ).count()
-    return cnt
+    q = db.query(ExpenseReport).filter(
+        ExpenseReport.status.in_(["owner_onayi", "submitted", "mudur_onayladi"])
+    )
+    if getattr(user, "company_id", None):
+        q = q.filter(ExpenseReport.company_id == user.company_id)
+    return sum(1 for r in q.all() if _can_approve(r, user, db))
 
 
 # ---------------------------------------------------------------------------
@@ -370,24 +386,31 @@ async def expenses_edit_post(
     # Edit modunda sadece bu raporun kalemlerini güncelle (split yok)
     _save_items_from_json(db, report.id, items_json)
 
+    first_approver = None
     if next_action == "submit":
-        report.status = "submitted"
+        # Sahip-onayı kuralı: gönderen ≠ referans sahibi ise önce SAHİP onaylar
+        owner = _reference_owner(report, db)
+        if owner and owner.id != report.submitted_by:
+            report.status = "owner_onayi"
+            first_approver = owner
+        else:
+            report.status = "submitted"
+            first_approver = _find_hbf_approver(_chain_anchor_id(report, db), db)
 
     db.commit()
 
     if next_action == "submit":
         back_id = report.request_id
-        # Bildirim: gönderenin bir üstüne git
-        approver = _find_hbf_approver(report.submitted_by, db)
         req_obj = db.query(ReqModel).filter(ReqModel.id == back_id).first() if back_id else None
-        if approver:
+        if first_approver:
+            stage = "dosya sahibi onayı" if report.status == "owner_onayi" else "onayı"
             from utils.notifications import create_notification
             create_notification(
                 db,
-                user_id    = approver.id,
+                user_id    = first_approver.id,
                 notif_type = "hbf_submitted",
-                title      = f"HBF onayı bekleniyor — {report.title or 'Harcama Formu'}",
-                message    = f"{req_obj.request_no if req_obj else ''} referansına ait harcama formu onayınızı bekliyor.",
+                title      = f"HBF {stage} bekleniyor — {report.title or 'Harcama Formu'}",
+                message    = f"{req_obj.request_no if req_obj else ''} referansına ait harcama formu {stage} aşamasında sizi bekliyor.",
                 link       = f"/expenses/{report.id}",
                 ref_id     = report.id,
             )
@@ -421,6 +444,20 @@ async def expenses_view(
         su = db.query(User).filter(User.id == report.submitted_by).first()
         if su:
             submitter_name = (f"{su.name} {getattr(su, 'surname', '') or ''}").strip()
+
+    # Şu an kimin onayında — durum çubuğu için
+    def _uname(u):
+        return (f"{u.name} {getattr(u, 'surname', '') or ''}").strip() if u else None
+    current_approver_name = None
+    if report.status == "owner_onayi":
+        current_approver_name = _uname(_reference_owner(report, db)) or "Dosya sahibi"
+    elif report.status == "submitted":
+        current_approver_name = _uname(_find_hbf_approver(_chain_anchor_id(report, db), db)) or "Müdür"
+    elif report.status == "mudur_onayladi":
+        current_approver_name = "Genel Müdür"
+    elif report.status == "onaylandi":
+        current_approver_name = "Muhasebe"
+
     return templates.TemplateResponse("expenses/form.html", {
         "request": request,
         "current_user": current_user,
@@ -431,6 +468,7 @@ async def expenses_view(
         "can_approve": _can_approve(report, current_user, db),
         "card_names": card_names,
         "submitter_name": submitter_name,
+        "current_approver_name": current_approver_name,
         "page_title": report.title or "HBF Detay",
         "PAYMENT_METHODS": EXPENSE_PAYMENT_METHODS,
         "DOC_TYPES": EXPENSE_DOC_TYPES,
@@ -463,7 +501,22 @@ async def expenses_approve(
     ref_no = req_obj.request_no if req_obj else ""
 
     to_muhasebe = False
-    if report.status == "submitted":
+    if report.status == "owner_onayi":
+        # 0. aşama: dosya sahibi onayladı → zincir SAHİPTEN yukarı başlar
+        report.owner_approved_by = current_user.id
+        report.owner_approved_at = now
+        if _is_gm(current_user):
+            # Sahip zaten GM ise → çift onay olmasın, direkt muhasebe
+            report.status = "onaylandi"
+            report.approved_by = current_user.id
+            report.approved_at = now
+            notify_targets, stage_msg, to_muhasebe = _find_muhasebe(db), "ödeme/kapatma", True
+        else:
+            # Normal zincir: SAHİBİN müdürü (anchor = sahip)
+            report.status = "submitted"
+            nxt = _find_hbf_approver(_chain_anchor_id(report, db), db)
+            notify_targets, stage_msg = ([nxt] if nxt else _find_gms(db)), "müdür onayı"
+    elif report.status == "submitted":
         if _is_gm(current_user):
             # GM/admin doğrudan finalize → muhasebe bekliyor
             report.status = "onaylandi"

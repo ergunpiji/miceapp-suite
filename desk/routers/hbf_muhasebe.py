@@ -32,12 +32,14 @@ EXP_DOC_TYPES = [("fatura", "Fatura"), ("fis", "Fiş"), ("belgesiz", "Belgesiz")
 router = APIRouter(prefix="/hbf-muhasebe", tags=["hbf-muhasebe"])
 
 EXP_STATUS_LABELS = {
-    "draft": "Taslak", "submitted": "Müdür Onayında", "mudur_onayladi": "GM Onayında",
+    "draft": "Taslak", "owner_onayi": "Dosya Sahibi Onayında",
+    "submitted": "Müdür Onayında", "mudur_onayladi": "GM Onayında",
     "onaylandi": "Muhasebe Bekliyor", "kapandi": "Kapandı", "rejected": "Reddedildi",
     "approved": "Onaylandı",
 }
 EXP_STATUS_COLORS = {
-    "draft": "secondary", "submitted": "warning", "mudur_onayladi": "info",
+    "draft": "secondary", "owner_onayi": "warning",
+    "submitted": "warning", "mudur_onayladi": "info",
     "onaylandi": "primary", "kapandi": "success", "rejected": "danger", "approved": "success",
 }
 
