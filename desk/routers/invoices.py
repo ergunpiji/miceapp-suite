@@ -809,6 +809,58 @@ async def invoice_approve_step(
     return RedirectResponse(url=redirect, status_code=302)
 
 
+# ---------------------------------------------------------------------------
+# Muhasebe "Fatura Kes" — onay zincirini atlayarak direkt kesme yetkisi
+# ---------------------------------------------------------------------------
+
+@router.post("/{invoice_id}/muhasebe-cut", name="invoice_muhasebe_cut")
+async def invoice_muhasebe_cut(
+    invoice_id: str,
+    request: Request,
+    invoice_no: str = Form(""),
+    next_url: str = Form(""),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    cid: int = Depends(get_company_id),
+):
+    """Muhasebe/admin fatura talebini direkt keser (onay zincirini atlar)."""
+    is_accounting = (
+        current_user.has_department_key("accounting")
+        or current_user.role in ("muhasebe", "muhasebe_muduru")
+        or current_user.is_admin
+    )
+    if not is_accounting:
+        raise HTTPException(403, "Bu işlem için muhasebe yetkisi gereklidir.")
+
+    inv = db.query(Invoice).filter_by(id=invoice_id, company_id=cid).first()
+    if not inv:
+        raise HTTPException(404, "Fatura bulunamadı.")
+    if inv.approval_status == "approved":
+        raise HTTPException(400, "Fatura zaten kesilmiş.")
+
+    if invoice_no.strip():
+        inv.invoice_no = invoice_no.strip()
+    inv.approval_status = "approved"
+
+    import json as _json
+    try:
+        history = _json.loads(inv.approval_history or "[]")
+    except Exception:
+        history = []
+    history.append({
+        "action": "muhasebe_cut",
+        "user_id": current_user.id,
+        "user_name": f"{current_user.name} {current_user.surname or ''}".strip(),
+        "user_role": current_user.role,
+        "ts": __import__("datetime").datetime.utcnow().isoformat(),
+    })
+    inv.approval_history = _json.dumps(history, ensure_ascii=False)
+
+    db.commit()
+    redirect = next_url.strip() if next_url.strip().startswith("/") else "/invoices?approval=pending"
+    return RedirectResponse(url=redirect, status_code=302)
+
+
 @router.post("/{invoice_id}/reject-step", name="invoice_reject_step")
 async def invoice_reject_step(
     invoice_id: str,

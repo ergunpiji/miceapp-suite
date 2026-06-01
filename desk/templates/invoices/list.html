@@ -83,12 +83,10 @@
           {% if not show_archived %}
           <td class="text-end pe-2">
             {% if inv.approval_status == 'onay_bekliyor' %}
-            <form method="post" action="/invoices/{{ inv.id }}/approve-step" class="d-inline">
-              <input type="hidden" name="next_url" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
-              <button type="submit" class="btn btn-success btn-sm">
-                <i class="bi bi-check-lg me-1"></i>Fatura Kes
-              </button>
-            </form>
+            <button type="button" class="btn btn-success btn-sm"
+              onclick="openCutModal('{{ inv.id }}', '{{ inv.invoice_no | e }}', '{{ (inv.vendor.name if inv.vendor else (inv.customer.name if inv.customer else '')) | e }}', '{{ inv.total_with_vat }}')">
+              <i class="bi bi-check-lg me-1"></i>Fatura Kes
+            </button>
             {% elif inv.is_split_parent %}
             <span class="badge bg-light text-muted border" title="Bölünmüş fatura">Bölündü</span>
             {% elif inv.split_parent_id %}
@@ -165,4 +163,52 @@ document.getElementById('archiveBtn').addEventListener('click', () => {
 });
 </script>
 {% endif %}
+
+{# ── Fatura Kes Modal ── #}
+<div class="modal fade" id="cutInvoiceModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-scissors me-2 text-success"></i>Fatura Kes</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="cutInvoiceForm">
+        <input type="hidden" name="next_url" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+        <div class="modal-body">
+          <div class="d-flex justify-content-between align-items-center mb-3 p-3 rounded" style="background:#f0fdf4; border:1px solid #86efac;">
+            <div>
+              <div class="fw-semibold" id="cutModalParty" style="font-size:15px;"></div>
+              <div class="text-muted small mt-1" id="cutModalAmount"></div>
+            </div>
+            <i class="bi bi-receipt-cutoff text-success fs-3"></i>
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-semibold">Fatura No <span class="text-danger">*</span></label>
+            <input type="text" name="invoice_no" id="cutInvoiceNo" class="form-control"
+                   placeholder="örn. 2024/00123" required autocomplete="off">
+            <div class="form-text">Kestiğiniz faturanın numarasını yazın.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">İptal</button>
+          <button type="submit" class="btn btn-success px-4">
+            <i class="bi bi-check-lg me-1"></i>Kesildi
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+function openCutModal(invoiceId, invoiceNo, partyName, amount) {
+  document.getElementById('cutInvoiceForm').action = '/invoices/' + invoiceId + '/muhasebe-cut';
+  document.getElementById('cutInvoiceNo').value = invoiceNo || '';
+  document.getElementById('cutModalParty').textContent = partyName || '—';
+  document.getElementById('cutModalAmount').textContent = amount
+    ? '₺' + parseFloat(amount).toLocaleString('tr-TR', {minimumFractionDigits: 2})
+    : '';
+  new bootstrap.Modal(document.getElementById('cutInvoiceModal')).show();
+  setTimeout(() => document.getElementById('cutInvoiceNo').focus(), 400);
+}
+</script>
 {% endblock %}
