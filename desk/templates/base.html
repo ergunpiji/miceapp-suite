@@ -334,7 +334,14 @@
     {% if has_invoice_sec %}
     <div class="nav-section-label">Faturalar &amp; Cari</div>
     {% if can_see(request, 'invoices') %}
-    <a href="/invoices" class="sidebar-link {% if request.url.path == '/invoices' %}active{% endif %}">
+    {% set all_pending = request.state.nav_counts.get('all_pending_invoices', 0) %}
+    {% if all_pending %}
+    <a href="/invoices?approval=pending" class="sidebar-link {% if request.query_params.get('approval') == 'pending' %}active{% endif %}">
+      <i class="bi bi-hourglass-split"></i> Fatura Talepleri
+      <span class="ms-auto badge-nav" style="background:#f59e0b;">{{ all_pending }}</span>
+    </a>
+    {% endif %}
+    <a href="/invoices" class="sidebar-link {% if request.url.path == '/invoices' and not request.query_params.get('approval') %}active{% endif %}">
       <i class="bi bi-receipt"></i> Faturalar
       {% set unpaid = request.state.nav_counts.get('invoices_unpaid', 0) %}
       {% if unpaid %}<span class="ms-auto badge-nav">{{ unpaid }}</span>{% endif %}

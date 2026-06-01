@@ -259,6 +259,14 @@ async def nav_counts_middleware(request: Request, call_next):
                                 Invoice.deleted_at == None)  # noqa: E711
                         .scalar() or 0
                     )
+                    # Tüm onay-bekleyen faturalar (muhasebe sidebar sayacı)
+                    counts["all_pending_invoices"] = (
+                        db.query(func.count(Invoice.id))
+                        .filter(Invoice.company_id == company_id,
+                                Invoice.approval_status == "onay_bekliyor",
+                                Invoice.deleted_at == None)  # noqa: E711
+                        .scalar() or 0
+                    )
 
                 # Havuzdaki referanssız faturalar (tüm satış kullanıcılarına görünür)
                 if company_id:

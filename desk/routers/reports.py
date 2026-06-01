@@ -7,7 +7,7 @@ from collections import defaultdict
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func, extract
+from sqlalchemy import func, extract, or_
 
 from fastapi import Form, HTTPException
 from fastapi.responses import RedirectResponse
@@ -41,6 +41,7 @@ async def report_pl(
         Invoice.status.in_(["approved", "partial", "paid"]),
         extract("year", Invoice.invoice_date) == year,
         Invoice.deleted_at == None,  # noqa: E711
+        or_(Invoice.approval_status.is_(None), Invoice.approval_status != "onay_bekliyor"),
     ).all()
 
     # Gelir tarafı: kesilen + komisyon + iade_kesilen (vendor'a iade → maliyet azalır → gelir)

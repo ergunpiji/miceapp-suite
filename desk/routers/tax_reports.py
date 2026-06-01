@@ -11,7 +11,7 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
-from sqlalchemy import extract
+from sqlalchemy import extract, or_
 from sqlalchemy.orm import Session
 
 from auth import require_admin, require_mudur, get_company_id
@@ -41,6 +41,7 @@ def _kdv_summary(db: Session, year: int, month: int, cid: int) -> dict:
         Invoice.status.in_(["approved", "partial", "paid"]),
         extract("year", Invoice.invoice_date) == year,
         extract("month", Invoice.invoice_date) == month,
+        or_(Invoice.approval_status.is_(None), Invoice.approval_status != "onay_bekliyor"),
     ).all()
 
     # Çıkış (kesilen + komisyon) hesaplanan KDV
@@ -81,6 +82,7 @@ def _ba_bs_lines(db: Session, year: int, month: int, cid: int, threshold: float 
         Invoice.status.in_(["approved", "partial", "paid"]),
         extract("year", Invoice.invoice_date) == year,
         extract("month", Invoice.invoice_date) == month,
+        or_(Invoice.approval_status.is_(None), Invoice.approval_status != "onay_bekliyor"),
     ).all()
 
     # BA: gelen (alımlar) — vergi no bazında topla
@@ -130,6 +132,7 @@ def _quarterly_corp_tax(db: Session, year: int, cid: int) -> list:
         Invoice.company_id == cid,
         Invoice.status.in_(["approved", "partial", "paid"]),
         extract("year", Invoice.invoice_date) == year,
+        or_(Invoice.approval_status.is_(None), Invoice.approval_status != "onay_bekliyor"),
     ).all()
     expenses = db.query(GeneralExpense).filter(
         GeneralExpense.company_id == cid,

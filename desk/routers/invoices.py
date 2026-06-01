@@ -45,6 +45,12 @@ async def invoices_list(
         query = query.filter(Invoice.approval_status == "onay_bekliyor")
     elif approval == "rejected":
         query = query.filter(Invoice.approval_status == "reddedildi")
+    else:
+        # Varsayılan: onay bekleyenleri hariç tut (ayrı "Fatura Talepleri" linki var)
+        from sqlalchemy import or_ as _or2
+        query = query.filter(
+            _or2(Invoice.approval_status.is_(None), Invoice.approval_status != "onay_bekliyor")
+        )
     if show_archived:
         query = query.filter(Invoice.deleted_at != None)  # noqa: E711
     else:

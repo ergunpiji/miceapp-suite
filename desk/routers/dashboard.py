@@ -92,11 +92,14 @@ async def dashboard(
     )
 
     # RBAC v2: Sales user yalnızca kendi müşterilerine ait faturaları görür
+    from sqlalchemy import or_ as _or
     inv_q = visible_invoices_query(db, current_user).filter(
         Invoice.status.in_(["approved", "partial", "paid"]),
         Invoice.invoice_date >= d_from,
         Invoice.invoice_date <= d_to,
         Invoice.deleted_at == None,  # noqa: E711
+        # Onay zinciri tamamlanmamış faturalar P&L'e girmez
+        _or(Invoice.approval_status.is_(None), Invoice.approval_status != "onay_bekliyor"),
     )
     if cust_id:
         # Müşteriye ait referans ID'leri
