@@ -3085,10 +3085,9 @@ document.getElementById('projectStatusModal')?.addEventListener('hidden.bs.modal
 
 function sendOfferEmail(reqId, customerEmail, eventName, refNo) {
   // 1) Durumu "offer_sent" olarak güncelle
-  fetch(`/requests/${reqId}/offer-sent`, { method: 'POST' })
-    .catch(() => {});  // sessiz hata — zaten offer_sent ise de sorun yok
+  fetch(`/requests/${reqId}/offer-sent`, { method: 'POST' }).catch(() => {});
 
-  // 2) Excel'i indir
+  // 2) Excel'i indir (link tıklama — aynı user-gesture içinde çalışır)
   const exportUrl = `/requests/${reqId}/export?vat=exclusive`;
   const a = document.createElement('a');
   a.href = exportUrl;
@@ -3097,20 +3096,24 @@ function sendOfferEmail(reqId, customerEmail, eventName, refNo) {
   a.click();
   document.body.removeChild(a);
 
-  // 3) Mail istemcisini aç (müşteri adresi varsa)
+  // 3) Mail istemcisi — location.href ile aç (popup blocker atlanır)
   if (customerEmail) {
     const offerSubj = getTplSubject('offer_customer')
       || renderEmailTpl('Etkinlik Teklifi: {event_name} — {request_no}');
     const offerBody = getTplBody('offer_customer')
-      || renderEmailTpl('Sayın Yetkili,\n\n{event_name} etkinliğiniz için hazırlanan teklif dosyasını ekte sunmaktayız.\n\nReferans No: {request_no}\n\nTeklifi inceleyip dönüş yapmanızı rica ederiz.\n\n{email_signature}');
-    const subject = encodeURIComponent(offerSubj);
-    const body    = encodeURIComponent(offerBody);
-    setTimeout(() => {
-      window.open(`mailto:${customerEmail}?subject=${subject}&body=${body}`, '_blank');
-    }, 800);
-    showToast('Teklif gönderildi olarak işaretlendi. Excel indiriliyor, mail uygulamanız açılıyor.');
+      || renderEmailTpl('Sayın {contact_name},\n\n{event_name} etkinliğiniz için hazırlanan teklif dosyasını ekte sunmaktayız.\n\nReferans No: {request_no}\n\nTeklifi inceleyip dönüş yapmanızı rica ederiz.\n\nSaygılarımızla,\n{email_signature}');
+    const mailtoHref = `mailto:${customerEmail}?subject=${encodeURIComponent(offerSubj)}&body=${encodeURIComponent(offerBody)}`;
+    // Aynı frame içinde aç — Chrome popup blocker'ı geçer
+    const mailLink = document.createElement('a');
+    mailLink.href = mailtoHref;
+    document.body.appendChild(mailLink);
+    mailLink.click();
+    document.body.removeChild(mailLink);
+    showToast('✓ Teklif gönderildi olarak işaretlendi. Excel indiriliyor ve mail istemcisi açılıyor.');
   } else {
-    showToast('Teklif gönderildi olarak işaretlendi. Excel indiriliyor. Müşteri email adresi tanımlı değil.');
+    // E-posta yoksa açılır modal — kullanıcı kopyalasın
+    showToast('⚠ Müşteri e-posta adresi tanımlı değil. Excel indiriliyor. Müşteri kartına e-posta ekleyin.');
+    // Yine de excel'i indir (zaten yukarıda tetiklendi)
   }
 }
 
