@@ -87,13 +87,10 @@ async def vendors_autocomplete(
     if current_user.role not in {*FINANCE_ROLES, "mudur"} and not current_user.is_gm:
         return JSONResponse([])
     term = f"%{q.strip()}%"
-    vendors = (
-        db.query(Vendor)
-        .filter(Vendor.active == True, Vendor.name.ilike(term))
-        .order_by(Vendor.name)
-        .limit(20)
-        .all()
-    )
+    _vq = db.query(Vendor).filter(Vendor.active == True, Vendor.name.ilike(term))
+    if current_user.company_id:
+        _vq = _vq.filter(Vendor.company_id == current_user.company_id)
+    vendors = _vq.order_by(Vendor.name).limit(20).all()
     return JSONResponse([
         {
             "id":           v.id,
@@ -120,6 +117,9 @@ async def vendors_list(
     _require_view(current_user)
 
     query = db.query(Vendor).filter(Vendor.active == True)
+    # Tenant izolasyonu — sadece kendi şirketinin tedarikçileri
+    if current_user.company_id:
+        query = query.filter(Vendor.company_id == current_user.company_id)
     if q.strip():
         term = f"%{q.strip()}%"
         query = query.filter(Vendor.name.ilike(term))

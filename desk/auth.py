@@ -21,8 +21,16 @@ from models import User, RolePermission, ROLE_ORDER
 # ---------------------------------------------------------------------------
 
 _env_key = os.environ.get("SECRET_KEY", "")
-SECRET_KEY = _env_key or "satinalma-dev-fallback-key--set-SECRET_KEY-env-var-in-production"
-if not _env_key:
+if _env_key:
+    SECRET_KEY = _env_key
+elif os.environ.get("ENVIRONMENT", "").lower() == "production":
+    # Production'da sabit yedek anahtar GÜVENLİK AÇIĞIDIR (JWT taklit edilebilir).
+    raise RuntimeError(
+        "SECRET_KEY ortam değişkeni production'da ZORUNLUDUR. "
+        'Üretmek için: python -c "import secrets; print(secrets.token_hex(32))"'
+    )
+else:
+    SECRET_KEY = "satinalma-dev-fallback-key--set-SECRET_KEY-env-var-in-production"
     print("[AUTH] SECRET_KEY env variable ayarlı değil — development fallback kullanılıyor!", flush=True)
 
 ALGORITHM = "HS256"

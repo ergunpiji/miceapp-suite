@@ -35,6 +35,17 @@ def _ensure_upload_dir():
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
+def _assert_tenant(report, user) -> None:
+    """Çapraz-kiracı (tenant) erişimini engelle — kaydın company_id'si kullanıcınınkiyle
+    uyuşmalı. company_id boş (legacy) kayıtlar engellenmez; uyuşmazlık 403."""
+    if report is None:
+        return
+    rc = getattr(report, "company_id", None)
+    uc = getattr(user, "company_id", None)
+    if rc and uc and rc != uc:
+        raise HTTPException(status_code=403, detail="Bu kayda erişim yetkiniz yok.")
+
+
 def _can_edit(report: ExpenseReport, user: User) -> bool:
     """Taslak ve reddedilen HBF'ler sahibi veya admin tarafından düzenlenebilir."""
     if user.role == "admin":
@@ -337,6 +348,7 @@ async def expenses_edit_get(
     db: Session = Depends(get_db),
 ):
     report = db.query(ExpenseReport).filter(ExpenseReport.id == report_id).first()
+    _assert_tenant(report, current_user)
     if not report:
         raise HTTPException(404)
     if not _can_edit(report, current_user):
@@ -368,6 +380,7 @@ async def expenses_edit_post(
 ):
     import json as _json
     report = db.query(ExpenseReport).filter(ExpenseReport.id == report_id).first()
+    _assert_tenant(report, current_user)
     if not report:
         raise HTTPException(404)
     if not _can_edit(report, current_user):
@@ -431,6 +444,7 @@ async def expenses_view(
     db: Session = Depends(get_db),
 ):
     report = db.query(ExpenseReport).filter(ExpenseReport.id == report_id).first()
+    _assert_tenant(report, current_user)
     if not report:
         raise HTTPException(404)
     # Hangi kredi kartıyla harcandığını göstermek için: id → "Ad ••1234"
@@ -489,6 +503,7 @@ async def expenses_approve(
     db: Session = Depends(get_db),
 ):
     report = db.query(ExpenseReport).filter(ExpenseReport.id == report_id).first()
+    _assert_tenant(report, current_user)
     if not report:
         raise HTTPException(404)
     if not _can_approve(report, current_user, db):
@@ -568,6 +583,7 @@ async def expenses_reject(
     db: Session = Depends(get_db),
 ):
     report = db.query(ExpenseReport).filter(ExpenseReport.id == report_id).first()
+    _assert_tenant(report, current_user)
     if not report:
         raise HTTPException(404)
     if not _can_approve(report, current_user, db):
@@ -592,6 +608,7 @@ async def expenses_sync_rows(
 ):
     """Satırları kaydet ve item ID'lerini döndür (belge yükleme öncesi auto-save)."""
     report = db.query(ExpenseReport).filter(ExpenseReport.id == report_id).first()
+    _assert_tenant(report, current_user)
     if not report:
         raise HTTPException(404)
     if not _can_edit(report, current_user):
@@ -659,6 +676,7 @@ async def expenses_upload_doc(
     db: Session = Depends(get_db),
 ):
     report = db.query(ExpenseReport).filter(ExpenseReport.id == report_id).first()
+    _assert_tenant(report, current_user)
     if not report:
         raise HTTPException(404)
     if not _can_edit(report, current_user):

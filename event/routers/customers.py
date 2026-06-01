@@ -27,6 +27,9 @@ async def customers_list(
     db: Session = Depends(get_db),
 ):
     query = db.query(Customer)
+    # Tenant izolasyonu — sadece kendi şirketinin müşterileri
+    if current_user.company_id:
+        query = query.filter(Customer.company_id == current_user.company_id)
     if not current_user.is_gm and current_user.role == "mudur" and current_user.team_id:
         _team = db.query(Team).filter(Team.id == current_user.team_id).first()
         if not (_team and _team.is_support_team):
@@ -51,6 +54,9 @@ async def customers_autocomplete(
 ):
     """PM için müşteri autocomplete endpoint'i"""
     query = db.query(Customer)
+    # Tenant izolasyonu
+    if current_user.company_id:
+        query = query.filter(Customer.company_id == current_user.company_id)
     if q:
         query = query.filter(Customer.name.ilike(f"%{q}%"))
     customers = query.order_by(Customer.name).limit(20).all()

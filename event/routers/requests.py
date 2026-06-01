@@ -114,6 +114,9 @@ async def requests_list(
     """Rol bazlı talep listesi"""
     query = db.query(ReqModel)
 
+    # NOT: requests tablosunda company_id kolonu henüz YOK (model tanımlıyor ama DB'de yok).
+    # Tenant filtresi, kolon eklenip backfill yapıldıktan sonra eklenmeli (bkz. denetim raporu).
+
     # ── ADIM 1: Rol bazlı BASE SCOPE — tüm view filtreleri bunun üstüne eklenir ──
     if current_user.is_gm:
         pass  # GM: tüm referanslar

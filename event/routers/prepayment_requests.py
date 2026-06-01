@@ -48,6 +48,16 @@ def _is_gm(user: User) -> bool:
     return user.is_gm
 
 
+def _assert_tenant(obj, user) -> None:
+    """Çapraz-kiracı erişimini engelle (company_id uyuşmazlığında 403)."""
+    if obj is None:
+        return
+    rc = getattr(obj, "company_id", None)
+    uc = getattr(user, "company_id", None)
+    if rc and uc and rc != uc:
+        raise HTTPException(status_code=403, detail="Bu kayda erişim yetkiniz yok.")
+
+
 def _require_can_request(user: User):
     if user.role not in REQUESTER_ROLES and not _is_gm(user):
         raise HTTPException(403, "Bu işlem için yetkiniz yok.")
@@ -212,6 +222,7 @@ async def prepayment_requests_doc(
 ):
     """Ön ödeme ek dosyasını servis eder (müdür/GM/muhasebe görebilir)."""
     pr = db.query(PrepaymentRequest).filter(PrepaymentRequest.id == pr_id).first()
+    _assert_tenant(pr, current_user)
     if not pr or not pr.document_path:
         raise HTTPException(404)
     return _serve_upload(pr.document_path, pr.document_name or "belge")
@@ -236,6 +247,10 @@ async def prepayment_requests_list(
         raise HTTPException(403)
 
     query = db.query(PrepaymentRequest)
+
+    # Tenant izolasyonu — sadece kendi şirketinin talepleri
+    if current_user.company_id:
+        query = query.filter(PrepaymentRequest.company_id == current_user.company_id)
 
     # Rol bazlı filtreleme: muhasebe/GM hepsini görür, diğerleri sadece kendileri
     if current_user.role in FINANCE_ROLES or is_gm:
@@ -292,6 +307,7 @@ async def prepayment_requests_detail(
     db: Session = Depends(get_db),
 ):
     pr = db.query(PrepaymentRequest).filter(PrepaymentRequest.id == pr_id).first()
+    _assert_tenant(pr, current_user)
     if not pr:
         raise HTTPException(404, "Talep bulunamadı.")
 
@@ -343,6 +359,7 @@ async def prepayment_requests_approve(
         raise HTTPException(403, "Sadece Genel Müdür onaylayabilir.")
 
     pr = db.query(PrepaymentRequest).filter(PrepaymentRequest.id == pr_id).first()
+    _assert_tenant(pr, current_user)
     if not pr or pr.status != "pending_gm":
         raise HTTPException(400, "Bu talep onaylanamaz.")
 
@@ -396,6 +413,7 @@ async def prepayment_requests_reject(
         raise HTTPException(403, "Sadece Genel Müdür reddedebilir.")
 
     pr = db.query(PrepaymentRequest).filter(PrepaymentRequest.id == pr_id).first()
+    _assert_tenant(pr, current_user)
     if not pr or pr.status != "pending_gm":
         raise HTTPException(400, "Bu talep reddedilemez.")
 
@@ -437,6 +455,7 @@ async def prepayment_requests_pay(
     _require_finance(current_user)
 
     pr = db.query(PrepaymentRequest).filter(PrepaymentRequest.id == pr_id).first()
+    _assert_tenant(pr, current_user)
     if not pr or pr.status != "approved":
         raise HTTPException(400, "Bu talep ödenemez (henüz GM onayı yok veya zaten işlendi).")
 
@@ -511,6 +530,7 @@ async def prepayment_requests_cancel(
     db: Session = Depends(get_db),
 ):
     pr = db.query(PrepaymentRequest).filter(PrepaymentRequest.id == pr_id).first()
+    _assert_tenant(pr, current_user)
     if not pr:
         raise HTTPException(404)
 
