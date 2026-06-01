@@ -22,8 +22,7 @@
   }
   .cari-ledger .section-head th {
     text-align: center; font-size: 13px; font-weight: 700;
-    padding: 8px 12px;
-    border-bottom: 2px solid;
+    padding: 8px 12px; border-bottom: 2px solid;
   }
   .cari-ledger .col-head th {
     font-size: 11px; text-transform: uppercase; letter-spacing: .4px;
@@ -32,6 +31,10 @@
   .cari-ledger .data-row td { font-size: 13px; }
   .cari-ledger .data-row.clickable { cursor: pointer; }
   .cari-ledger .data-row.clickable:hover td { background: #f0f9ff; }
+  .cari-ledger .hbf-summary-row td {
+    background: #fffbeb; border-top: 2px dashed #fcd34d; font-style: italic;
+  }
+  .cari-ledger .hbf-summary-row td.amt { color: #d97706; font-weight: 700; font-style: normal; }
   .cari-ledger .divider-col {
     width: 3px; background: #e2e8f0 !important; padding: 0; border: none;
   }
@@ -55,6 +58,8 @@
 {% endblock %}
 
 {% block content %}
+{% set toplam_gider = gider_total + hbf_total %}
+{% set karlılık_oran = ((net / gelir_total * 100) | round(1)) if gelir_total > 0 else 0 %}
 <div class="container-fluid" style="max-width: 1200px;">
 
   {# ── Özet Kartlar ── #}
@@ -68,16 +73,21 @@
     </div>
     <div class="col-6 col-md-3">
       <div class="summary-card" style="background:#fef2f2; border:1px solid #fca5a5;">
-        <div class="text-muted small mb-1">Giderler (Fatura)</div>
-        <div class="fw-bold fs-5 text-danger">₺{{ '{:,.0f}'.format(gider_total).replace(',','.') }}</div>
-        <div class="text-muted" style="font-size:11px;">{{ giderler|length }} fatura</div>
+        <div class="text-muted small mb-1">Toplam Giderler</div>
+        <div class="fw-bold fs-5 text-danger">₺{{ '{:,.0f}'.format(toplam_gider).replace(',','.') }}</div>
+        <div class="text-muted" style="font-size:11px;">
+          Fatura ₺{{ '{:,.0f}'.format(gider_total).replace(',','.') }}
+          {% if hbf_total > 0 %} + HBF ₺{{ '{:,.0f}'.format(hbf_total).replace(',','.') }}{% endif %}
+        </div>
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="summary-card" style="background:#fffbeb; border:1px solid #fcd34d;">
-        <div class="text-muted small mb-1">Giderler (HBF)</div>
-        <div class="fw-bold fs-5" style="color:#d97706;">₺{{ '{:,.0f}'.format(hbf_total).replace(',','.') }}</div>
-        <div class="text-muted" style="font-size:11px;">{{ hbf_list|length }} HBF</div>
+      <div class="summary-card" style="background:#f0f9ff; border:1px solid #93c5fd;">
+        <div class="text-muted small mb-1">Karlılık Oranı</div>
+        <div class="fw-bold fs-5" style="color:#1d4ed8;">
+          {{ '+' if karlılık_oran >= 0 else '' }}%{{ '{:,.1f}'.format(karlılık_oran).replace(',','.') }}
+        </div>
+        <div class="text-muted" style="font-size:11px;">Net Kar / Gelir</div>
       </div>
     </div>
     <div class="col-6 col-md-3">
@@ -113,7 +123,6 @@
             <th>Açıklama</th>
             <th>Firma</th>
             <th class="text-end">Tutar</th>
-            {# divider-col skipped (rowspan) #}
             <th>Tarih</th>
             <th>Açıklama</th>
             <th>Firma</th>
@@ -121,7 +130,6 @@
           </tr>
         </thead>
         <tbody>
-          {# Satırları zip gibi yan yana: max(len(gelirler), len(giderler)) #}
           {% set max_rows = [gelirler|length, giderler|length]|max %}
           {% if max_rows == 0 %}
           <tr class="data-row">
@@ -132,40 +140,34 @@
           {% for i in range(max_rows) %}
           {% set gi = gelirler[i] if i < gelirler|length else None %}
           {% set ci = giderler[i] if i < giderler|length else None %}
-          <tr class="data-row"
-              {% if gi and ci %}style="cursor:default;"
-              {% elif gi %}onclick="window.location.href='/invoices/{{ gi.id }}/detail'" style="cursor:pointer;"
-              {% elif ci %}onclick="window.location.href='/invoices/{{ ci.id }}/detail'" style="cursor:pointer;"
-              {% endif %}>
-            {# Giriş tarafı #}
+          <tr class="data-row">
             {% if gi %}
-            <td style="white-space:nowrap; color:#64748b;" onclick="if(event.target===this||!event.target.closest('a'))window.location.href='/invoices/{{ gi.id }}/detail'; event.stopPropagation();">{{ gi.invoice_date or '—' }}</td>
-            <td style="max-width:220px;" onclick="window.location.href='/invoices/{{ gi.id }}/detail'; event.stopPropagation();">
+            <td style="white-space:nowrap; color:#64748b; cursor:pointer;" onclick="window.location.href='/invoices/{{ gi.id }}/detail'">{{ gi.invoice_date or '—' }}</td>
+            <td style="max-width:220px; cursor:pointer;" onclick="window.location.href='/invoices/{{ gi.id }}/detail'">
               <div>{{ gi.description or gi.invoice_no or '—' }}</div>
               {% if gi.invoice_no %}<div class="text-muted" style="font-size:11px;">Fatura No: {{ gi.invoice_no }}</div>{% endif %}
               {% if gi.status == 'pending' %}<span class="badge bg-warning text-dark" style="font-size:10px;">Onay Bekliyor</span>
               {% elif gi.status == 'approved' %}<span class="badge bg-success" style="font-size:10px;">Onaylandı</span>
               {% elif gi.status == 'rejected' %}<span class="badge bg-danger" style="font-size:10px;">Reddedildi</span>{% endif %}
             </td>
-            <td onclick="window.location.href='/invoices/{{ gi.id }}/detail'; event.stopPropagation();">{{ gi.vendor_name or '—' }}</td>
-            <td class="text-end fw-semibold text-success" onclick="window.location.href='/invoices/{{ gi.id }}/detail'; event.stopPropagation();">
+            <td style="cursor:pointer;" onclick="window.location.href='/invoices/{{ gi.id }}/detail'">{{ gi.vendor_name or '—' }}</td>
+            <td class="text-end fw-semibold text-success" style="cursor:pointer;" onclick="window.location.href='/invoices/{{ gi.id }}/detail'">
               ₺{{ '{:,.2f}'.format(gi.total_amount or 0).replace(',','.') }}
             </td>
             {% else %}
             <td></td><td></td><td></td><td></td>
             {% endif %}
-            {# Çıkış tarafı #}
             {% if ci %}
-            <td style="white-space:nowrap; color:#64748b;" onclick="window.location.href='/invoices/{{ ci.id }}/detail'; event.stopPropagation();">{{ ci.invoice_date or '—' }}</td>
-            <td style="max-width:220px;" onclick="window.location.href='/invoices/{{ ci.id }}/detail'; event.stopPropagation();">
+            <td style="white-space:nowrap; color:#64748b; cursor:pointer;" onclick="window.location.href='/invoices/{{ ci.id }}/detail'">{{ ci.invoice_date or '—' }}</td>
+            <td style="max-width:220px; cursor:pointer;" onclick="window.location.href='/invoices/{{ ci.id }}/detail'">
               <div>{{ ci.description or ci.invoice_no or '—' }}</div>
               {% if ci.invoice_no %}<div class="text-muted" style="font-size:11px;">Fatura No: {{ ci.invoice_no }}</div>{% endif %}
               {% if ci.status == 'pending' %}<span class="badge bg-warning text-dark" style="font-size:10px;">Onay Bekliyor</span>
               {% elif ci.status == 'approved' %}<span class="badge bg-success" style="font-size:10px;">Onaylandı</span>
               {% elif ci.status == 'rejected' %}<span class="badge bg-danger" style="font-size:10px;">Reddedildi</span>{% endif %}
             </td>
-            <td onclick="window.location.href='/invoices/{{ ci.id }}/detail'; event.stopPropagation();">{{ ci.vendor_name or '—' }}</td>
-            <td class="text-end fw-semibold text-danger" onclick="window.location.href='/invoices/{{ ci.id }}/detail'; event.stopPropagation();">
+            <td style="cursor:pointer;" onclick="window.location.href='/invoices/{{ ci.id }}/detail'">{{ ci.vendor_name or '—' }}</td>
+            <td class="text-end fw-semibold text-danger" style="cursor:pointer;" onclick="window.location.href='/invoices/{{ ci.id }}/detail'">
               ₺{{ '{:,.2f}'.format(ci.total_amount or 0).replace(',','.') }}
             </td>
             {% else %}
@@ -173,13 +175,26 @@
             {% endif %}
           </tr>
           {% endfor %}
+
+          {# HBF özet satırı — Çıkışlar tarafına #}
+          {% if hbf_list %}
+          <tr class="hbf-summary-row">
+            <td colspan="4"></td>
+            <td colspan="3" style="color:#92400e;">
+              <i class="bi bi-receipt-cutoff me-1"></i>
+              HBF Toplamı
+              <span class="text-muted ms-1" style="font-size:11px;">({{ hbf_list|length }} form — ayrıntı için aşağı bakın)</span>
+            </td>
+            <td class="text-end amt">₺{{ '{:,.2f}'.format(hbf_total).replace(',','.') }}</td>
+          </tr>
+          {% endif %}
         </tbody>
         <tfoot>
           <tr class="total-row">
             <td colspan="3" class="text-end" style="font-size:12px; color:#64748b;">TOPLAM</td>
             <td class="text-end text-success">₺{{ '{:,.2f}'.format(gelir_total).replace(',','.') }}</td>
-            <td colspan="3" class="text-end" style="font-size:12px; color:#64748b;">TOPLAM</td>
-            <td class="text-end text-danger">₺{{ '{:,.2f}'.format(gider_total).replace(',','.') }}</td>
+            <td colspan="3" class="text-end" style="font-size:12px; color:#64748b;">TOPLAM (Fatura + HBF)</td>
+            <td class="text-end text-danger">₺{{ '{:,.2f}'.format(toplam_gider).replace(',','.') }}</td>
           </tr>
           <tr class="bakiye-row">
             <td colspan="4" class="text-end">
@@ -192,9 +207,11 @@
               <span class="text-muted ms-3" style="font-size:11px;">(HBF ₺{{ '{:,.0f}'.format(hbf_total).replace(',','.') }} dahil)</span>
               {% endif %}
             </td>
-            <td colspan="4" class="text-end text-muted" style="font-size:12px;">
-              KDV Hariç: ₺{{ '{:,.2f}'.format((gelirler|sum(attribute='amount') or 0) - (giderler|sum(attribute='amount') or 0)).replace(',','.') }}
+            <td colspan="3" class="text-end text-muted" style="font-size:12px;">
+              Karlılık: <strong style="color:#1d4ed8;">{{ '+' if karlılık_oran >= 0 else '' }}%{{ '{:,.1f}'.format(karlılık_oran).replace(',','.') }}</strong>
+              &nbsp;·&nbsp; KDV Hariç Gider: ₺{{ '{:,.2f}'.format((giderler|sum(attribute='amount') or 0)).replace(',','.') }}
             </td>
+            <td></td>
           </tr>
         </tfoot>
       </table>

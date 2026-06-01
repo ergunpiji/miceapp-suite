@@ -278,7 +278,7 @@ async def invoices_list(
     if current_user.role not in {"admin", "super_admin", "genel_mudur", "muhasebe_muduru", "muhasebe", "mudur", "yonetici", "asistan", "satinalma"} and not current_user.is_gm:
         raise HTTPException(status_code=403)
 
-    query = db.query(Invoice).join(Invoice.request)
+    query = db.query(Invoice).outerjoin(Invoice.request)
 
     # "Onaylarım" görünümü — sadece benim onayımı bekleyen faturalar
     if view == "my_pending":
@@ -313,7 +313,7 @@ async def invoices_list(
 
     invoices = query.order_by(Invoice.created_at.desc()).all()
 
-    _count_base = db.query(Invoice).join(Invoice.request)
+    _count_base = db.query(Invoice).outerjoin(Invoice.request)
     if current_user.role in ("yonetici", "asistan"):
         from models import Request as ReqModel
         _count_base = _count_base.filter(ReqModel.created_by == current_user.id)
