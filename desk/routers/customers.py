@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 from auth import get_current_user, get_company_id, require_admin, require_module
 from database import get_db
 from models import (
-    Customer, CustomerPrepayment, Invoice, Cheque, Reference,
+    Customer, CustomerPrepayment, Invoice, Cheque, Reference, Team,
     User, CashBook, BankAccount, CreditCard, CashEntry, BankMovement,
     PAYMENT_METHODS,
 )
@@ -46,11 +46,14 @@ async def customers_list(
 async def customer_new_get(
     request: Request,
     current_user: User = Depends(require_module("customers", edit=True)),
+    db: Session = Depends(get_db),
 ):
+    teams = db.query(Team).filter(Team.active == True).order_by(Team.name).all()
     return templates.TemplateResponse(
         "customers/form.html",
         {"request": request, "current_user": current_user,
-         "customer": None, "page_title": "Yeni Müşteri", "error": None},
+         "customer": None, "page_title": "Yeni Müşteri", "error": None,
+         "teams": teams},
     )
 
 
@@ -69,16 +72,18 @@ async def customer_new_post(
     payment_dow: str = Form(""),
     notes: str = Form(""),
     contacts_json: str = Form("[]"),
+    team_id: str = Form(""),
     current_user: User = Depends(require_module("customers", edit=True)),
     db: Session = Depends(get_db),
 ):
     code = code.strip().upper()[:3]
     if db.query(Customer).filter(Customer.code == code, Customer.company_id == current_user.company_id).first():
+        teams = db.query(Team).filter(Team.active == True).order_by(Team.name).all()
         return templates.TemplateResponse(
             "customers/form.html",
             {"request": request, "current_user": current_user,
              "customer": None, "page_title": "Yeni Müşteri",
-             "error": f"'{code}' kodu zaten kullanılıyor."},
+             "error": f"'{code}' kodu zaten kullanılıyor.", "teams": teams},
             status_code=400,
         )
     c = Customer(
@@ -89,6 +94,7 @@ async def customer_new_post(
         payment_dow=int(payment_dow) if payment_dow.strip() else None,
         notes=notes.strip(),
         contacts_json=contacts_json or "[]",
+        team_id=team_id.strip() or None,
         company_id=current_user.company_id,
         owner_id=current_user.id,
     )
@@ -184,10 +190,12 @@ async def customer_edit_get(
     c = db.query(Customer).filter(Customer.id == customer_id, Customer.company_id == current_user.company_id).first()
     if not c:
         raise HTTPException(status_code=404)
+    teams = db.query(Team).filter(Team.active == True).order_by(Team.name).all()
     return templates.TemplateResponse(
         "customers/form.html",
         {"request": request, "current_user": current_user,
-         "customer": c, "page_title": f"Düzenle — {c.name}", "error": None},
+         "customer": c, "page_title": f"Düzenle — {c.name}", "error": None,
+         "teams": teams},
     )
 
 
@@ -207,6 +215,7 @@ async def customer_edit_post(
     payment_dow: str = Form(""),
     notes: str = Form(""),
     contacts_json: str = Form("[]"),
+    team_id: str = Form(""),
     current_user: User = Depends(require_module("customers", edit=True)),
     db: Session = Depends(get_db),
 ):
@@ -216,11 +225,12 @@ async def customer_edit_post(
     code = code.strip().upper()[:3]
     existing = db.query(Customer).filter(Customer.code == code, Customer.id != customer_id, Customer.company_id == current_user.company_id).first()
     if existing:
+        teams = db.query(Team).filter(Team.active == True).order_by(Team.name).all()
         return templates.TemplateResponse(
             "customers/form.html",
             {"request": request, "current_user": current_user,
              "customer": c, "page_title": f"Düzenle — {c.name}",
-             "error": f"'{code}' kodu zaten kullanılıyor."},
+             "error": f"'{code}' kodu zaten kullanılıyor.", "teams": teams},
             status_code=400,
         )
     c.name = name.strip()
@@ -235,6 +245,7 @@ async def customer_edit_post(
     c.payment_dow = int(payment_dow) if payment_dow.strip() else None
     c.notes = notes.strip()
     c.contacts_json = contacts_json or "[]"
+    c.team_id = team_id.strip() or None
     db.commit()
     return RedirectResponse(url=f"/customers/{customer_id}", status_code=status.HTTP_302_FOUND)
 

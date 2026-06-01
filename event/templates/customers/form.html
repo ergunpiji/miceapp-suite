@@ -95,14 +95,31 @@
                      value="{{ customer.tax_no if customer else '' }}" placeholder="0123456789">
             </div>
 
-            <div class="col-md-6">
-              <label class="form-label fw-semibold" style="font-size:13px;">Ödeme Vadesi</label>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" style="font-size:13px;">
+                Tahsilat Vadesi
+                <small class="text-muted fw-normal">(gün)</small>
+              </label>
               <input type="text" name="payment_term" class="form-control"
                      value="{{ customer.payment_term if customer else '' }}"
-                     placeholder="örn. 30 gün, 45 gün, peşin">
+                     placeholder="örn. 30, 45, peşin">
             </div>
 
-            <div class="col-md-6">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" style="font-size:13px;">
+                Tahsilat Günü
+                <small class="text-muted fw-normal">(vadeden sonraki ilk)</small>
+              </label>
+              <select name="payment_dow" class="form-select">
+                <option value="">— Belirtilmemiş —</option>
+                {% set days = [('0','Pazartesi'),('1','Salı'),('2','Çarşamba'),('3','Perşembe'),('4','Cuma'),('5','Cumartesi'),('6','Pazar')] %}
+                {% for val, lbl in days %}
+                <option value="{{ val }}" {% if customer and customer.payment_dow is not none and customer.payment_dow|string == val %}selected{% endif %}>{{ lbl }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-md-4">
               <label class="form-label fw-semibold" style="font-size:13px;">
                 Takım
                 <span class="text-muted fw-normal" style="font-size:11px;">(opsiyonel)</span>
@@ -116,10 +133,9 @@
                 </option>
                 {% endfor %}
               </select>
-              <div class="form-text">Seçilirse bu müşteriye ait yeni talepler otomatik bu takıma atanır.</div>
             </div>
 
-            <div class="col-md-6">
+            <div class="col-md-12">
               <label class="form-label fw-semibold" style="font-size:13px;">Notlar</label>
               <textarea name="notes" class="form-control" rows="2">{{ customer.notes if customer else '' }}</textarea>
             </div>

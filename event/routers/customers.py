@@ -96,6 +96,7 @@ async def customers_create(
     notes:         str = Form(""),
     contacts_json: str = Form("[]"),
     payment_term:  str = Form(""),
+    payment_dow:   str = Form(""),
     team_id:       str = Form(""),
     request: Request = None,
     current_user: User = Depends(require_admin),
@@ -132,6 +133,7 @@ async def customers_create(
         notes=notes.strip(),
         contacts_json=contacts_json,
         payment_term=payment_term.strip(),
+        payment_dow=int(payment_dow) if payment_dow.strip() else None,
         team_id=team_id.strip() or None,
         created_at=_now(),
     )
@@ -185,6 +187,7 @@ async def customers_update(
     notes:         str = Form(""),
     contacts_json: str = Form("[]"),
     payment_term:  str = Form(""),
+    payment_dow:   str = Form(""),
     team_id:       str = Form(""),
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
@@ -217,12 +220,13 @@ async def customers_update(
     customer.sector        = sector.strip()
     customer.address       = address.strip()
     customer.tax_office    = tax_office.strip()
-    customer.tax_no    = tax_no.strip()
+    customer.tax_no        = tax_no.strip()
     customer.email         = email.strip()
     customer.phone         = phone.strip()
     customer.notes         = notes.strip()
     customer.contacts_json = contacts_json
     customer.payment_term  = payment_term.strip()
+    customer.payment_dow   = int(payment_dow) if payment_dow.strip() else None
     customer.team_id       = team_id.strip() or None
     db.commit()
     return RedirectResponse(url="/customers", status_code=status.HTTP_302_FOUND)

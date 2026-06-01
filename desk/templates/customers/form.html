@@ -110,8 +110,23 @@
               </select>
             </div>
             <div class="col-md-4">
+              <label class="form-label fw-semibold" style="font-size:13px;">
+                Takım
+                <small class="text-muted fw-normal">(opsiyonel)</small>
+              </label>
+              <select name="team_id" class="form-select">
+                <option value="">— Takım seçin —</option>
+                {% for team in teams | default([]) %}
+                <option value="{{ team.id }}"
+                        {% if customer and customer.team_id == team.id %}selected{% endif %}>
+                  {{ team.name }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12">
               <label class="form-label fw-semibold" style="font-size:13px;">Notlar</label>
-              <textarea name="notes" class="form-control" rows="1">{{ customer.notes if customer else '' }}</textarea>
+              <textarea name="notes" class="form-control" rows="2">{{ customer.notes if customer else '' }}</textarea>
             </div>
 
           </div>
