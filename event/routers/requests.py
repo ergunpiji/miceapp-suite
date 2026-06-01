@@ -2067,3 +2067,58 @@ async def requests_create_statement(
     db.commit()
     db.refresh(stmt_budget)
     return RedirectResponse(url=f"/budgets/{stmt_budget.id}/statement", status_code=status.HTTP_302_FOUND)
+
+
+# ---------------------------------------------------------------------------
+# Cari Kontrol — Referansın tüm mali hareketleri
+# ---------------------------------------------------------------------------
+
+@router.get("/{req_id}/cari", response_class=HTMLResponse, name="requests_cari")
+async def requests_cari(
+    req_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from models import Invoice as _Inv, INVOICE_TYPE_LABELS, ExpenseReport
+
+    req = db.query(ReqModel).filter(ReqModel.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404)
+
+    # Tüm faturalar
+    all_invoices = (
+        db.query(_Inv)
+        .filter(_Inv.request_id == req_id)
+        .order_by(_Inv.invoice_date.asc(), _Inv.created_at.asc())
+        .all()
+    )
+    gelirler = [i for i in all_invoices if i.invoice_type in ("kesilen", "komisyon")]
+    giderler = [i for i in all_invoices if i.invoice_type in ("gelen", "iade_gelen", "iade_kesilen")]
+
+    # HBF kayıtları
+    hbf_list = (
+        db.query(ExpenseReport)
+        .filter(ExpenseReport.request_id == req_id)
+        .order_by(ExpenseReport.created_at.asc())
+        .all()
+    )
+
+    gelir_total  = round(sum(i.total_amount or 0 for i in gelirler), 2)
+    gider_total  = round(sum(i.total_amount or 0 for i in giderler), 2)
+    hbf_total    = round(sum(h.grand_total for h in hbf_list), 2)
+    net          = round(gelir_total - gider_total - hbf_total, 2)
+
+    return templates.TemplateResponse("requests/cari.html", {
+        "request":          request,
+        "current_user":     current_user,
+        "page_title":       f"Cari Kontrol — {req.request_no}",
+        "req":              req,
+        "gelirler":         gelirler,
+        "giderler":         giderler,
+        "hbf_list":         hbf_list,
+        "gelir_total":      gelir_total,
+        "gider_total":      gider_total,
+        "hbf_total":        hbf_total,
+        "net":              net,
+    })

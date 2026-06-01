@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/requests/{{ req.id }}#tab-financial" class="btn btn-outline-secondary btn-sm">
+  <i class="bi bi-arrow-left me-1"></i> Referansa Dön
+</a>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .cari-section-title {
+    font-size: 13px; font-weight: 700; padding: 8px 16px;
+    border-bottom: 1px solid currentColor;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .cari-table th {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .4px;
+    color: #64748b; background: #f8fafc; white-space: nowrap;
+    padding: 6px 12px; border-bottom: 1px solid #e2e8f0;
+  }
+  .cari-table td { font-size: 13px; padding: 8px 12px; vertical-align: middle; }
+  .cari-table tr.clickable { cursor: pointer; }
+  .cari-table tr.clickable:hover td { background: #f0f9ff; }
+  .total-row td { font-weight: 700; background: #f8fafc; border-top: 2px solid #e2e8f0; }
+  .net-bar { border-radius: 10px; padding: 12px 20px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid" style="max-width: 1100px;">
+
+  {# ── Özet Bar ── #}
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="card border-0 net-bar" style="background:#f0fdf4;">
+        <div class="text-muted small">Gelirler</div>
+        <div class="fw-bold fs-5 text-success">₺{{ '{:,.0f}'.format(gelir_total).replace(',','.') }}</div>
+        <div class="text-muted" style="font-size:11px;">{{ gelirler|length }} fatura</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 net-bar" style="background:#fef2f2;">
+        <div class="text-muted small">Giderler (Fatura)</div>
+        <div class="fw-bold fs-5 text-danger">₺{{ '{:,.0f}'.format(gider_total).replace(',','.') }}</div>
+        <div class="text-muted" style="font-size:11px;">{{ giderler|length }} fatura</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 net-bar" style="background:#fffbeb;">
+        <div class="text-muted small">Giderler (HBF)</div>
+        <div class="fw-bold fs-5 text-warning">₺{{ '{:,.0f}'.format(hbf_total).replace(',','.') }}</div>
+        <div class="text-muted" style="font-size:11px;">{{ hbf_list|length }} HBF</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 net-bar {{ 'bg-success' if net >= 0 else 'bg-danger' }}" style="color:white; opacity:.9;">
+        <div class="small" style="opacity:.85;">Net Kar / Zarar</div>
+        <div class="fw-bold fs-5">{{ '+' if net >= 0 else '' }}₺{{ '{:,.0f}'.format(net).replace(',','.') }}</div>
+        <div style="font-size:11px; opacity:.75;">Gelir − Fatura − HBF</div>
+      </div>
+    </div>
+  </div>
+
+  {# ── Gelirler ── #}
+  <div class="card mb-4" style="border:1px solid #86efac;">
+    <div class="cari-section-title" style="color:#16a34a; background:#f0fdf4; border-color:#86efac; border-radius:7px 7px 0 0;">
+      <i class="bi bi-arrow-down-circle-fill"></i>
+      Gelirler — Müşteriye Kesilen Faturalar
+      <span class="ms-auto fw-normal text-muted" style="font-size:12px;">{{ gelirler|length }} kayıt</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table mb-0 cari-table">
+        <thead>
+          <tr>
+            <th>Tip</th>
+            <th>Fatura No</th>
+            <th>Tarih</th>
+            <th>Müşteri / Firma</th>
+            <th>Genel Açıklama</th>
+            <th class="text-end">Tutar (KDV Hariç)</th>
+            <th class="text-end">KDV</th>
+            <th class="text-end">Toplam</th>
+            <th>Durum</th>
+            <th>Onay</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for inv in gelirler %}
+          <tr class="clickable" onclick="window.location.href='/invoices/{{ inv.id }}/detail'">
+            <td><span class="badge bg-success bg-opacity-10 text-success" style="font-size:11px;">{{ inv.type_label }}</span></td>
+            <td class="fw-semibold text-muted">{{ inv.invoice_no or '—' }}</td>
+            <td style="white-space:nowrap; color:#64748b;">{{ inv.invoice_date or '—' }}</td>
+            <td>{{ inv.vendor_name or '—' }}</td>
+            <td class="text-muted" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ inv.description or '' }}</td>
+            <td class="text-end">₺{{ '{:,.2f}'.format(inv.amount or 0).replace(',','.') }}</td>
+            <td class="text-end text-muted small">₺{{ '{:,.2f}'.format(inv.vat_amount or 0).replace(',','.') }}</td>
+            <td class="text-end fw-semibold">₺{{ '{:,.2f}'.format(inv.total_amount or 0).replace(',','.') }}</td>
+            <td>
+              {% if inv.status == 'pending' %}<span class="badge bg-warning text-dark" style="font-size:11px;">Onay Bekliyor</span>
+              {% elif inv.status == 'approved' %}<span class="badge bg-success" style="font-size:11px;">Onaylandı</span>
+              {% elif inv.status == 'rejected' %}<span class="badge bg-danger" style="font-size:11px;">Reddedildi</span>
+              {% else %}<span class="badge bg-secondary" style="font-size:11px;">{{ inv.status }}</span>{% endif %}
+            </td>
+            <td class="text-muted small">{{ inv.current_approver.full_name if inv.current_approver else '—' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="10" class="text-center text-muted py-4">Henüz kesilen fatura yok</td></tr>
+          {% endfor %}
+          {% if gelirler %}
+          <tr class="total-row">
+            <td colspan="5" class="text-end text-muted" style="font-size:12px;">TOPLAM</td>
+            <td class="text-end">₺{{ '{:,.2f}'.format(gelirler|sum(attribute='amount') or 0).replace(',','.') }}</td>
+            <td class="text-end">₺{{ '{:,.2f}'.format(gelirler|sum(attribute='vat_amount') or 0).replace(',','.') }}</td>
+            <td class="text-end text-success">₺{{ '{:,.2f}'.format(gelir_total).replace(',','.') }}</td>
+            <td colspan="2"></td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── Giderler ── #}
+  <div class="card mb-4" style="border:1px solid #fca5a5;">
+    <div class="cari-section-title" style="color:#dc2626; background:#fef2f2; border-color:#fca5a5; border-radius:7px 7px 0 0;">
+      <i class="bi bi-arrow-up-circle-fill"></i>
+      Giderler — Tedarikçiden Gelen Faturalar
+      <span class="ms-auto fw-normal text-muted" style="font-size:12px;">{{ giderler|length }} kayıt</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table mb-0 cari-table">
+        <thead>
+          <tr>
+            <th>Tip</th>
+            <th>Fatura No</th>
+            <th>Tarih</th>
+            <th>Tedarikçi</th>
+            <th>Genel Açıklama</th>
+            <th class="text-end">Tutar (KDV Hariç)</th>
+            <th class="text-end">KDV</th>
+            <th class="text-end">Toplam</th>
+            <th>Durum</th>
+            <th>Onay</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for inv in giderler %}
+          <tr class="clickable" onclick="window.location.href='/invoices/{{ inv.id }}/detail'">
+            <td><span class="badge bg-danger bg-opacity-10 text-danger" style="font-size:11px;">{{ inv.type_label }}</span></td>
+            <td class="fw-semibold text-muted">{{ inv.invoice_no or '—' }}</td>
+            <td style="white-space:nowrap; color:#64748b;">{{ inv.invoice_date or '—' }}</td>
+            <td>{{ inv.vendor_name or '—' }}</td>
+            <td class="text-muted" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ inv.description or '' }}</td>
+            <td class="text-end">₺{{ '{:,.2f}'.format(inv.amount or 0).replace(',','.') }}</td>
+            <td class="text-end text-muted small">₺{{ '{:,.2f}'.format(inv.vat_amount or 0).replace(',','.') }}</td>
+            <td class="text-end fw-semibold">₺{{ '{:,.2f}'.format(inv.total_amount or 0).replace(',','.') }}</td>
+            <td>
+              {% if inv.status == 'pending' %}<span class="badge bg-warning text-dark" style="font-size:11px;">Onay Bekliyor</span>
+              {% elif inv.status == 'approved' %}<span class="badge bg-success" style="font-size:11px;">Onaylandı</span>
+              {% elif inv.status == 'rejected' %}<span class="badge bg-danger" style="font-size:11px;">Reddedildi</span>
+              {% else %}<span class="badge bg-secondary" style="font-size:11px;">{{ inv.status }}</span>{% endif %}
+            </td>
+            <td class="text-muted small">{{ inv.current_approver.full_name if inv.current_approver else '—' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="10" class="text-center text-muted py-4">Henüz gelen fatura yok</td></tr>
+          {% endfor %}
+          {% if giderler %}
+          <tr class="total-row">
+            <td colspan="5" class="text-end text-muted" style="font-size:12px;">TOPLAM</td>
+            <td class="text-end">₺{{ '{:,.2f}'.format(giderler|sum(attribute='amount') or 0).replace(',','.') }}</td>
+            <td class="text-end">₺{{ '{:,.2f}'.format(giderler|sum(attribute='vat_amount') or 0).replace(',','.') }}</td>
+            <td class="text-end text-danger">₺{{ '{:,.2f}'.format(gider_total).replace(',','.') }}</td>
+            <td colspan="2"></td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── HBF Kayıtları ── #}
+  <div class="card mb-4" style="border:1px solid #fcd34d;">
+    <div class="cari-section-title" style="color:#92400e; background:#fffbeb; border-color:#fcd34d; border-radius:7px 7px 0 0;">
+      <i class="bi bi-receipt-cutoff"></i>
+      HBF — Harcama Bildirim Formları
+      <span class="ms-auto fw-normal text-muted" style="font-size:12px;">{{ hbf_list|length }} kayıt</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table mb-0 cari-table">
+        <thead>
+          <tr>
+            <th>HBF No</th>
+            <th>Başlık</th>
+            <th>Tarih</th>
+            <th>Oluşturan</th>
+            <th>Kalem Sayısı</th>
+            <th class="text-end">KDV Hariç</th>
+            <th class="text-end">KDV</th>
+            <th class="text-end">Toplam</th>
+            <th>Durum</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for hbf in hbf_list %}
+          <tr class="clickable" onclick="window.location.href='/expenses/{{ hbf.id }}'">
+            <td class="fw-semibold text-muted" style="font-size:11px;">{{ hbf.id[:8] }}</td>
+            <td>{{ hbf.title or ('HBF #' ~ hbf.id[:8]) }}</td>
+            <td style="white-space:nowrap; color:#64748b;">{{ hbf.created_at.strftime('%d.%m.%Y') if hbf.created_at else '—' }}</td>
+            <td>{{ hbf.submitter.full_name if hbf.submitter else '—' }}</td>
+            <td class="text-center">{{ hbf.items|length }}</td>
+            <td class="text-end">₺{{ '{:,.2f}'.format(hbf.grand_excl_vat).replace(',','.') }}</td>
+            <td class="text-end text-muted small">₺{{ '{:,.2f}'.format(hbf.grand_vat).replace(',','.') }}</td>
+            <td class="text-end fw-semibold">₺{{ '{:,.2f}'.format(hbf.grand_total).replace(',','.') }}</td>
+            <td>
+              <span class="badge bg-{{ hbf.status_color }}" style="font-size:11px;">{{ hbf.status_label }}</span>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="9" class="text-center text-muted py-4">Henüz HBF kaydı yok</td></tr>
+          {% endfor %}
+          {% if hbf_list %}
+          <tr class="total-row">
+            <td colspan="5" class="text-end text-muted" style="font-size:12px;">TOPLAM</td>
+            <td class="text-end">₺{{ '{:,.2f}'.format(hbf_list|sum(attribute='grand_excl_vat') or 0).replace(',','.') }}</td>
+            <td class="text-end">₺{{ '{:,.2f}'.format(hbf_list|sum(attribute='grand_vat') or 0).replace(',','.') }}</td>
+            <td class="text-end text-warning">₺{{ '{:,.2f}'.format(hbf_total).replace(',','.') }}</td>
+            <td></td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

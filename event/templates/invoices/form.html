@@ -147,84 +147,19 @@
         </div>
         {% endif %}
 
-        {# ── Cari / Referans Finansal Özet ── sadece view_mode'da ve referans varsa ── #}
-        {% if view_mode and selected_req and (req_gelirler is defined and (req_gelirler or req_giderler)) %}
-        <div class="row g-2 mb-4">
-          <div class="col-12">
-            <div class="fw-semibold small text-muted mb-2">
-              <i class="bi bi-bar-chart-line me-1"></i>
-              {{ selected_req.request_no }} — Referans Finansal Özet
-            </div>
-          </div>
-          <div class="col-md-6">
-            <div class="card" style="border:1px solid #86efac;">
-              <div class="card-header py-1 px-3" style="background:#f0fdf4; border-bottom:1px solid #86efac;">
-                <span class="fw-bold text-success" style="font-size:12px;"><i class="bi bi-arrow-down-circle me-1"></i>Gelirler (Müşteriye Kesilen)</span>
-              </div>
-              <div class="card-body p-0">
-                <table class="table table-sm mb-0" style="font-size:12px;">
-                  <thead><tr style="background:#f8fafc;">
-                    <th class="ps-3">Fatura No</th><th>Tarih</th><th class="text-end pe-3">Tutar</th>
-                  </tr></thead>
-                  <tbody>
-                  {% for gi in req_gelirler %}
-                  <tr>
-                    <td class="ps-3 text-muted">{{ gi.invoice_no or '—' }}</td>
-                    <td class="text-muted">{{ gi.invoice_date or '—' }}</td>
-                    <td class="text-end pe-3 fw-semibold">₺{{ '{:,.0f}'.format(gi.total_amount or 0).replace(',','.') }}</td>
-                  </tr>
-                  {% else %}
-                  <tr><td colspan="3" class="ps-3 text-muted py-2" style="font-size:11px;">Henüz kesilen fatura yok</td></tr>
-                  {% endfor %}
-                  </tbody>
-                </table>
-                <div class="d-flex justify-content-between align-items-center px-3 py-1 border-top" style="background:#f0fdf4;">
-                  <span class="text-muted" style="font-size:11px;">Toplam</span>
-                  <span class="fw-bold text-success" style="font-size:13px;">₺{{ '{:,.0f}'.format(req_gelir_total).replace(',','.') }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="col-md-6">
-            <div class="card" style="border:1px solid #fca5a5;">
-              <div class="card-header py-1 px-3" style="background:#fef2f2; border-bottom:1px solid #fca5a5;">
-                <span class="fw-bold text-danger" style="font-size:12px;"><i class="bi bi-arrow-up-circle me-1"></i>Giderler (Tedarikçiden Gelen)</span>
-              </div>
-              <div class="card-body p-0">
-                <table class="table table-sm mb-0" style="font-size:12px;">
-                  <thead><tr style="background:#f8fafc;">
-                    <th class="ps-3">Fatura No</th><th>Tarih</th><th class="text-end pe-3">Tutar</th>
-                  </tr></thead>
-                  <tbody>
-                  {% for gi in req_giderler %}
-                  <tr>
-                    <td class="ps-3 text-muted">{{ gi.invoice_no or '—' }}</td>
-                    <td class="text-muted">{{ gi.invoice_date or '—' }}</td>
-                    <td class="text-end pe-3 fw-semibold">₺{{ '{:,.0f}'.format(gi.total_amount or 0).replace(',','.') }}</td>
-                  </tr>
-                  {% else %}
-                  <tr><td colspan="3" class="ps-3 text-muted py-2" style="font-size:11px;">Henüz gelen fatura yok</td></tr>
-                  {% endfor %}
-                  </tbody>
-                </table>
-                <div class="d-flex justify-content-between align-items-center px-3 py-1 border-top" style="background:#fef2f2;">
-                  <span class="text-muted" style="font-size:11px;">Toplam</span>
-                  <span class="fw-bold text-danger" style="font-size:13px;">₺{{ '{:,.0f}'.format(req_gider_total).replace(',','.') }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          {% if req_gelir_total or req_gider_total %}
-          <div class="col-12">
-            <div class="d-flex justify-content-end gap-4 px-2 py-1 rounded" style="background:#f8fafc; font-size:13px;">
-              <span class="text-muted">Net Kar/Zarar:</span>
-              {% set _net = req_gelir_total - req_gider_total %}
-              <span class="fw-bold {{ 'text-success' if _net >= 0 else 'text-danger' }}">
-                {{ '+' if _net >= 0 else '' }}₺{{ '{:,.0f}'.format(_net).replace(',','.')  }}
-              </span>
-            </div>
-          </div>
-          {% endif %}
+        {# ── Cari Kontrol butonu ── sadece view_mode + referans varsa ── #}
+        {% if view_mode and selected_req %}
+        <div class="mb-3">
+          <a href="/requests/{{ selected_req.id }}/cari" target="_blank"
+             class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-2">
+            <i class="bi bi-bar-chart-line"></i>
+            Cari Kontrol — {{ selected_req.request_no }}
+            <span class="badge bg-primary" style="font-size:11px;">
+              {% set _gtotal = req_gelir_total + req_gider_total %}
+              {% if _gtotal > 0 %}₺{{ '{:,.0f}'.format(_gtotal).replace(',','.') }}{% else %}Aç{% endif %}
+            </span>
+          </a>
+          <span class="text-muted ms-2" style="font-size:12px;">Gelirler, giderler ve HBF kayıtları</span>
         </div>
         {% endif %}
         {% endif %}
