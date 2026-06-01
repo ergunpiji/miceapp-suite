@@ -280,9 +280,8 @@ async def invoices_list(
 
     from database import EVENT_COMPANY_ID
     from sqlalchemy import or_ as _or_cid
-    _cid = current_user.company_id or EVENT_COMPANY_ID
     query = db.query(Invoice).outerjoin(Invoice.request).filter(
-        _or_cid(Invoice.company_id == _cid, Invoice.company_id.is_(None))
+        _or_cid(Invoice.company_id == EVENT_COMPANY_ID, Invoice.company_id.is_(None))
     )
 
     # "Onaylarım" görünümü — sadece benim onayımı bekleyen faturalar
@@ -550,6 +549,7 @@ async def invoices_create(
         db.commit()
         return RedirectResponse(url=f"/requests/{req_id}#tab-financial", status_code=303)
 
+    from database import EVENT_COMPANY_ID
     try:
         lines = json.loads(lines_json or "[]")
     except Exception:
@@ -617,7 +617,7 @@ async def invoices_create(
         total_amount        = incl,
         status              = "pending",
         current_approver_id = _initial_approver_id,
-        company_id          = current_user.company_id,
+        company_id          = EVENT_COMPANY_ID,
         created_by          = current_user.id,
         created_at          = _now(),
         updated_at          = _now(),
