@@ -60,7 +60,7 @@ async def customers_autocomplete(
     if q:
         query = query.filter(Customer.name.ilike(f"%{q}%"))
     customers = query.order_by(Customer.name).limit(20).all()
-    return JSONResponse([{"id": c.id, "name": c.name, "code": c.code} for c in customers])
+    return JSONResponse([{"id": c.id, "name": c.name, "code": c.code, "payment_term": c.payment_term or ""} for c in customers])
 
 
 @router.get("/new", response_class=HTMLResponse, name="customers_new")

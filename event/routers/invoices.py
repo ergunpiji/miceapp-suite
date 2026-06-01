@@ -377,20 +377,23 @@ async def invoices_new_form(
                 })
 
             customer_name = ""
+            customer_payment_term = ""
             if req and req.customer_id:
                 from models import Customer
                 cust = db.query(Customer).filter(Customer.id == req.customer_id).first()
                 if cust:
                     customer_name = cust.name
+                    customer_payment_term = str(cust.payment_term or "")
             if not customer_name and req:
                 customer_name = req.client_name or ""
 
             statement_prefill = {
-                "vendor_name":       customer_name,
-                "invoice_type":      "kesilen",
-                "description":       f"Hesap Dökümü — {stmt.venue_name} / {req.request_no if req else ''}",
-                "lines_json":        json.dumps(invoice_lines, ensure_ascii=False),
-                "grouped_lines_json": json.dumps(grouped_lines, ensure_ascii=False),
+                "vendor_name":          customer_name,
+                "invoice_type":         "kesilen",
+                "description":          f"Hesap Dökümü — {stmt.venue_name} / {req.request_no if req else ''}",
+                "lines_json":           json.dumps(invoice_lines, ensure_ascii=False),
+                "grouped_lines_json":   json.dumps(grouped_lines, ensure_ascii=False),
+                "customer_payment_term": customer_payment_term,
             }
 
     page_title = "Fatura Talebi Oluştur" if statement_prefill else "Yeni Fatura"

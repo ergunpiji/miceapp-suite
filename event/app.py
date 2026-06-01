@@ -15,7 +15,8 @@ except ImportError:
     pass
 
 from fastapi import FastAPI, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -226,6 +227,34 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         {"request": request, "current_user": None, "status_code": exc.status_code, "detail": exc.detail},
         status_code=exc.status_code,
     )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = "; ".join(
+        f"{'.'.join(str(l) for l in e['loc'])}: {e['msg']}"
+        for e in exc.errors()
+    )
+    return templates.TemplateResponse(
+        "errors/generic.html",
+        {"request": request, "current_user": None, "status_code": 422, "detail": f"Form verisi hatalı: {errors}"},
+        status_code=422,
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    import traceback, logging
+    logging.getLogger("miceapp").error("Unhandled exception: %s\n%s", exc, traceback.format_exc())
+    try:
+        return templates.TemplateResponse(
+            "errors/generic.html",
+            {"request": request, "current_user": None, "status_code": 500,
+             "detail": "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin."},
+            status_code=500,
+        )
+    except Exception:
+        return JSONResponse({"detail": "Sunucu hatası"}, status_code=500)
 
 
 # ---------------------------------------------------------------------------

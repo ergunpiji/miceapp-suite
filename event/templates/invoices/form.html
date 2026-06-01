@@ -589,10 +589,11 @@ function customerSearch(q) {
       }
       dd.innerHTML = data.map(c =>
         `<div class="px-3 py-2 border-bottom" style="cursor:pointer;"
-              onmousedown="selectCustomer('${c.id}','${c.name.replace(/'/g,"\\'")}')"
+              onmousedown="selectCustomer('${c.id}','${c.name.replace(/'/g,"\\'")}',${c.payment_term ? parseInt(c.payment_term) || 0 : 0})"
               onmouseover="this.style.background='#f0fdf4'" onmouseout="this.style.background=''">
           <span class="fw-semibold">${c.name}</span>
           ${c.code ? `<span class='text-muted ms-2' style='font-size:11px;'>${c.code.toUpperCase()}</span>` : ''}
+          ${c.payment_term ? `<span class='text-muted ms-2' style='font-size:11px;'>${c.payment_term} gün vade</span>` : ''}
          </div>`
       ).join('');
       dd.style.display = '';
@@ -601,13 +602,17 @@ function customerSearch(q) {
   }, 300);
 }
 
-function selectCustomer(id, name) {
+function selectCustomer(id, name, paymentTerm) {
   document.getElementById('fCustomerId').value   = id;
   document.getElementById('fCustomerName').value = name;
   document.getElementById('fVendorName').value   = name;
   document.getElementById('customerDropdown').style.display  = 'none';
   document.getElementById('defineCustomerBox').style.display = 'none';
   _customerDismissed = true;
+  if (paymentTerm) {
+    _vendorPaymentTerm = paymentTerm;
+    autoFillDueDate();
+  }
 }
 
 function hideCustomerDrop() {
@@ -702,14 +707,26 @@ let groupedLines  = [];
 let groupedMode   = true;   // başlangıçta gruplu
 
 (function() {
-  if (PREFILL_DATA.vendor_name) document.getElementById('fVendorName').value = PREFILL_DATA.vendor_name;
+  // Önce tipi ayarla (syncCustomerNameToVendorName tetikler, bu noktada isim henüz boş — OK)
+  if (PREFILL_DATA.invoice_type) {
+    const sel = document.getElementById('invoiceTypeSelect');
+    if (sel) { sel.value = PREFILL_DATA.invoice_type; sel.dispatchEvent(new Event('change')); }
+  }
+  // Tip değiştikten SONRA ismi doldur; müşteri tipi için fCustomerName'e, vendor tipi için fVendorName'e
+  if (PREFILL_DATA.vendor_name) {
+    const cn = document.getElementById('fCustomerName');
+    const vn = document.getElementById('fVendorName');
+    if (cn) cn.value = PREFILL_DATA.vendor_name;
+    if (vn) vn.value = PREFILL_DATA.vendor_name;
+  }
   if (PREFILL_DATA.description) {
     const d = document.getElementById('fDescription');
     if (d) d.value = PREFILL_DATA.description;
   }
-  if (PREFILL_DATA.invoice_type) {
-    const sel = document.getElementById('invoiceTypeSelect');
-    if (sel) { sel.value = PREFILL_DATA.invoice_type; sel.dispatchEvent(new Event('change')); }
+  // Müşteri vade süresini kaydet (fatura tarihi girilince otomatik vade hesaplaması için)
+  if (PREFILL_DATA.customer_payment_term) {
+    const pt = parseInt(PREFILL_DATA.customer_payment_term);
+    if (pt > 0) _vendorPaymentTerm = pt;
   }
   try { detailedLines = JSON.parse(PREFILL_DATA.lines_json || '[]'); } catch(e) {}
   try { groupedLines  = JSON.parse(PREFILL_DATA.grouped_lines_json || '[]'); } catch(e) {}
