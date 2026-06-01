@@ -67,6 +67,8 @@ async def customer_new_post(
     phone: str = Form(""),
     payment_term: str = Form(""),
     payment_dow: str = Form(""),
+    notes: str = Form(""),
+    contacts_json: str = Form("[]"),
     current_user: User = Depends(require_module("customers", edit=True)),
     db: Session = Depends(get_db),
 ):
@@ -85,8 +87,10 @@ async def customer_new_post(
         address=address.strip(), email=email.strip(), phone=phone.strip(),
         payment_term=payment_term.strip() or None,
         payment_dow=int(payment_dow) if payment_dow.strip() else None,
+        notes=notes.strip(),
+        contacts_json=contacts_json or "[]",
         company_id=current_user.company_id,
-        owner_id=current_user.id,  # RBAC v2: sales sahibi
+        owner_id=current_user.id,
     )
     db.add(c)
     db.commit()
@@ -201,6 +205,8 @@ async def customer_edit_post(
     phone: str = Form(""),
     payment_term: str = Form(""),
     payment_dow: str = Form(""),
+    notes: str = Form(""),
+    contacts_json: str = Form("[]"),
     current_user: User = Depends(require_module("customers", edit=True)),
     db: Session = Depends(get_db),
 ):
@@ -227,8 +233,10 @@ async def customer_edit_post(
     c.phone = phone.strip()
     c.payment_term = payment_term.strip() or None
     c.payment_dow = int(payment_dow) if payment_dow.strip() else None
+    c.notes = notes.strip()
+    c.contacts_json = contacts_json or "[]"
     db.commit()
-    return RedirectResponse(url="/customers", status_code=status.HTTP_302_FOUND)
+    return RedirectResponse(url=f"/customers/{customer_id}", status_code=status.HTTP_302_FOUND)
 
 
 @router.post("/{customer_id}/prepayment", name="customer_prepayment")
