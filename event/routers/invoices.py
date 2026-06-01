@@ -522,7 +522,7 @@ async def invoices_create(
         request_id          = req_id or None,
         invoice_type        = invoice_type,
         invoice_no          = invoice_no.strip(),
-        invoice_date        = invoice_date or None,
+        invoice_date        = invoice_date or _date.today().isoformat(),
         due_date            = _due_date,
         vendor_id           = vendor_id.strip() or None,
         vendor_name         = vendor_name.strip(),
@@ -738,7 +738,7 @@ async def invoices_update(
 
     inv.invoice_type = invoice_type
     inv.invoice_no   = invoice_no.strip()
-    inv.invoice_date = invoice_date or None
+    inv.invoice_date = invoice_date or _date.today().isoformat()
     inv.due_date     = due_date or None
     inv.vendor_id    = vendor_id.strip() or None
     inv.vendor_name  = vendor_name.strip()

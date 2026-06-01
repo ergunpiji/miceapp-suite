@@ -1178,7 +1178,7 @@ class Invoice(Base):
     vendor_id     = Column(String(36), ForeignKey("vendors.id"), nullable=True, index=True)
     invoice_type  = Column(String(32), nullable=False)   # kesilen|gelen|komisyon|iade_kesilen|iade_gelen
     invoice_no    = Column(String(100), default="")
-    invoice_date  = Column(String(10), nullable=True)    # YYYY-MM-DD string
+    invoice_date  = Column(String(10), nullable=False)   # YYYY-MM-DD string
     due_date      = Column(String(10), nullable=True)    # YYYY-MM-DD string
     currency      = Column(String(10), default="TRY", nullable=False)
     vendor_name   = Column(String(255), default="")      # tedarikçi/müşteri adı (serbest metin — geriye uyumluluk)
