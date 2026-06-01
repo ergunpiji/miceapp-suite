@@ -11,6 +11,7 @@ from auth import get_current_user, require_admin, hash_password
 from database import get_db
 from models import (
     User, Employee, Company, Department, UserDepartment,
+    OrgTitle, Team,
     ROLE_ORDER, ROLE_LABELS,
 )
 from templates_config import templates
@@ -65,11 +66,21 @@ def _get_form_context(db, current_user, user=None, error=None, page_title="Kulla
             if ud.is_head:
                 head_dept_ids.add(ud.department_id)
 
+    org_titles = db.query(OrgTitle).order_by(OrgTitle.sort_order).all()
+    teams      = db.query(Team).filter(Team.active == True).order_by(Team.name).all()
+    pm_users   = db.query(User).filter(
+        User.active == True,
+        User.role.in_(["admin", "mudur", "yonetici", "genel_mudur", "super_admin"]),
+    ).order_by(User.name).all()
+    if user:
+        pm_users = [u for u in pm_users if u.id != user.id]
+
     return {
         "current_user": current_user,
         "user": user,
         "employees": employees,
         "managers": managers,
+        "pm_users": pm_users,
         "roles": ROLE_ORDER,
         "role_labels": ROLE_LABELS,
         "page_title": page_title,
@@ -80,6 +91,8 @@ def _get_form_context(db, current_user, user=None, error=None, page_title="Kulla
         "all_departments": all_departments,
         "user_dept_ids": user_dept_ids,
         "head_dept_ids": head_dept_ids,
+        "org_titles": org_titles,
+        "teams": teams,
     }
 
 
@@ -150,6 +163,8 @@ async def user_new_post(
     manager_id: Optional[str] = Form(None),
     employee_id: str = Form(""),
     company_id: Optional[str] = Form(None),
+    org_title_id: str = Form(""),
+    team_id: str = Form(""),
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -180,6 +195,8 @@ async def user_new_post(
         password_hash=hash_password(password),
         role=role,
         manager_id=manager_id or None,
+        org_title_id=org_title_id.strip() or None,
+        team_id=team_id.strip() or None,
         company_id=assigned_company_id,
         active=True,
     )
@@ -232,6 +249,8 @@ async def user_edit_post(
     active: str = Form("1"),
     employee_id: str = Form(""),
     company_id: Optional[str] = Form(None),
+    org_title_id: str = Form(""),
+    team_id: str = Form(""),
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -262,6 +281,8 @@ async def user_edit_post(
     u.email = email
     u.role = role
     u.manager_id = manager_id or None
+    u.org_title_id = org_title_id.strip() or None
+    u.team_id = team_id.strip() or None
     u.active = (active == "1")
     if password.strip():
         u.password_hash = hash_password(password.strip())

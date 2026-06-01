@@ -2,53 +2,58 @@
 {% block page_title %}{{ page_title }}{% endblock %}
 {% block content %}
 <div class="row justify-content-center">
-  <div class="col-md-6">
-    <div class="card border-0 shadow-sm">
-      <div class="card-header" style="background:linear-gradient(135deg,#1a3a5c,#1e5f8c);color:#fff;border-radius:8px 8px 0 0">
-        <h6 class="mb-0"><i class="bi bi-person-fill me-2"></i>{{ page_title }}</h6>
-      </div>
+  <div class="col-lg-7">
+
+    <div class="mb-3">
+      <a href="/users" class="text-muted text-decoration-none" style="font-size:13px;">
+        <i class="bi bi-arrow-left me-1"></i> Kullanıcı Listesine Dön
+      </a>
+    </div>
+
+    <div class="card">
       <div class="card-body p-4">
-        {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
-        <form method="post">
+        <h5 class="fw-bold mb-4">
+          {% if user %}
+            <i class="bi bi-person-gear me-2 text-primary"></i>Kullanıcı Düzenle
+          {% else %}
+            <i class="bi bi-person-plus me-2 text-primary"></i>Yeni Kullanıcı
+          {% endif %}
+        </h5>
+
+        {% if error %}
+        <div class="alert alert-danger d-flex align-items-center gap-2 py-2">
+          <i class="bi bi-exclamation-circle-fill"></i><small>{{ error }}</small>
+        </div>
+        {% endif %}
+
+        <form method="post" action="{{ '/users/' + user.id + '/edit' if user else '/users/new' }}">
           <div class="row g-3">
 
+            {# ── Temel Bilgiler ── #}
             <div class="col-md-6">
-              <label class="form-label fw-semibold">Ad <span class="text-danger">*</span></label>
-              <input type="text" name="name" class="form-control" required value="{{ user.name if user else '' }}">
+              <label class="form-label fw-semibold" style="font-size:13px;">Ad <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="form-control" required
+                     value="{{ user.name if user else '' }}">
             </div>
             <div class="col-md-6">
-              <label class="form-label fw-semibold">Soyad</label>
-              <input type="text" name="surname" class="form-control" value="{{ user.surname if user else '' }}">
+              <label class="form-label fw-semibold" style="font-size:13px;">Soyad <span class="text-danger">*</span></label>
+              <input type="text" name="surname" class="form-control" required
+                     value="{{ user.surname if user else '' }}">
             </div>
 
-            <div class="col-md-6">
-              <label class="form-label fw-semibold">Ünvan</label>
-              <input type="text" name="title" class="form-control" value="{{ user.title if user else '' }}" placeholder="ör. Finansman Müdürü">
+            <div class="col-md-8">
+              <label class="form-label fw-semibold" style="font-size:13px;">E-posta <span class="text-danger">*</span></label>
+              <input type="email" name="email" class="form-control" required
+                     value="{{ user.email if user else '' }}">
             </div>
-            <div class="col-md-6">
-              <label class="form-label fw-semibold">Telefon</label>
-              <input type="text" name="phone" class="form-control" value="{{ user.phone if user else '' }}" placeholder="0 5XX XXX XX XX">
-            </div>
-
-            <div class="col-12">
-              <label class="form-label fw-semibold">E-posta <span class="text-danger">*</span></label>
-              <input type="email" name="email" class="form-control" required value="{{ user.email if user else '' }}">
-            </div>
-
-            <div class="col-12">
-              <label class="form-label fw-semibold">
-                Şifre {% if user %}<span class="text-muted small">(boş bırakılırsa değişmez)</span>{% else %}<span class="text-danger">*</span>{% endif %}
-              </label>
-              <input type="password" name="password" class="form-control" {% if not user %}required{% endif %}>
-            </div>
-
-            <!-- Rol -->
-            <div class="col-md-6">
-              <label class="form-label fw-semibold">Rol <span class="text-danger">*</span></label>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" style="font-size:13px;">Rol <span class="text-danger">*</span></label>
               <select name="role" class="form-select">
                 {% for r in roles %}
                 {% if r != 'super_admin' or current_user.role == 'super_admin' %}
-                <option value="{{ r }}" {% if user and user.role == r %}selected{% elif not user and r == 'kullanici' %}selected{% endif %}>
+                <option value="{{ r }}"
+                  {% if user and user.role == r %}selected
+                  {% elif not user and r == 'kullanici' %}selected{% endif %}>
                   {{ role_labels[r] }}
                 </option>
                 {% endif %}
@@ -57,26 +62,96 @@
               <div class="form-text">Üst roller, alt rollerin tüm yetkilerini içerir.</div>
             </div>
 
-            <!-- Müdür (bağlı yönetici) -->
+            {# ── Organizasyon Unvanı ── #}
+            <div class="col-12">
+              <label class="form-label fw-semibold" style="font-size:13px;">Organizasyon Unvanı</label>
+              <select name="org_title_id" class="form-select" id="orgTitleSelect">
+                <option value="">— Seçiniz —</option>
+                {% set current_grade = namespace(val=0) %}
+                {% for ot in org_titles %}
+                  {% if ot.grade != current_grade.val %}
+                    {% if current_grade.val > 0 %}</optgroup>{% endif %}
+                    <optgroup label="Kademe {{ ot.grade }}">
+                    {% set current_grade.val = ot.grade %}
+                  {% endif %}
+                  <option value="{{ ot.id }}"
+                    {% if user and user.org_title_id == ot.id %}selected{% endif %}>
+                    {{ ot.name }}{% if ot.parent %} ← {{ ot.parent.name }}{% endif %}
+                  </option>
+                {% endfor %}
+                {% if current_grade.val > 0 %}</optgroup>{% endif %}
+              </select>
+              <div class="form-text" id="budgetLimitHint"></div>
+            </div>
+
+            {# ── Takım + Yönetici ── #}
             <div class="col-md-6">
-              <label class="form-label fw-semibold">Bağlı Müdür</label>
-              <select name="manager_id" class="form-select">
-                <option value="">— Yok (doğrudan GM'e bağlı) —</option>
-                {% for m in managers %}
-                <option value="{{ m.id }}" {% if user and user.manager_id == m.id %}selected{% endif %}>
-                  {{ m.name }}{% if m.title %} — {{ m.title }}{% endif %} ({{ role_labels[m.role] }})
+              <label class="form-label fw-semibold" style="font-size:13px;">Etkinlik Takımı</label>
+              <select name="team_id" class="form-select" id="teamSelect">
+                <option value="">— Takım Seçiniz —</option>
+                {% for t in (teams or []) %}
+                <option value="{{ t.id }}"
+                  {% if user and user.team_id == t.id %}selected{% endif %}>
+                  {{ t.name }}{% if t.code %} ({{ t.code }}){% endif %}
                 </option>
                 {% endfor %}
               </select>
-              <div class="form-text">Avans/HBF onayı bu kişiden geçer.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" style="font-size:13px;">Doğrudan Yönetici</label>
+              <select name="manager_id" class="form-select" id="managerSelect">
+                <option value="">— Seçiniz —</option>
+                {% for m in (pm_users or []) %}
+                <option value="{{ m.id }}"
+                        data-team="{{ m.team_id or '' }}"
+                        data-role="{{ m.role }}"
+                  {% if user and user.manager_id == m.id %}selected{% endif %}>
+                  {{ m.name }}{% if m.surname %} {{ m.surname }}{% endif %}
+                  {% if m.title %} — {{ m.title }}{% endif %}
+                  ({{ role_labels.get(m.role, m.role) }})
+                </option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Takım seçilince filtrelenir. Avans/HBF onayı bu kişiden geçer.</div>
             </div>
 
-            <!-- Çalışan profil bağlantısı -->
+            {# ── Ünvan + Telefon ── #}
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" style="font-size:13px;">Ünvan / Pozisyon</label>
+              <input type="text" name="title" class="form-control"
+                     value="{{ user.title if user else '' }}"
+                     placeholder="örn. Finansman Müdürü">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" style="font-size:13px;">Telefon</label>
+              <input type="tel" name="phone" class="form-control"
+                     value="{{ user.phone if user else '' }}"
+                     placeholder="0 5XX XXX XX XX">
+            </div>
+
+            {# ── Şifre ── #}
             <div class="col-12">
-              <label class="form-label fw-semibold">Çalışan Profili Bağla</label>
+              <label class="form-label fw-semibold" style="font-size:13px;">
+                Şifre
+                {% if user %}<small class="text-muted fw-normal">(boş bırakırsanız değişmez)</small>
+                {% else %}<span class="text-danger">*</span>{% endif %}
+              </label>
+              <div class="input-group">
+                <input type="password" name="password" id="passwordField" class="form-control"
+                       {% if not user %}required{% endif %}
+                       placeholder="{% if user %}Değiştirmek istemiyorsanız boş bırakın{% else %}En az 6 karakter{% endif %}">
+                <button class="btn btn-outline-secondary" type="button" id="togglePwd" tabindex="-1">
+                  <i class="bi bi-eye" id="eyeIconForm"></i>
+                </button>
+              </div>
+            </div>
+
+            {# ── Çalışan Profili ── #}
+            <div class="col-12">
+              <label class="form-label fw-semibold" style="font-size:13px;">Çalışan Profili Bağla</label>
               <select name="employee_id" class="form-select">
                 <option value="">— Bağlı değil —</option>
-                {% for emp in employees %}
+                {% for emp in (employees or []) %}
                 <option value="{{ emp.id }}"
                   {% if linked_employee and linked_employee.id == emp.id %}selected{% endif %}>
                   {{ emp.name }}{% if emp.title %} — {{ emp.title }}{% endif %}
@@ -86,9 +161,10 @@
               <div class="form-text">Kullanıcı bu çalışan adına avans talebinde bulunabilir.</div>
             </div>
 
+            {# ── Şirket (super_admin) ── #}
             {% if current_user.role == 'super_admin' and companies %}
             <div class="col-md-8">
-              <label class="form-label fw-semibold">Şirket <span class="text-danger">*</span></label>
+              <label class="form-label fw-semibold" style="font-size:13px;">Şirket <span class="text-danger">*</span></label>
               <select name="company_id" class="form-select">
                 <option value="">— Şirket Seç —</option>
                 {% for c in companies %}
@@ -100,9 +176,10 @@
             </div>
             {% endif %}
 
+            {# ── Durum (edit) ── #}
             {% if user %}
             <div class="col-md-4">
-              <label class="form-label fw-semibold">Durum</label>
+              <label class="form-label fw-semibold" style="font-size:13px;">Durum</label>
               <select name="active" class="form-select">
                 <option value="1" {% if user.active %}selected{% endif %}>Aktif</option>
                 <option value="0" {% if not user.active %}selected{% endif %}>Pasif</option>
@@ -110,10 +187,10 @@
             </div>
             {% endif %}
 
-            <!-- Departman atamaları (RBAC v2) -->
+            {# ── Departmanlar (RBAC v2) ── #}
             {% if all_departments %}
             <div class="col-12">
-              <label class="form-label fw-semibold">
+              <label class="form-label fw-semibold" style="font-size:13px;">
                 Departmanlar
                 <small class="text-muted fw-normal ms-1">— hangi sayfaları görür belirler</small>
               </label>
@@ -142,7 +219,7 @@
                 {% endfor %}
                 <small class="text-muted d-block mt-2">
                   <i class="bi bi-info-circle me-1"></i>
-                  Bir kullanıcı birden fazla departmanda olabilir. Admin / Genel Müdür her zaman tüm modülleri görür.
+                  Admin / Genel Müdür her zaman tüm modülleri görür.
                 </small>
               </div>
             </div>
@@ -152,7 +229,8 @@
 
           <div class="d-flex gap-2 mt-4">
             <button type="submit" class="btn btn-primary px-4">
-              <i class="bi bi-check-lg me-1"></i>Kaydet
+              <i class="bi bi-check-lg me-1"></i>
+              {% if user %}Güncelle{% else %}Kaydet{% endif %}
             </button>
             <a href="/users" class="btn btn-outline-secondary">İptal</a>
           </div>
@@ -161,4 +239,57 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Şifre göster/gizle
+  document.getElementById('togglePwd').addEventListener('click', function () {
+    const f = document.getElementById('passwordField');
+    const i = document.getElementById('eyeIconForm');
+    f.type = f.type === 'password' ? 'text' : 'password';
+    i.className = f.type === 'password' ? 'bi bi-eye' : 'bi bi-eye-slash';
+  });
+
+  // Organizasyon unvanı → bütçe limiti göster
+  const TITLE_LIMITS = {
+    {% for ot in org_titles %}
+    "{{ ot.id }}": { limit: {{ ot.budget_limit if ot.budget_limit is not none else 'null' }}, grade: {{ ot.grade }} },
+    {% endfor %}
+  };
+  document.getElementById('orgTitleSelect').addEventListener('change', function () {
+    const hint = document.getElementById('budgetLimitHint');
+    const data = TITLE_LIMITS[this.value];
+    if (!data) { hint.textContent = ''; return; }
+    if (data.limit === null) {
+      hint.innerHTML = `<i class="bi bi-infinity me-1"></i>Kademe ${data.grade} — Bütçe limiti tanımlanmamış (limitsiz)`;
+    } else {
+      const fmt = new Intl.NumberFormat('tr-TR').format(data.limit);
+      hint.innerHTML = `<i class="bi bi-cash-stack me-1"></i>Kademe ${data.grade} — Onay limiti: <strong>₺${fmt}</strong>`;
+    }
+  });
+  document.getElementById('orgTitleSelect').dispatchEvent(new Event('change'));
+
+  // Takım seçince yönetici dropdown'ını filtrele
+  const teamSelect    = document.getElementById('teamSelect');
+  const managerSelect = document.getElementById('managerSelect');
+  const TOP_ROLES     = new Set(['admin', 'mudur', 'genel_mudur', 'super_admin']);
+
+  function filterManagers() {
+    const teamId = teamSelect ? teamSelect.value : '';
+    if (!managerSelect) return;
+    Array.from(managerSelect.options).forEach(opt => {
+      if (!opt.value) { opt.hidden = false; return; }
+      if (TOP_ROLES.has(opt.dataset.role)) { opt.hidden = false; return; }
+      opt.hidden = teamId ? (opt.dataset.team !== teamId) : false;
+    });
+    const sel = managerSelect.options[managerSelect.selectedIndex];
+    if (sel && sel.hidden) managerSelect.value = '';
+  }
+
+  if (teamSelect) {
+    teamSelect.addEventListener('change', filterManagers);
+    filterManagers();
+  }
+</script>
 {% endblock %}

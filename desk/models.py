@@ -233,7 +233,22 @@ class Team(Base):
 
     @property
     def active_members(self):
-        return []   # desk User'da team_id yoksa boş döner
+        return []
+
+
+class OrgTitle(Base):
+    """Organizasyon unvanları — event app ile ortak 'org_titles' tablosu."""
+    __tablename__ = "org_titles"
+
+    id                  = Column(String(36), primary_key=True, default=_uuid)
+    name                = Column(String(150), nullable=False)
+    grade               = Column(Integer, nullable=False, default=1)
+    parent_id           = Column(String(36), ForeignKey("org_titles.id"), nullable=True)
+    budget_limit        = Column(Float, nullable=True)
+    sort_order          = Column(Integer, default=0)
+    pm_permission_level = Column(String(16), nullable=True)
+
+    parent = relationship("OrgTitle", remote_side="OrgTitle.id", foreign_keys=[parent_id])
 
 
 # ---------------------------------------------------------------------------
