@@ -717,7 +717,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <div id="rfqAddVenueArea" class="px-3 pt-3" style="display:none;">
               <div class="border rounded p-3" style="background:#f8fafc;">
                 <div class="fw-semibold mb-2" style="font-size:12px; color:#1e293b;">
-                  <i class="bi bi-plus-circle me-1 text-primary"></i>Tedarikçi Ekle
+                  <i class="bi bi-plus-circle me-1 text-primary"></i>Mevcut Tedarikçiden Seç
                 </div>
                 <div class="vs-wrapper mb-2">
                   <div class="position-relative">
@@ -730,12 +730,60 @@ document.addEventListener('DOMContentLoaded', function() {
                   </div>
                   <div class="vs-dropdown" id="rfqAddDrop" style="display:none;"></div>
                 </div>
-                <button type="button" class="btn btn-outline-secondary btn-sm mt-1"
-                        onclick="document.getElementById('rfqAddVenueArea').style.display='none';">
-                  İptal
-                </button>
+                <div class="d-flex gap-2 mt-2">
+                  <button type="button" class="btn btn-outline-success btn-sm"
+                          onclick="showRfqNewVendorForm()">
+                    <i class="bi bi-person-plus me-1"></i>Yeni Tedarikçi Ekle
+                  </button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm"
+                          onclick="document.getElementById('rfqAddVenueArea').style.display='none'; document.getElementById('rfqNewVendorForm').style.display='none';">
+                    İptal
+                  </button>
+                </div>
               </div>
             </div>
+
+            {# Yeni tedarikçi hızlı kayıt formu (başta gizli) #}
+            <div id="rfqNewVendorForm" class="px-3 pt-2 pb-2" style="display:none;">
+              <div class="border rounded p-3" style="background:#f0fdf4; border-color:#86efac;">
+                <div class="fw-semibold mb-3" style="font-size:13px; color:#166534;">
+                  <i class="bi bi-person-plus-fill me-1"></i>Yeni Tedarikçi — Hızlı Kayıt
+                </div>
+                <div class="row g-2">
+                  <div class="col-md-6">
+                    <label class="form-label mb-1" style="font-size:11px; font-weight:600;">Firma / Tedarikçi Adı *</label>
+                    <input type="text" id="nvName" class="form-control form-control-sm" placeholder="Firma adı">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label mb-1" style="font-size:11px; font-weight:600;">E-posta</label>
+                    <input type="email" id="nvEmail" class="form-control form-control-sm" placeholder="info@firma.com">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label mb-1" style="font-size:11px; font-weight:600;">Telefon</label>
+                    <input type="text" id="nvPhone" class="form-control form-control-sm" placeholder="0212 xxx xx xx">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label mb-1" style="font-size:11px; font-weight:600;">İletişim Kişisi</label>
+                    <input type="text" id="nvContact" class="form-control form-control-sm" placeholder="Ad Soyad">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label mb-1" style="font-size:11px; font-weight:600;">Unvan</label>
+                    <input type="text" id="nvTitle" class="form-control form-control-sm" placeholder="Satış Müdürü">
+                  </div>
+                </div>
+                <div id="nvError" class="text-danger mt-2" style="font-size:12px; display:none;"></div>
+                <div class="d-flex gap-2 mt-3">
+                  <button type="button" class="btn btn-success btn-sm" onclick="saveNewVendorAndAddToRfq()">
+                    <i class="bi bi-check-lg me-1"></i>Kaydet ve RFQ'ya Ekle
+                  </button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm"
+                          onclick="document.getElementById('rfqNewVendorForm').style.display='none';">
+                    İptal
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <div id="rfqVenueCards" class="p-3"></div>
           </div>
           <div class="modal-footer">
@@ -3287,7 +3335,7 @@ function renderRfqAddDrop(query) {
     }
     return true;
   });
-  if (!filtered.length) { drop.innerHTML = `<div class="vs-no-res">Sonuç bulunamadı</div>`; return; }
+  if (!filtered.length) { drop.innerHTML = `<div class="vs-no-res">Sonuç bulunamadı &nbsp;<a href="#" style="font-size:11px;color:#16a34a;" onclick="event.preventDefault();showRfqNewVendorForm();"><i class="bi bi-person-plus me-1"></i>Yeni Tedarikçi Ekle</a></div>`; return; }
   drop.innerHTML = filtered.map(v =>
     `<div class="vs-item" onclick="addVenueToRfq('${escH(v.id)}')">
       <div>
@@ -3306,10 +3354,45 @@ function addVenueToRfq(venueId) {
   const vi = _rfqCardCount++;
   const card = buildRfqCard(venue, vi, _rfqCurrentEFS);
   document.getElementById('rfqVenueCards').appendChild(card);
-  // Alanı kapat ve input'u temizle
   document.getElementById('rfqAddVenueArea').style.display = 'none';
   document.getElementById('rfqAddSearch').value = '';
   card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function showRfqNewVendorForm() {
+  document.getElementById('rfqAddVenueArea').style.display = 'none';
+  document.getElementById('rfqNewVendorForm').style.display = 'block';
+  document.getElementById('nvName').focus();
+  document.getElementById('nvError').style.display = 'none';
+}
+
+async function saveNewVendorAndAddToRfq() {
+  const name    = (document.getElementById('nvName').value||'').trim();
+  const email   = (document.getElementById('nvEmail').value||'').trim();
+  const phone   = (document.getElementById('nvPhone').value||'').trim();
+  const contact = (document.getElementById('nvContact').value||'').trim();
+  const title   = (document.getElementById('nvTitle').value||'').trim();
+  const errEl   = document.getElementById('nvError');
+  if (!name) { errEl.textContent='Firma adı zorunludur.'; errEl.style.display='block'; return; }
+  errEl.style.display = 'none';
+  try {
+    const resp = await fetch('/vendors/quick-create', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({name, email, phone, contact_name: contact, contact_title: title}),
+    });
+    const data = await resp.json();
+    if (!resp.ok) { errEl.textContent = data.error||'Hata oluştu.'; errEl.style.display='block'; return; }
+    // ALL_VENUES dizisine ekle (aynı oturumda tekrar aramada görünsün)
+    ALL_VENUES.push({id:data.id, name:data.name, email:data.email, phone:data.phone,
+                     supplier_type:'diger', city:'', cities:[],
+                     contacts:[{name:contact||data.name, title, email, phone}]});
+    addVenueToRfq(data.id);
+    document.getElementById('rfqNewVendorForm').style.display = 'none';
+    ['nvName','nvEmail','nvPhone','nvContact','nvTitle'].forEach(id => { document.getElementById(id).value=''; });
+  } catch(e) {
+    errEl.textContent = 'Bağlantı hatası.'; errEl.style.display = 'block';
+  }
 }
 
 // ─── RFQ Picker dropdown state ───

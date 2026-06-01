@@ -84,7 +84,7 @@ async def vendors_autocomplete(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if current_user.role not in {*FINANCE_ROLES, "mudur"} and not current_user.is_gm:
+    if current_user.role not in {*FINANCE_ROLES, "mudur", "satinalma", "yonetici", "asistan"} and not current_user.is_gm:
         return JSONResponse([])
     term = f"%{q.strip()}%"
     _vq = db.query(Vendor).filter(Vendor.active == True, Vendor.name.ilike(term))
@@ -101,6 +101,57 @@ async def vendors_autocomplete(
         }
         for v in vendors
     ])
+
+
+# ---------------------------------------------------------------------------
+# POST /vendors/quick-create  — RFQ modalından hızlı tedarikçi oluştur (JSON)
+# ---------------------------------------------------------------------------
+
+@router.post("/quick-create", name="vendors_quick_create")
+async def vendors_quick_create(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """RFQ modalı için hızlı tedarikçi oluşturma — JSON döner."""
+    data = await request.json()
+    name    = (data.get("name") or "").strip()
+    email   = (data.get("email") or "").strip()
+    phone   = (data.get("phone") or "").strip()
+    contact = (data.get("contact_name") or "").strip()
+    contact_title = (data.get("contact_title") or "").strip()
+
+    if not name:
+        return JSONResponse({"error": "Tedarikçi adı zorunludur."}, status_code=400)
+
+    contacts_json = "[]"
+    if contact or email or phone:
+        import json as _json
+        contacts_json = _json.dumps([{
+            "name": contact or name, "title": contact_title,
+            "email": email, "phone": phone,
+        }], ensure_ascii=False)
+
+    vendor = Vendor(
+        id            = _uuid(),
+        name          = name,
+        email         = email,
+        phone         = phone,
+        contacts_json = contacts_json,
+        active        = True,
+        company_id    = current_user.company_id,
+        created_by    = current_user.id,
+        created_at    = _now(),
+        updated_at    = _now(),
+    )
+    db.add(vendor)
+    db.commit()
+    return JSONResponse({
+        "id":    vendor.id,
+        "name":  vendor.name,
+        "email": vendor.email,
+        "phone": vendor.phone,
+    })
 
 
 # ---------------------------------------------------------------------------
