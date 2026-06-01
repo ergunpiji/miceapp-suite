@@ -85,6 +85,58 @@
         </div>
         {% endif %}
 
+        {% if view_mode %}
+        {# ── Onay/Red paneli ── #}
+        {% if invoice.status in ('pending', 'mudur_approved') and can_approve_this %}
+        <div class="alert d-flex align-items-center gap-3 mb-3"
+             style="background:#fefce8; border:1px solid #fde047; border-radius:8px;">
+          <i class="bi bi-shield-check text-warning fs-5"></i>
+          <div class="flex-grow-1">
+            <div class="fw-bold" style="font-size:14px; color:#713f12;">Bu fatura onayınızı bekliyor</div>
+            <div class="text-muted" style="font-size:12px;">Aşağıdaki formu kontrol edip onaylayabilir ya da reddedebilirsiniz.</div>
+          </div>
+          <div class="d-flex gap-2">
+            <form method="post" action="/invoices/{{ invoice.id }}/approve" class="d-inline">
+              <button type="submit" class="btn btn-success btn-sm px-3">
+                <i class="bi bi-check-lg me-1"></i>Onayla
+              </button>
+            </form>
+            <button type="button" class="btn btn-outline-danger btn-sm px-3"
+                    data-bs-toggle="modal" data-bs-target="#rejectModal">
+              <i class="bi bi-x-lg me-1"></i>Reddet
+            </button>
+          </div>
+        </div>
+        {% elif invoice.status == 'approved' %}
+        <div class="alert d-flex align-items-center gap-2 mb-3"
+             style="background:#f0fdf4; border:1px solid #86efac; border-radius:8px;">
+          <i class="bi bi-check-circle-fill text-success"></i>
+          <span class="fw-semibold text-success">Onaylandı</span>
+          {% if invoice.approver %}<span class="text-muted ms-1 small">— {{ invoice.approver.full_name }}</span>{% endif %}
+        </div>
+        {% elif invoice.status == 'rejected' %}
+        <div class="alert d-flex align-items-center gap-2 mb-3"
+             style="background:#fef2f2; border:1px solid #fca5a5; border-radius:8px;">
+          <i class="bi bi-x-circle-fill text-danger"></i>
+          <span class="fw-semibold text-danger">Reddedildi</span>
+          {% if invoice.rejection_note %}<span class="text-danger ms-2 small">— {{ invoice.rejection_note }}</span>{% endif %}
+        </div>
+        {% endif %}
+        {# İşlem geçmişi #}
+        {% if logs %}
+        <div class="mb-3 px-1">
+          <div class="text-muted small fw-semibold mb-1">İşlem Geçmişi</div>
+          {% for log in logs %}
+          <div class="d-flex align-items-center gap-2 small text-muted mb-1">
+            <i class="bi {{ log_actions.get(log.action, ('','bi-dot',''))[1] }}"></i>
+            <span>{{ log.created_at.strftime('%d.%m.%Y %H:%M') if log.created_at else '' }}</span>
+            <span>{{ log.note or log.action }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% endif %}
+
         <form method="post"
               action="{% if edit_mode %}/invoices/{{ invoice.id }}/edit{% else %}/invoices/new{% endif %}"
               enctype="multipart/form-data"
@@ -427,6 +479,7 @@
           </div>
 
           {# ── Butonlar ── #}
+          {% if not view_mode %}
           <div class="d-flex gap-2">
             <button type="submit" class="btn btn-primary" onclick="prepareSave()">
               <i class="bi bi-check-lg me-1"></i>
@@ -446,8 +499,46 @@
             <a href="/requests" class="btn btn-outline-secondary">İptal</a>
             {% endif %}
           </div>
+          {% else %}
+          <div class="d-flex gap-2">
+            {% if invoice.request_id %}
+            <a href="/requests/{{ invoice.request_id }}#tab-financial" class="btn btn-outline-secondary">
+              <i class="bi bi-arrow-left me-1"></i>Referansa Dön
+            </a>
+            {% else %}
+            <a href="/invoices" class="btn btn-outline-secondary">
+              <i class="bi bi-arrow-left me-1"></i>Listeye Dön
+            </a>
+            {% endif %}
+          </div>
+          {% endif %}
 
         </form>
+
+        {# Red modal — view_mode'da #}
+        {% if view_mode and can_approve_this %}
+        <div class="modal fade" id="rejectModal" tabindex="-1">
+          <div class="modal-dialog modal-dialog-centered">
+            <form method="post" action="/invoices/{{ invoice.id }}/reject" class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title text-danger"><i class="bi bi-x-circle me-2"></i>Faturayı Reddet</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+              </div>
+              <div class="modal-body">
+                <label class="form-label fw-semibold">Red Gerekçesi <span class="text-danger">*</span></label>
+                <textarea name="rejection_note" class="form-control" rows="3"
+                          placeholder="Neden reddedildiğini açıklayın..." required></textarea>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" class="btn btn-danger px-4">
+                  <i class="bi bi-x-lg me-1"></i>Reddet
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -1043,5 +1134,37 @@ function fmt(n) {
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+{% if view_mode %}
+// View mode: formu salt okunur yap
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.getElementById('invoiceForm');
+  if (!form) return;
+  form.querySelectorAll('input, select, textarea').forEach(el => {
+    el.setAttribute('readonly', true);
+    el.setAttribute('disabled', true);
+    el.style.pointerEvents = 'none';
+    el.style.background = '#f8fafc';
+  });
+  // Belge yükleme alanını gizle
+  const docDrop = document.getElementById('docDrop');
+  if (docDrop) docDrop.style.display = 'none';
+  // PDF parse alanını gizle
+  const parseZone = document.getElementById('parseZone');
+  if (parseZone) parseZone.style.display = 'none';
+  // Kalem ekleme / silme butonlarını gizle
+  ['btnAddLine','btnToggleGrouped'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  document.querySelectorAll('.btn-remove-line, .remove-line-btn, [onclick*="removeLine"]').forEach(el => {
+    el.style.display = 'none';
+  });
+  // Dropdown'ları kapat
+  ['vendorDropdown','customerDropdown','reqDropdown'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+});
+{% endif %}
 </script>
 {% endblock %}

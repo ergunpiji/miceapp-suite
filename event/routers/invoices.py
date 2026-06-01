@@ -129,6 +129,25 @@ def _require_approval_permission(current_user: User, inv, db: Session):
     raise HTTPException(status_code=403, detail="Bu faturayı onaylamak için yetkiniz yok.")
 
 
+def _can_approve_inv(db: Session, inv, user: User) -> bool:
+    """Kullanıcının bu faturayı onaylayıp onaylayamayacağını bool döner."""
+    if inv.status not in ("pending", "mudur_approved"):
+        return False
+    if user.role in ("admin", "muhasebe_muduru") or _is_gm(user):
+        return True
+    if inv.current_approver_id:
+        if user.id == inv.current_approver_id:
+            return True
+        if _is_above_in_chain(db, user.id, inv.current_approver_id):
+            return True
+    else:
+        if inv.request and inv.request.created_by == user.id:
+            return True
+        if _is_gm(user) or user.role == "mudur":
+            return True
+    return False
+
+
 def _find_next_approver(db: Session, user_id: str):
     """Zincirde bir üst onaylayıcıyı (yöneticiyi) döner."""
     user = db.query(User).filter(User.id == user_id).first()
@@ -176,9 +195,18 @@ async def invoice_detail(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """Fatura detayı — Nurcan'ın doldurduğu formun birebir görünümü (read-only)."""
     from models import INVOICE_LOG_ACTIONS
-    from datetime import date as _dt
     inv = _get_invoice_or_404(db, invoice_id)
+
+    # Fatura kalemlerini form.html'nin beklediği formata çevir
+    req = db.query(ReqModel).filter(ReqModel.id == inv.request_id).first() if inv.request_id else None
+    undoc_entries = req.undocumented_entries if req else []
+
+    # Onay/red yetkisi
+    can_approve_this = _can_approve_inv(db, inv, current_user)
+
+    logs = []
     try:
         logs = (
             db.query(InvoiceLog)
@@ -187,15 +215,24 @@ async def invoice_detail(
             .all()
         )
     except Exception:
-        logs = []
-    return templates.TemplateResponse("invoices/detail.html", {
-        "request":       request,
-        "current_user":  current_user,
-        "inv":           inv,
-        "logs":          logs,
-        "log_actions":   INVOICE_LOG_ACTIONS,
-        "today_str":     _dt.today().isoformat(),
-        "page_title":    f"Fatura — {inv.invoice_no or inv.id[:8]}",
+        pass
+
+    return templates.TemplateResponse("invoices/form.html", {
+        "request":          request,
+        "current_user":     current_user,
+        "page_title":       f"Fatura Talebi — {inv.vendor_name or inv.invoice_no or inv.id[:8]}",
+        "invoice":          inv,
+        "selected_req":     req,
+        "all_requests":     [],
+        "undoc_entries":    undoc_entries,
+        "invoice_types":    INVOICE_TYPES,
+        "edit_mode":        False,
+        "view_mode":        True,          # read-only, onay paneli göster
+        "statement_prefill": None,
+        "from_statement":   None,
+        "can_approve_this": can_approve_this,
+        "logs":             logs,
+        "log_actions":      INVOICE_LOG_ACTIONS,
     })
 
 
