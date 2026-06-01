@@ -1247,6 +1247,10 @@ async def requests_detail(
             "parent_fund":            parent_fund,
             "can_manage_funds":       (lambda u: u.role in ("admin", "muhasebe_muduru") or u.is_gm)(current_user),
             "today":                  today,
+            # Talepler (kütüphanenin üstünde)
+            "req_invoices":           sorted(req.invoices or [], key=lambda x: x.created_at, reverse=True),
+            "req_prepayments":        sorted(req.prepayment_requests or [], key=lambda x: x.requested_at, reverse=True),
+            "req_hbfs":               sorted(expense_reports, key=lambda x: x.created_at, reverse=True),
             # Kütüphane
             "timeline":               timeline,
             "req_documents":          req_documents,

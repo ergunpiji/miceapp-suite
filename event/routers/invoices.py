@@ -25,7 +25,8 @@ from templates_config import templates
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
 FINANCE_ROLES        = {"admin", "muhasebe_muduru", "muhasebe"}
-INVOICE_REQUEST_ROLES = {"admin", "mudur", "yonetici", "muhasebe_muduru", "muhasebe"}  # fatura talebi
+# Fatura talebi oluşturabilecek tüm roller (herkes talep oluşturabilir, muhasebe direkt keser)
+INVOICE_REQUEST_ROLES = {"admin", "mudur", "yonetici", "asistan", "satinalma", "muhasebe_muduru", "muhasebe"}
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "static", "uploads", "invoices")
 ALLOWED_EXTS = {".pdf", ".jpg", ".jpeg", ".png", ".gif", ".webp"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -132,6 +133,9 @@ def _require_approval_permission(current_user: User, inv, db: Session):
 def _can_approve_inv(db: Session, inv, user: User) -> bool:
     """Kullanıcının bu faturayı onaylayıp onaylayamayacağını bool döner."""
     if inv.status not in ("pending", "mudur_approved"):
+        return False
+    # Oluşturan kişi kendi talebini onaylayamaz
+    if user.id == inv.created_by and not _is_gm(user) and user.role not in ("admin", "muhasebe_muduru"):
         return False
     if user.role in ("admin", "muhasebe_muduru") or _is_gm(user):
         return True
@@ -342,11 +346,9 @@ async def invoices_new_form(
     db: Session = Depends(get_db),
 ):
     # statement_id ile geliyorsa PM/yonetici de fatura talebi oluşturabilir
-    if statement_id:
-        if current_user.role not in INVOICE_REQUEST_ROLES:
-            raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz yok.")
-    else:
-        _require_finance(current_user)
+    # Herkes fatura talebi oluşturabilir; muhasebe/admin aynı form üzerinden direkt de keser
+    if current_user.role not in INVOICE_REQUEST_ROLES and not current_user.is_gm:
+        raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz yok.")
     req = None
     if request_id:
         req = db.query(ReqModel).filter(ReqModel.id == request_id).first()
@@ -497,12 +499,9 @@ async def invoices_create(
         current_user.id, current_user.role, invoice_type,
         bool(from_statement), document.filename if document else None,
     )
-    # Statement üzerinden gelen fatura talepleri PM/yonetici'ye de açık
-    if from_statement:
-        if current_user.role not in INVOICE_REQUEST_ROLES:
-            raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz yok.")
-    else:
-        _require_finance(current_user)
+    # Herkes fatura talebi oluşturabilir
+    if current_user.role not in INVOICE_REQUEST_ROLES and not current_user.is_gm:
+        raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz yok.")
     req = None
     if req_id:
         req = db.query(ReqModel).filter(ReqModel.id == req_id).first()
@@ -543,10 +542,25 @@ async def invoices_create(
     # geriye uyumluluk için vat_rate: ilk satırın oranı (veya 0)
     first_vat = float(lines[0].get("vat_rate", 0)) if lines else 0.0
 
-    # Onay zinciri: ilk onaylayıcı = referansın sahibi (PM)
+    # Onay zinciri: fatura talebi → oluşturanın yöneticisine gider (GM nihai onaylayıcı)
+    # Oluşturan kişi ASLA kendi talebini onaylayamaz.
     _initial_approver_id = None
     if req:
-        _initial_approver_id = req.created_by
+        creator = db.query(User).filter(User.id == current_user.id).first()
+        if creator and creator.manager_id:
+            _initial_approver_id = creator.manager_id          # yönetici (müdür)
+        else:
+            # Yönetici yoksa doğrudan GM'e gider
+            _gm = db.query(User).filter(
+                User.active == True,
+                User.is_gm == True,
+            ).first()
+            if not _gm:
+                _gm = db.query(User).filter(
+                    User.active == True,
+                    User.role.in_(["admin", "genel_mudur"]),
+                ).first()
+            _initial_approver_id = _gm.id if _gm else None
 
     # due_date otomatik hesaplama: boşsa invoice_date + payment_term
     _due_date = due_date or None
@@ -893,6 +907,9 @@ async def invoices_approve(
     db: Session = Depends(get_db),
 ):
     inv = _get_invoice_or_404(db, invoice_id)
+    # Oluşturan kişi kendi talebini onaylayamaz
+    if inv.created_by == current_user.id and not _is_gm(current_user) and current_user.role not in ("admin", "muhasebe_muduru"):
+        raise HTTPException(status_code=403, detail="Kendi oluşturduğunuz fatura talebini onaylayamazsınız.")
     _require_approval_permission(current_user, inv, db)
 
     if inv.status not in ("pending", "mudur_approved", "gm_approved"):

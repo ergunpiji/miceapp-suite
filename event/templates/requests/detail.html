@@ -2033,6 +2033,104 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 </div>
 
+{# ─── TALEPLER ─── #}
+{% set all_talepler = req_invoices|list + req_prepayments|list + req_hbfs|list %}
+{% if all_talepler %}
+<div class="card mb-4" id="tab-talepler">
+  <div class="card-header d-flex align-items-center justify-content-between py-2"
+       style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
+    <h6 class="fw-bold mb-0">
+      <i class="bi bi-file-earmark-check me-2 text-primary"></i>Talepler
+    </h6>
+    <a href="/invoices/new?request_id={{ req.id }}" class="btn btn-sm btn-outline-primary">
+      <i class="bi bi-plus me-1"></i>Yeni Talep
+    </a>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0" style="font-size:13px;">
+      <thead style="background:#f8fafc; font-size:11px;">
+        <tr>
+          <th class="ps-3 py-2 fw-semibold text-muted">TİP</th>
+          <th class="py-2 fw-semibold text-muted">FİRMA / AÇIKLAMA</th>
+          <th class="py-2 fw-semibold text-muted">TALEP EDEN</th>
+          <th class="py-2 fw-semibold text-muted">TARİH</th>
+          <th class="py-2 text-end fw-semibold text-muted">TUTAR</th>
+          <th class="py-2 fw-semibold text-muted">DURUM</th>
+          <th class="pe-3"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {# Fatura Talepleri #}
+        {% for inv in req_invoices %}
+        <tr style="cursor:pointer;" onclick="window.location.href='/invoices/{{ inv.id }}/detail'">
+          <td class="ps-3 py-2">
+            <span class="badge" style="background:#dbeafe; color:#1d4ed8; font-size:11px;">Fatura</span>
+          </td>
+          <td class="py-2 fw-semibold">{{ inv.vendor_name or '—' }}</td>
+          <td class="py-2 text-muted small">{{ inv.creator.full_name if inv.creator else '—' }}</td>
+          <td class="py-2 text-muted small">{{ inv.invoice_date or '—' }}</td>
+          <td class="py-2 text-end fw-semibold">₺{{ '{:,.0f}'.format(inv.total_amount or 0).replace(',','.') }}</td>
+          <td class="py-2">
+            {% if inv.status == 'pending' %}<span class="badge bg-warning text-dark">Onay Bekliyor</span>
+            {% elif inv.status == 'approved' %}<span class="badge bg-success">Onaylandı</span>
+            {% elif inv.status == 'rejected' %}<span class="badge bg-danger">Reddedildi</span>
+            {% elif inv.status == 'cancelled' %}<span class="badge bg-secondary">İptal</span>
+            {% else %}<span class="badge bg-secondary">{{ inv.status }}</span>{% endif %}
+          </td>
+          <td class="pe-3 py-2 text-end">
+            <a href="/invoices/{{ inv.id }}/detail" class="btn btn-xs btn-outline-secondary btn-sm"
+               onclick="event.stopPropagation()">Aç</a>
+          </td>
+        </tr>
+        {% endfor %}
+        {# Ön Ödeme Talepleri #}
+        {% for pp in req_prepayments %}
+        <tr style="cursor:pointer;" onclick="window.location.href='/prepayment-requests/{{ pp.id }}'">
+          <td class="ps-3 py-2">
+            <span class="badge" style="background:#dcfce7; color:#166534; font-size:11px;">Ön Ödeme</span>
+          </td>
+          <td class="py-2 fw-semibold">{{ pp.vendor.name if pp.vendor else '—' }}</td>
+          <td class="py-2 text-muted small">{{ pp.requester.full_name if pp.requester else '—' }}</td>
+          <td class="py-2 text-muted small">{{ pp.requested_at | date_tr }}</td>
+          <td class="py-2 text-end fw-semibold">₺{{ '{:,.0f}'.format(pp.amount or 0).replace(',','.') }}</td>
+          <td class="py-2">
+            {% if pp.status == 'pending_gm' %}<span class="badge bg-warning text-dark">GM Onayı Bekliyor</span>
+            {% elif pp.status == 'approved' %}<span class="badge bg-info text-dark">Onaylandı</span>
+            {% elif pp.status == 'paid' %}<span class="badge bg-success">Ödendi</span>
+            {% elif pp.status == 'rejected' %}<span class="badge bg-danger">Reddedildi</span>
+            {% else %}<span class="badge bg-secondary">{{ pp.status }}</span>{% endif %}
+          </td>
+          <td class="pe-3 py-2 text-end">
+            <a href="/prepayment-requests/{{ pp.id }}" class="btn btn-xs btn-outline-secondary btn-sm"
+               onclick="event.stopPropagation()">Aç</a>
+          </td>
+        </tr>
+        {% endfor %}
+        {# HBF Talepleri #}
+        {% for hbf in req_hbfs %}
+        <tr style="cursor:pointer;" onclick="window.location.href='/expenses/{{ hbf.id }}'">
+          <td class="ps-3 py-2">
+            <span class="badge" style="background:#fef3c7; color:#92400e; font-size:11px;">HBF</span>
+          </td>
+          <td class="py-2 fw-semibold">{{ hbf.title or ('HBF #' ~ hbf.id[:8]) }}</td>
+          <td class="py-2 text-muted small">{{ hbf.submitter.full_name if hbf.submitter else '—' }}</td>
+          <td class="py-2 text-muted small">{{ hbf.created_at | date_tr }}</td>
+          <td class="py-2 text-end fw-semibold">₺{{ '{:,.0f}'.format(hbf.grand_total).replace(',','.') }}</td>
+          <td class="py-2">
+            <span class="badge bg-{{ hbf.status_color }}">{{ hbf.status_label }}</span>
+          </td>
+          <td class="pe-3 py-2 text-end">
+            <a href="/expenses/{{ hbf.id }}" class="btn btn-xs btn-outline-secondary btn-sm"
+               onclick="event.stopPropagation()">Aç</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
 {# ─── KÜTÜPHANE SEKMESİ ─── #}
 <div class="card mb-4" id="tab-library">
   <div class="card-header d-flex align-items-center justify-content-between py-2"

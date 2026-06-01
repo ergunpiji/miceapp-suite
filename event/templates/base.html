@@ -272,6 +272,25 @@
       <i class="bi bi-speedometer2 nav-icon"></i> Dashboard
     </a>
 
+    {# ── Fatura Talebi — tüm roller görür ── #}
+    <div class="nav-section-label section-main">Fatura Talebi</div>
+    <a href="/invoices/new"
+       class="sidebar-link {% if cp == '/invoices/new' and not request.query_params.get('statement_id') %}active{% endif %}">
+      <i class="bi bi-plus-circle nav-icon"></i> Yeni Fatura Talebi
+    </a>
+    <a href="/taleplerim"
+       class="sidebar-link {% if cp == '/taleplerim' %}active{% endif %}">
+      <i class="bi bi-list-ul nav-icon"></i> Taleplerim
+    </a>
+    {% if nc.inv_my_pending %}
+    <a href="/invoices?view=my_pending"
+       class="sidebar-link {% if request.query_params.get('view') == 'my_pending' %}active{% endif %}">
+      <i class="bi bi-hourglass-split nav-icon" style="color:#f59e0b;"></i>
+      <span style="color:#f59e0b; font-weight:600;">Onaylarım</span>
+      {{ nb(nc.inv_my_pending) }}
+    </a>
+    {% endif %}
+
     {# ── ADMIN / GENEL MÜDÜR / MUHASEBE MÜDÜRÜ ── #}
     {% if current_user.role in ('admin', 'mudur', 'muhasebe_muduru') or current_user.is_gm %}
 
