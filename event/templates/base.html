@@ -362,6 +362,15 @@
             <i class="bi bi-receipt nav-icon"></i> Faturalar
             {{ nb(_inv_total) }}
           </a>
+          {% if nc.inv_my_pending %}
+          <a href="/invoices?view=my_pending"
+             class="sidebar-link {% if request.query_params.get('view') == 'my_pending' %}active{% endif %}"
+             style="padding-left:28px;">
+            <i class="bi bi-hourglass-split nav-icon" style="color:#f59e0b;"></i>
+            <span style="color:#f59e0b; font-weight:600;">Onaylarım</span>
+            {{ nb(nc.inv_my_pending) }}
+          </a>
+          {% endif %}
           <a href="/invoices/unlinked"
              class="sidebar-link {% if cp == '/invoices/unlinked' %}active{% endif %}">
             <i class="bi bi-link-45deg nav-icon"></i> Referans Bekleyenler
@@ -559,8 +568,8 @@
              class="sidebar-link {% if cp == '/prepayment-requests/new' %}active{% endif %}">
             <i class="bi bi-arrow-up-circle nav-icon"></i> Ön Ödeme Talebi
           </a>
-          <a href="/prepayment-requests"
-             class="sidebar-link {% if '/prepayment-requests' in cp and cp != '/prepayment-requests/new' %}active{% endif %}">
+          <a href="/taleplerim"
+             class="sidebar-link {% if cp == '/taleplerim' %}active{% endif %}">
             <i class="bi bi-list-ul nav-icon"></i> Taleplerim
           </a>
           <a href="/expenses/new"
@@ -623,8 +632,8 @@
              class="sidebar-link {% if cp == '/prepayment-requests/new' %}active{% endif %}">
             <i class="bi bi-arrow-up-circle nav-icon"></i> Ön Ödeme Talebi
           </a>
-          <a href="/prepayment-requests"
-             class="sidebar-link {% if '/prepayment-requests' in cp and cp != '/prepayment-requests/new' %}active{% endif %}">
+          <a href="/taleplerim"
+             class="sidebar-link {% if cp == '/taleplerim' %}active{% endif %}">
             <i class="bi bi-list-ul nav-icon"></i> Taleplerim
           </a>
           <a href="/expenses/new"

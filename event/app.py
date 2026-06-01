@@ -108,6 +108,11 @@ async def nav_counts_middleware(request: Request, call_next):
                     counts["inv_pending_gm"] = db.execute(
                         _text("SELECT COUNT(*) FROM invoices WHERE status='pending'")
                     ).scalar() or 0
+                    # Benim onayımı bekleyen faturalar (current_approver_id = bu kullanıcı)
+                    counts["inv_my_pending"] = db.execute(
+                        _text("SELECT COUNT(*) FROM invoices WHERE status='pending' AND current_approver_id=:uid"),
+                        {"uid": uid}
+                    ).scalar() or 0
                 if role in ("muhasebe", "muhasebe_muduru", "admin") or _is_gm:
                     # Muhasebe kesmesi bekleyen faturalar
                     counts["inv_pending_cut"] = db.execute(
@@ -319,6 +324,7 @@ from routers import modules as modules_router
 from routers import permissions as permissions_router
 from routers import prepayment_requests as prepayment_requests_router
 from routers import coordinator as coordinator_router
+from routers import my_requests as my_requests_router
 
 app.include_router(auth_router.router)
 app.include_router(dashboard_router.router)
@@ -346,6 +352,7 @@ app.include_router(modules_router.router)
 app.include_router(permissions_router.router)
 app.include_router(prepayment_requests_router.router)
 app.include_router(coordinator_router.router)
+app.include_router(my_requests_router.router)
 
 # ---------------------------------------------------------------------------
 # Operasyon Ajanı — sub-app olarak mount et (/operasyon/...)

@@ -162,7 +162,10 @@
               'kesilen': 'success', 'gelen': 'primary',
               'komisyon': 'info', 'iade_kesilen': 'warning', 'iade_gelen': 'secondary'
             } %}
-            <tr>
+            <tr {% if view == 'my_pending' %}
+              style="cursor:pointer;" title="Formu görüntülemek için tıklayın"
+              onclick="window.location.href='/invoices/{{ inv.id }}/detail'"
+            {% endif %}>
               <td class="ps-3">
                 <a href="/requests/{{ inv.request_id }}#tab-financial"
                    class="text-decoration-none fw-semibold text-primary">

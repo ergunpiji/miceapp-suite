@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block page_title %}Taleplerim{% endblock %}
+{% block content %}
+
+{% macro status_badge(label_tuple) %}
+  {% if label_tuple %}
+  <span class="badge" style="background:
+    {% if label_tuple[1]=='success' %}#16a34a
+    {% elif label_tuple[1]=='warning' %}#f59e0b
+    {% elif label_tuple[1]=='danger' %}#dc2626
+    {% elif label_tuple[1]=='info' %}#0891b2
+    {% elif label_tuple[1]=='primary' %}#2563eb
+    {% else %}#6b7280{% endif %};
+    color:#fff; font-size:11px; padding:3px 8px; border-radius:999px;">
+    {{ label_tuple[0] }}
+  </span>
+  {% endif %}
+{% endmacro %}
+
+<div class="row g-3">
+
+  {# ── Fatura Talepleri ── #}
+  <div class="col-12">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 d-flex align-items-center justify-content-between py-3">
+        <h6 class="fw-bold mb-0">
+          <i class="bi bi-receipt me-2 text-primary"></i>Fatura Talepleri
+        </h6>
+        <a href="/invoices" class="btn btn-sm btn-outline-primary">Tümü</a>
+      </div>
+      <div class="table-responsive">
+        {% if invoices %}
+        <table class="table table-hover mb-0" style="font-size:13px;">
+          <thead style="background:#f8fafc;">
+            <tr>
+              <th class="ps-4 py-2 fw-semibold text-muted" style="font-size:11px;">TARİH</th>
+              <th class="py-2 fw-semibold text-muted" style="font-size:11px;">FİRMA / MÜŞTERİ</th>
+              <th class="py-2 fw-semibold text-muted" style="font-size:11px;">REFERANS</th>
+              <th class="py-2 fw-semibold text-muted" style="font-size:11px;">FATURA NO</th>
+              <th class="py-2 text-end fw-semibold text-muted" style="font-size:11px;">TUTAR</th>
+              <th class="py-2 fw-semibold text-muted" style="font-size:11px;">DURUM</th>
+              <th class="pe-4"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for inv in invoices %}
+            {% set slabel = invoice_status_label.get(inv.status, (inv.status, 'secondary')) %}
+            <tr>
+              <td class="ps-4 py-2 text-muted">{{ inv.invoice_date | date_tr if inv.invoice_date else '—' }}</td>
+              <td class="py-2 fw-semibold">{{ inv.vendor_name or '—' }}</td>
+              <td class="py-2">
+                {% if inv.request %}
+                <a href="/requests/{{ inv.request_id }}#tab-financial" class="text-decoration-none text-primary small">
+                  {{ inv.request.request_no }}
+                </a>
+                {% else %}—{% endif %}
+              </td>
+              <td class="py-2 text-muted">{{ inv.invoice_no or '—' }}</td>
+              <td class="py-2 text-end fw-semibold">₺{{ '{:,.0f}'.format(inv.total_amount or 0).replace(',','.') }}</td>
+              <td class="py-2">
+                {% if inv.approval_status == 'onay_bekliyor' %}
+                  <span class="badge" style="background:#f59e0b;color:#fff;font-size:11px;padding:3px 8px;border-radius:999px;">
+                    Muhasebe Bekliyor
+                  </span>
+                {% elif inv.approval_status == 'approved' %}
+                  <span class="badge" style="background:#16a34a;color:#fff;font-size:11px;padding:3px 8px;border-radius:999px;">
+                    Onaylandı / Kesildi
+                  </span>
+                {% elif inv.approval_status == 'reddedildi' %}
+                  <span class="badge" style="background:#dc2626;color:#fff;font-size:11px;padding:3px 8px;border-radius:999px;">
+                    Reddedildi
+                  </span>
+                {% else %}
+                  {{ status_badge(slabel) }}
+                {% endif %}
+              </td>
+              <td class="pe-4 py-2 text-end">
+                <a href="/invoices/{{ inv.id }}/detail" class="btn btn-xs btn-outline-secondary btn-sm" style="font-size:11px; padding:2px 8px;">Detay</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-4 text-muted">Henüz fatura talebi yok.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# ── Ön Ödeme Talepleri ── #}
+  <div class="col-12">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 d-flex align-items-center justify-content-between py-3">
+        <h6 class="fw-bold mb-0">
+          <i class="bi bi-arrow-up-circle me-2 text-success"></i>Ön Ödeme Talepleri
+        </h6>
+        <a href="/prepayment-requests" class="btn btn-sm btn-outline-success">Tümü</a>
+      </div>
+      <div class="table-responsive">
+        {% if prepayments %}
+        <table class="table table-hover mb-0" style="font-size:13px;">
+          <thead style="background:#f8fafc;">
+            <tr>
+              <th class="ps-4 py-2 fw-semibold text-muted" style="font-size:11px;">TARİH</th>
+              <th class="py-2 fw-semibold text-muted" style="font-size:11px;">TEDARİKÇİ</th>
+              <th class="py-2 fw-semibold text-muted" style="font-size:11px;">REFERANS</th>
+              <th class="py-2 text-end fw-semibold text-muted" style="font-size:11px;">TUTAR</th>
+              <th class="py-2 fw-semibold text-muted" style="font-size:11px;">AÇIKLAMA</th>
+              <th class="py-2 fw-semibold text-muted" style="font-size:11px;">DURUM</th>
+              <th class="pe-4"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for pp in prepayments %}
+            {% set slabel = prepayment_status_label.get(pp.status, (pp.status, 'secondary')) %}
+            <tr>
+              <td class="ps-4 py-2 text-muted">{{ pp.requested_at | date_tr }}</td>
+              <td class="py-2 fw-semibold">{{ pp.vendor.name if pp.vendor else '—' }}</td>
+              <td class="py-2">
+                {% if pp.request %}
+                <a href="/requests/{{ pp.request_id }}" class="text-decoration-none text-primary small">
+                  {{ pp.request.request_no }}
+                </a>
+                {% else %}—{% endif %}
+              </td>
+              <td class="py-2 text-end fw-semibold">₺{{ '{:,.0f}'.format(pp.amount or 0).replace(',','.') }}</td>
+              <td class="py-2 text-muted" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                {{ pp.description or '—' }}
+              </td>
+              <td class="py-2">{{ status_badge(slabel) }}</td>
+              <td class="pe-4 py-2 text-end">
+                <a href="/prepayment-requests/{{ pp.id }}" class="btn btn-xs btn-outline-secondary btn-sm" style="font-size:11px; padding:2px 8px;">Detay</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-4 text-muted">Henüz ön ödeme talebi yok.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# ── HBF Talepleri ── #}
+  <div class="col-12">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 d-flex align-items-center justify-content-between py-3">
+        <h6 class="fw-bold mb-0">
+          <i class="bi bi-receipt-cutoff me-2 text-warning"></i>HBF Talepleri
+        </h6>
+        <a href="/expenses" class="btn btn-sm btn-outline-warning">Tümü</a>
+      </div>
+      <div class="table-responsive">
+        {% if hbfs %}
+        <table class="table table-hover mb-0" style="font-size:13px;">
+          <thead style="background:#f8fafc;">
+            <tr>
+              <th class="ps-4 py-2 fw-semibold text-muted" style="font-size:11px;">TARİH</th>
+              <th class="py-2 fw-semibold text-muted" style="font-size:11px;">BAŞLIK</th>
+              <th class="py-2 fw-semibold text-muted" style="font-size:11px;">REFERANS</th>
+              <th class="py-2 text-end fw-semibold text-muted" style="font-size:11px;">TOPLAM</th>
+              <th class="py-2 fw-semibold text-muted" style="font-size:11px;">DURUM</th>
+              <th class="pe-4"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for hbf in hbfs %}
+            {% set slabel = expense_status_label.get(hbf.status, (hbf.status, 'secondary')) %}
+            <tr>
+              <td class="ps-4 py-2 text-muted">{{ hbf.created_at | date_tr }}</td>
+              <td class="py-2 fw-semibold">{{ hbf.title or ('HBF #' ~ hbf.id[:8]) }}</td>
+              <td class="py-2">
+                {% if hbf.request %}
+                <a href="/requests/{{ hbf.request_id }}" class="text-decoration-none text-primary small">
+                  {{ hbf.request.request_no }}
+                </a>
+                {% else %}—{% endif %}
+              </td>
+              <td class="py-2 text-end fw-semibold">
+                ₺{{ '{:,.0f}'.format(hbf.grand_total).replace(',','.') }}
+              </td>
+              <td class="py-2">{{ status_badge(slabel) }}</td>
+              <td class="pe-4 py-2 text-end">
+                <a href="/expenses/{{ hbf.id }}" class="btn btn-xs btn-outline-secondary btn-sm" style="font-size:11px; padding:2px 8px;">Detay</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-4 text-muted">Henüz HBF talebi yok.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

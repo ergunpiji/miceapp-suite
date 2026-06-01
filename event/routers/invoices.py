@@ -208,9 +208,10 @@ async def invoices_list(
     request: Request,
     status_filter: str = "all",
     type_filter: str = "all",
-    q: str = "",            # serbest metin: fatura no, tedarikçi, referans no
-    date_from: str = "",    # YYYY-MM-DD
-    date_to: str = "",      # YYYY-MM-DD
+    view: str = "",          # my_pending → sadece benim onayımı bekleyenler
+    q: str = "",             # serbest metin: fatura no, tedarikçi, referans no
+    date_from: str = "",     # YYYY-MM-DD
+    date_to: str = "",       # YYYY-MM-DD
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -220,11 +221,18 @@ async def invoices_list(
 
     query = db.query(Invoice).join(Invoice.request)
 
-    # mudur (Etkinlik Süreç Müdürü) ve GM tüm faturaları görebilir
-    # PM sadece kendi referanslarının faturalarını görür
-    if current_user.role in ("yonetici", "asistan"):
-        from models import Request as ReqModel
-        query = query.filter(ReqModel.created_by == current_user.id)
+    # "Onaylarım" görünümü — sadece benim onayımı bekleyen faturalar
+    if view == "my_pending":
+        query = query.filter(
+            Invoice.current_approver_id == current_user.id,
+            Invoice.status == "pending",
+        )
+    else:
+        # mudur (Etkinlik Süreç Müdürü) ve GM tüm faturaları görebilir
+        # PM sadece kendi referanslarının faturalarını görür
+        if current_user.role in ("yonetici", "asistan"):
+            from models import Request as ReqModel
+            query = query.filter(ReqModel.created_by == current_user.id)
 
     if status_filter != "all":
         query = query.filter(Invoice.status == status_filter)
@@ -264,10 +272,11 @@ async def invoices_list(
     return templates.TemplateResponse("invoices/list.html", {
         "request":              request,
         "current_user":         current_user,
-        "page_title":           "Faturalar",
+        "page_title":           "Onaylarım" if view == "my_pending" else "Faturalar",
         "invoices":             invoices,
         "status_filter":        status_filter,
         "type_filter":          type_filter,
+        "view":                 view,
         "q":                    q,
         "date_from":            date_from,
         "date_to":              date_to,
