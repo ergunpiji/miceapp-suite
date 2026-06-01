@@ -348,8 +348,8 @@
     </a>
     {% set my_pending = request.state.nav_counts.get('my_pending_invoices', 0) %}
     {% if my_pending %}
-    <a href="/invoices?approval=pending_mine" class="sidebar-link ps-4 {% if request.query_params.get('approval') == 'pending_mine' %}active{% endif %}" style="font-size:12px">
-      <i class="bi bi-hourglass-split"></i> Onayımı Bekleyenler
+    <a href="/invoices?approval=pending_mine" class="sidebar-link {% if request.query_params.get('approval') == 'pending_mine' %}active{% endif %}">
+      <i class="bi bi-hourglass-split"></i> <span style="color:#f59e0b; font-weight:600;">Onaylarım</span>
       <span class="ms-auto badge-nav" style="background:#f59e0b;">{{ my_pending }}</span>
     </a>
     {% endif %}

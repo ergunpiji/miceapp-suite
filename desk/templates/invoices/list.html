@@ -60,7 +60,10 @@
       </thead>
       <tbody>
         {% for inv in invoices %}
-        <tr>
+        <tr {% if approval == 'pending_mine' %}
+          style="cursor:pointer;" title="Formu görüntülemek için tıklayın"
+          onclick="if(!event.target.closest('a,button,input,form'))window.location.href='/invoices/{{ inv.id }}'"
+        {% endif %}>
           {% if current_user.has_role_min("mudur") and not show_archived %}
           <td><input type="checkbox" class="form-check-input row-check" value="{{ inv.id }}"></td>
           {% endif %}

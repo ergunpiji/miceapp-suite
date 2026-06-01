@@ -68,7 +68,8 @@ async def invoices_list(
             "request": request, "current_user": current_user,
             "invoices": invoices, "invoice_types": INVOICE_TYPES,
             "invoice_type": invoice_type, "status_filter": status_filter,
-            "q": q, "page_title": "Faturalar",
+            "approval": approval,
+            "q": q, "page_title": "Onaylarım" if approval == "pending_mine" else "Faturalar",
             "show_archived": show_archived,
         },
     )
