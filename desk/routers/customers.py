@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 from auth import get_current_user, get_company_id, require_admin, require_module
 from database import get_db
 from models import (
-    Customer, CustomerPrepayment, Invoice, Cheque, Reference, Team,
+    Customer, CustomerPrepayment, Invoice, Cheque, Reference,
     User, CashBook, BankAccount, CreditCard, CashEntry, BankMovement,
     PAYMENT_METHODS,
 )
@@ -48,7 +48,7 @@ async def customer_new_get(
     current_user: User = Depends(require_module("customers", edit=True)),
     db: Session = Depends(get_db),
 ):
-    teams = db.query(Team).filter(Team.active == True).order_by(Team.name).all()
+    teams = []
     return templates.TemplateResponse(
         "customers/form.html",
         {"request": request, "current_user": current_user,
@@ -78,7 +78,7 @@ async def customer_new_post(
 ):
     code = code.strip().upper()[:3]
     if db.query(Customer).filter(Customer.code == code, Customer.company_id == current_user.company_id).first():
-        teams = db.query(Team).filter(Team.active == True).order_by(Team.name).all()
+        teams = []
         return templates.TemplateResponse(
             "customers/form.html",
             {"request": request, "current_user": current_user,
@@ -190,7 +190,7 @@ async def customer_edit_get(
     c = db.query(Customer).filter(Customer.id == customer_id, Customer.company_id == current_user.company_id).first()
     if not c:
         raise HTTPException(status_code=404)
-    teams = db.query(Team).filter(Team.active == True).order_by(Team.name).all()
+    teams = []
     return templates.TemplateResponse(
         "customers/form.html",
         {"request": request, "current_user": current_user,
@@ -225,7 +225,7 @@ async def customer_edit_post(
     code = code.strip().upper()[:3]
     existing = db.query(Customer).filter(Customer.code == code, Customer.id != customer_id, Customer.company_id == current_user.company_id).first()
     if existing:
-        teams = db.query(Team).filter(Team.active == True).order_by(Team.name).all()
+        teams = []
         return templates.TemplateResponse(
             "customers/form.html",
             {"request": request, "current_user": current_user,
