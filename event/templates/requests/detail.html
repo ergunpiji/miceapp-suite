@@ -176,8 +176,8 @@
             {% if req.budgets %}Yeni Bütçe{% else %}Bütçe Oluştur{% endif %}
           </a>
           {% endif %}
-          {# Teklif gönder butonu #}
-          {% if req.status in ('budget_ready', 'in_progress', 'venues_contacted') %}
+          {# Teklif gönder butonu — satın alma değil, PM/müdür/admin #}
+          {% if req.status in ('budget_ready', 'in_progress', 'venues_contacted') and current_user.role != 'satinalma' %}
           <form method="post" action="/requests/{{ req.id }}/offer-sent">
             <button type="submit" class="btn btn-outline-teal btn-sm"
                     onclick="return confirm('Teklif müşteriye gönderildi olarak işaretlensin mi?')"
