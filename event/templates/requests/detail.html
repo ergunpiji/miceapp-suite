@@ -3266,10 +3266,16 @@ function buildRfqContent(section) {
         <div id="rfqVsChips" class="mb-3">
           <span style="font-size:11px;color:#94a3b8;">Henüz tedarikçi seçilmedi</span>
         </div>
-        <button type="button" class="btn btn-primary btn-sm"
-                onclick="applyVenuePickerSelection(${JSON.stringify(section)}, ${JSON.stringify(emailFilterSection)})">
-          <i class="bi bi-envelope-open me-1"></i> Seçili Tedarikçiler İçin Mail Hazırla
-        </button>
+        <div class="d-flex gap-2 flex-wrap">
+          <button type="button" class="btn btn-primary btn-sm"
+                  onclick="applyVenuePickerSelection(${JSON.stringify(section)}, ${JSON.stringify(emailFilterSection)})">
+            <i class="bi bi-envelope-open me-1"></i> Seçili Tedarikçiler İçin Mail Hazırla
+          </button>
+          <button type="button" class="btn btn-outline-success btn-sm"
+                  onclick="showRfqNewVendorForm()">
+            <i class="bi bi-person-plus me-1"></i> Yeni Tedarikçi Ekle
+          </button>
+        </div>
       </div>`;
 
     // Dropdown'u otomatik aç
@@ -3441,7 +3447,7 @@ function renderRfqVsDrop(query) {
   const filtered = _rfqPickerCandidates.filter(v =>
     !q || v.name.toLowerCase().includes(q) || v.city.toLowerCase().includes(q)
   );
-  if (!filtered.length) { drop.innerHTML = `<div class="vs-no-res">Sonuç bulunamadı</div>`; return; }
+  if (!filtered.length) { drop.innerHTML = `<div class="vs-no-res">Sonuç bulunamadı &nbsp;<a href="#" style="font-size:11px;color:#16a34a;" onclick="event.preventDefault();showRfqNewVendorForm();"><i class="bi bi-person-plus me-1"></i>Yeni Tedarikçi Ekle</a></div>`; return; }
   drop.innerHTML = filtered.map(v =>
     `<div class="vs-item ${_rfqPickerSelected.has(v.id)?'vs-sel':''}" onclick="toggleRfqVsItem('${escH(v.id)}')">
       <i class="bi bi-check2" style="flex-shrink:0;visibility:${_rfqPickerSelected.has(v.id)?'visible':'hidden'};color:#1d4ed8;"></i>
