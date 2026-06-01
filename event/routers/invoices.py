@@ -3,8 +3,11 @@ Satın Alma — Fatura Yönetimi
 Erişim: admin, muhasebe_muduru, muhasebe
 """
 import json
+import logging
 import os
 import shutil
+
+_log = logging.getLogger("miceapp.invoices")
 from datetime import datetime, date as _date, timedelta
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -144,9 +147,11 @@ def _get_invoice_or_404(db: Session, invoice_id: str) -> Invoice:
 def _save_document(file: UploadFile, invoice_id: str) -> tuple[str, str]:
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in ALLOWED_EXTS:
+        _log.warning("_save_document: desteklenmeyen uzantı '%s' (dosya: %s)", ext, file.filename)
         raise HTTPException(status_code=400, detail="Desteklenmeyen dosya türü. PDF veya resim yükleyin.")
     data = file.file.read()
     if len(data) > MAX_FILE_SIZE:
+        _log.warning("_save_document: dosya çok büyük %d bytes (dosya: %s)", len(data), file.filename)
         raise HTTPException(status_code=400, detail="Dosya boyutu 10 MB'ı aşamaz.")
     dest_filename = f"{invoice_id}{ext}"
     key = save_upload(data, "invoices", dest_filename)
@@ -441,6 +446,11 @@ async def invoices_create(
     from_statement:      str = Form(""),   # statement ID — PM'den gelenler
     document:            UploadFile = File(None),
 ):
+    _log.info(
+        "invoices_create: user=%s role=%s type=%s from_statement=%s doc=%s",
+        current_user.id, current_user.role, invoice_type,
+        bool(from_statement), document.filename if document else None,
+    )
     # Statement üzerinden gelen fatura talepleri PM/yonetici'ye de açık
     if from_statement:
         if current_user.role not in INVOICE_REQUEST_ROLES:
