@@ -1180,6 +1180,7 @@ class Invoice(Base):
     invoice_no    = Column(String(100), default="")
     invoice_date  = Column(String(10), nullable=True)    # YYYY-MM-DD string
     due_date      = Column(String(10), nullable=True)    # YYYY-MM-DD string
+    currency      = Column(String(10), default="TRY", nullable=False)
     vendor_name   = Column(String(255), default="")      # tedarikçi/müşteri adı (serbest metin — geriye uyumluluk)
     description   = Column(Text, default="")
     amount        = Column(Float, default=0.0)           # KDV hariç toplam, TRY (lines'dan hesaplanır)
@@ -1251,6 +1252,7 @@ class Invoice(Base):
             "invoice_no":    self.invoice_no,
             "invoice_date":  self.invoice_date.isoformat() if hasattr(self.invoice_date, "isoformat") else self.invoice_date,
             "due_date":      self.due_date.isoformat() if hasattr(self.due_date, "isoformat") else self.due_date,
+            "currency":      self.currency or "TRY",
             "vendor_name":   self.vendor_name,
             "description":   self.description,
             "amount":        self.amount,
