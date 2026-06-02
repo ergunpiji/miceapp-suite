@@ -571,7 +571,9 @@ def migrate_db():
         _safe_add_column(conn, "requests",           "company_id", "VARCHAR(36)")
         _safe_add_column(conn, "invoices",           "company_id", "VARCHAR(36)")
         _safe_add_column(conn, "budgets",            "company_id", "VARCHAR(36)")
-        _safe_add_column(conn, "vendor_prepayments", "company_id", "VARCHAR(36)")
+        _safe_add_column(conn, "vendor_prepayments", "company_id",  "VARCHAR(36)")
+        _safe_add_column(conn, "vendor_prepayments", "request_id",  "VARCHAR(36)")
+        _safe_add_column(conn, "vendor_prepayments", "updated_at",  "TIMESTAMP")
         # ── ut/yi tipi etkinlik: hekim + staff sayıları ────────────────────────
         _safe_add_column(conn, "requests", "hekim_count", "INTEGER")
         _safe_add_column(conn, "requests", "staff_count",  "INTEGER")
