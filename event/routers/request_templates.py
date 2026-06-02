@@ -25,9 +25,11 @@ router = APIRouter(prefix="/request-templates", tags=["request_templates"])
 
 def _visible_templates(db: Session, user: User):
     """Kullanıcının görebileceği şablonlar: kendi takımı + kendi oluşturduğu."""
+    from sqlalchemy import or_ as _or_cid
     q = db.query(RequestTemplate).filter(
         RequestTemplate.active == True,
-        RequestTemplate.company_id == EVENT_COMPANY_ID,
+        _or_cid(RequestTemplate.company_id == EVENT_COMPANY_ID,
+                RequestTemplate.company_id.is_(None)),  # NULL kaydedilenleri de göster
     )
     if user.is_gm or user.role in ("admin", "super_admin"):
         return q.order_by(RequestTemplate.name).all()
@@ -113,7 +115,7 @@ async def templates_create(
         name=name.strip(),
         description=description.strip(),
         event_type=event_type.strip(),
-        team_id=team_id.strip() or current_user.team_id or None,
+        team_id=team_id.strip() or None,
         items_json=items_json or "{}",
         company_id=EVENT_COMPANY_ID,
         created_by=current_user.id,
@@ -171,7 +173,7 @@ async def templates_update(
     tmpl.name = name.strip()
     tmpl.description = description.strip()
     tmpl.event_type = event_type.strip()
-    tmpl.team_id = team_id.strip() or current_user.team_id or None
+    tmpl.team_id = team_id.strip() or None
     tmpl.items_json = items_json or "{}"
     tmpl.updated_at = _now()
     db.commit()
@@ -260,7 +262,7 @@ async def templates_save_from_request(
         name=name.strip(),
         description=description.strip(),
         event_type=event_type.strip(),
-        team_id=team_id.strip() or current_user.team_id or None,
+        team_id=team_id.strip() or None,
         items_json=json.dumps(items, ensure_ascii=False),
         company_id=EVENT_COMPANY_ID,
         created_by=current_user.id,

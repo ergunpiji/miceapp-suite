@@ -576,7 +576,8 @@ async def requests_new(
     from sqlalchemy import or_ as _or_tmpl
     _tmpl_q = db.query(RequestTemplate).filter(
         RequestTemplate.active == True,
-        RequestTemplate.company_id == EVENT_COMPANY_ID,
+        _or_tmpl(RequestTemplate.company_id == EVENT_COMPANY_ID,
+                 RequestTemplate.company_id.is_(None)),
     )
     if not (current_user.is_gm or current_user.role in ("admin", "super_admin")):
         if current_user.team_id:
