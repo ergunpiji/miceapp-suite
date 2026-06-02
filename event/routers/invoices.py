@@ -403,7 +403,8 @@ async def invoices_new_form(
                     sale = float(row.get("sale_price", 0))
                     cur  = row.get("currency", "TRY") or "TRY"
                     sale_try = stmt.amount_to_try(sale, cur)
-                    vat  = int(float(row.get("vat_rate", 20)))
+                    _vr  = float(row.get("vat_rate", 20) or 20)
+                    vat  = int(_vr * 100 if 0 < _vr <= 1 else _vr)
                     if sale_try > 0:
                         invoice_lines.append({
                             "description": row.get("service_name", "Hizmet Bedeli"),
@@ -418,7 +419,8 @@ async def invoices_new_form(
                     nights = float(row.get("nights", 1))
                     cur    = row.get("currency", "TRY") or "TRY"
                     total_try = stmt.amount_to_try(sale * qty * nights, cur)
-                    vat    = int(float(row.get("vat_rate", 20)))
+                    _vr2   = float(row.get("vat_rate", 20) or 20)
+                    vat    = int(_vr2 * 100 if 0 < _vr2 <= 1 else _vr2)
                     if total_try > 0:
                         invoice_lines.append({
                             "description": row.get("service_name", row.get("description", "")),

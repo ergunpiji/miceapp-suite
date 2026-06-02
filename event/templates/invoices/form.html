@@ -807,14 +807,22 @@ function autoFillDueDate() {
 
 // ── Başlangıç verileri ───────────────────────────────────────────────────────
 const VAT_RATES = [0, 1, 8, 10, 18, 20];
+function _normVat(r) {
+  // Budget satırları vat_rate'i 0.20 (ondalık) saklayabilir; forma 20 (yüzde) lazım
+  r = parseFloat(r) || 0;
+  return (r > 0 && r <= 1) ? Math.round(r * 100) : r;
+}
 let lines = [];
 {% if invoice and invoice.lines_json %}
 try { lines = {{ invoice.lines | tojson }}; } catch(e) {}
+lines = lines.map(l => ({ ...l, vat_rate: _normVat(l.vat_rate) }));
 {% endif %}
 // Eski format (lines yoksa ama amount varsa) geriye uyumluluk
 {% if invoice and not invoice.lines %}
   {% if invoice.amount and invoice.amount > 0 %}
-  lines = [{ description: {{ (invoice.description or '') | tojson }}, amount: {{ invoice.amount }}, vat_rate: {{ invoice.vat_rate or 20 }}, vat_amount: {{ invoice.vat_amount or 0 }} }];
+  {% set _raw_vr = invoice.vat_rate or 0 %}
+  {% set _vr = (_raw_vr * 100) | int if _raw_vr > 0 and _raw_vr <= 1 else (_raw_vr | int or 20) %}
+  lines = [{ description: {{ (invoice.description or '') | tojson }}, amount: {{ invoice.amount }}, vat_rate: {{ _vr }}, vat_amount: {{ invoice.vat_amount or 0 }} }];
   {% endif %}
 {% endif %}
 {% if statement_prefill %}
