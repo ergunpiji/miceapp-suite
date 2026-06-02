@@ -36,8 +36,10 @@ GSK_SECTION_LABELS = {
 
 
 def _get_budget_rows(req: ReqModel) -> list[dict]:
-    """Referansa bağlı tüm bütçelerin kalemlerini döner (taslak dahil)."""
+    """Kalemleri döner: önce bütçe satırları, yoksa referansın hizmet talepleri."""
     rows = []
+
+    # 1) Bütçe satırları (satın alma tarafından girilmiş)
     for b in req.budgets:
         for r in (b.rows or []):
             if not r.get("description"):
@@ -50,7 +52,32 @@ def _get_budget_rows(req: ReqModel) -> list[dict]:
                 "qty":         float(r.get("qty", 1) or 1),
                 "nights":      float(r.get("nights", 1) or 1),
                 "unit":        r.get("unit", ""),
-                "budget_name": b.venue_name or "",
+                "budget_name": b.venue_name or "Bütçe",
+                "source":      "budget",
+            })
+
+    if rows:
+        return rows
+
+    # 2) Bütçe yoksa referansın hizmet talepleri (items_json)
+    items = req.items or {}
+    for section, section_items in items.items():
+        if not isinstance(section_items, list):
+            continue
+        for idx, r in enumerate(section_items):
+            desc = r.get("description", "").strip()
+            if not desc:
+                continue
+            rows.append({
+                "id":          f"{section}_{idx}",
+                "section":     section,
+                "description": desc,
+                "sale_price":  0.0,    # Hizmet talebinde fiyat yok — formda girilmeli
+                "qty":         float(r.get("qty", 1) or 1),
+                "nights":      1.0,
+                "unit":        r.get("unit", ""),
+                "budget_name": "Hizmet Talebi",
+                "source":      "request",
             })
     return rows
 
@@ -144,10 +171,18 @@ async def gsk_export_download(
         gsk_sec = form.get(f"gsk_section_{row_id}", "")
         if not gsk_sec or gsk_sec == "skip":
             continue
+        # Hizmet talebinden gelen satırlarda fiyat formdan okunur
+        if r.get("source") == "request":
+            try:
+                unit_price = float(form.get(f"price_{row_id}", "0").replace(",", ".") or 0)
+            except ValueError:
+                unit_price = 0.0
+        else:
+            unit_price = r["sale_price"]
         items_by_section.setdefault(gsk_sec, []).append(
             LineItem(
                 description=r["description"],
-                unit_price=r["sale_price"],
+                unit_price=unit_price,
                 quantity=r["qty"],
                 days=r["nights"],
             )

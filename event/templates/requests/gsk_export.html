@@ -125,9 +125,22 @@
             {% endif %}
             {% for row in budget_rows %}
             <tr class="gsk-row">
-              <td class="ps-3 fw-semibold">{{ row.description }}</td>
+              <td class="ps-3 fw-semibold">
+                {{ row.description }}
+                {% if row.source == 'request' %}
+                <span class="badge ms-1" style="background:#fef3c7;color:#92400e;font-size:10px;">Hizmet Talebi</span>
+                {% endif %}
+              </td>
               <td class="text-muted" style="font-size:11px;">{{ row.budget_name }}</td>
-              <td class="text-end">₺{{ '{:,.0f}'.format(row.sale_price).replace(',','.') }}</td>
+              <td class="text-end">
+                {% if row.source == 'request' %}
+                <input type="number" name="price_{{ row.id }}" class="form-control form-control-sm text-end"
+                       style="width:110px; display:inline-block;"
+                       value="0" min="0" step="100" placeholder="₺ Fiyat">
+                {% else %}
+                ₺{{ '{:,.0f}'.format(row.sale_price).replace(',','.') }}
+                {% endif %}
+              </td>
               <td class="text-end text-muted">{{ row.qty | int }}</td>
               <td class="text-end text-muted">{{ row.nights | int }}</td>
               <td>
