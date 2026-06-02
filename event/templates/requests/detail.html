@@ -227,9 +227,9 @@
           </a>
         {% endif %}
 
-        {# GSK Export — müşteri GSK veya etkinlik tipi "ut" ise #}
+        {# GSK Export — müşteri GSK VE etkinlik tipi ut/yi ise #}
         {% set _is_gsk = (customer and ('gsk' in customer.name|lower or 'glaxo' in customer.name|lower))
-                         or req.event_type == 'yi' %}
+                         and req.event_type in ('yi', 'ut') %}
         {% if _is_gsk and req.budgets %}
         <a href="/requests/{{ req.id }}/export/gsk"
            class="btn btn-sm"
