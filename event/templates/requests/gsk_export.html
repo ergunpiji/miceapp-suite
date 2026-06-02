@@ -99,6 +99,45 @@
       </div>
     </div>
 
+    {# ── Fiyat Girişi (sale_price = 0 olan kalemler) ── #}
+    {% if zero_price_rows %}
+    <div class="card mb-3 border-warning">
+      <div class="card-header py-2 px-3 d-flex align-items-center gap-2"
+           style="background:#fffbeb; border-bottom:1px solid #fcd34d;">
+        <i class="bi bi-pencil-square text-warning"></i>
+        <span class="fw-bold" style="font-size:13px; color:#92400e;">Fiyat Girişi Gerekli</span>
+        <span class="ms-2 text-muted small">Bu kalemlerin bütçesinde satış fiyatı girilmemiş</span>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0" style="font-size:13px;">
+          <thead style="background:#fefce8;">
+            <tr>
+              <th class="ps-3 py-2">Açıklama</th>
+              <th class="py-2 text-center" style="width:80px;">Kişi/Adet</th>
+              <th class="py-2" style="width:160px;">Kişi Başı Fiyat (₺)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in zero_price_rows %}
+            <tr>
+              <td class="ps-3 fw-semibold">{{ row.description }}</td>
+              <td class="text-center text-muted">{{ row.qty | int }}</td>
+              <td class="pe-3">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text">₺</span>
+                  <input type="number" name="price_{{ row.id }}"
+                         class="form-control text-end"
+                         value="" min="0" step="1" placeholder="0">
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
     {# ── Otomatik Bölümleme Önizlemesi ── #}
     <div class="card mb-4">
       <div class="card-header py-2 px-3 d-flex align-items-center gap-2"

@@ -40,11 +40,13 @@ def _get_budget_rows(req: ReqModel) -> list[dict]:
         for r in (b.rows or []):
             if not r.get("description"):
                 continue
+            sale  = float(r.get("sale_price", 0) or 0)
+            cost  = float(r.get("cost_price", 0) or 0)
             rows.append({
                 "id":          r.get("id", ""),
                 "section":     r.get("section", ""),
                 "description": r.get("description", ""),
-                "sale_price":  float(r.get("sale_price", 0) or 0),
+                "sale_price":  sale if sale > 0 else cost,  # cost_price fallback
                 "qty":         float(r.get("qty", 1) or 1),
                 "nights":      float(r.get("nights", 1) or 1),
                 "unit":        r.get("unit", ""),
@@ -75,14 +77,16 @@ def _get_budget_rows(req: ReqModel) -> list[dict]:
     return rows
 
 
-def _build_items_auto(req: ReqModel) -> tuple[dict, list[str]]:
+def _build_items_auto(req: ReqModel, price_overrides: dict | None = None) -> tuple[dict, list[str]]:
     """Budget satırlarını otomatik GSK bölümlerine dağıtır.
+    price_overrides: {row_id: float} — formdan gelen fiyat düzeltmeleri
     Returns: (items_by_section, warnings)
     """
     from gsk_export import LineItem, GSK_SECTIONS
 
     hekim_count = float(req.hekim_count or 0)
     staff_count = float(req.staff_count or 0)
+    price_overrides = price_overrides or {}
 
     raw: dict[str, list] = {k: [] for k in GSK_SECTION_LABELS}
     warnings: list[str] = []
@@ -92,7 +96,8 @@ def _build_items_auto(req: ReqModel) -> tuple[dict, list[str]]:
         sec       = (r.get("section") or "").lower()
         desc_low  = (r.get("description") or "").lower()
         desc      = r.get("description", "")
-        price     = float(r.get("sale_price") or 0)
+        row_id    = r.get("id", "")
+        price     = price_overrides.get(row_id, float(r.get("sale_price") or 0))
         qty       = float(r.get("qty") or 1)
         nights    = float(r.get("nights") or 1)
 
@@ -195,14 +200,18 @@ async def gsk_export_form(
     template_exists = os.path.isfile(GSK_TEMPLATE_PATH)
     preview = _auto_preview(req)
 
+    # Fiyatı eksik (0) kalemleri bul — kullanıcının girmesi gerekecek
+    zero_price_rows = [r for r in _get_budget_rows(req) if r["sale_price"] == 0]
+
     return templates.TemplateResponse("requests/gsk_export.html", {
-        "request":        request,
-        "current_user":   current_user,
-        "req":            req,
-        "venue_name":     venue_name,
-        "template_exists": template_exists,
-        "preview":        preview,
-        "page_title":     f"GSK Teklif Export — {req.request_no}",
+        "request":          request,
+        "current_user":     current_user,
+        "req":              req,
+        "venue_name":       venue_name,
+        "template_exists":  template_exists,
+        "preview":          preview,
+        "zero_price_rows":  zero_price_rows,
+        "page_title":       f"GSK Teklif Export — {req.request_no}",
     })
 
 
@@ -241,7 +250,17 @@ async def gsk_export_download(
     except ValueError:
         commission_rate = 0.055
 
-    items_by_section, _ = _build_items_auto(req)
+    # Formdan gelen fiyat düzeltmeleri (sıfır fiyatlı kalemler için)
+    price_overrides: dict[str, float] = {}
+    for key in form:
+        if key.startswith("price_"):
+            row_id = key[6:]
+            try:
+                price_overrides[row_id] = float((form.get(key) or "0").replace(",", "."))
+            except ValueError:
+                pass
+
+    items_by_section, _ = _build_items_auto(req, price_overrides=price_overrides)
 
     with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
         tmp_path = tmp.name
