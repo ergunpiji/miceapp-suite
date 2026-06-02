@@ -4,8 +4,8 @@
 
 {% block topbar_actions %}
 {% if view_mode %}
-{% if invoice and invoice.invoice_type == 'gelen' and invoice.status != 'cancelled' and desk_url %}
-<a href="{{ desk_url }}/invoices/new?komisyon_source={{ invoice.id }}" class="btn btn-primary btn-sm me-1">
+{% if invoice and invoice.invoice_type == 'gelen' and invoice.status != 'cancelled' %}
+<a href="/invoices/new?komisyon_source={{ invoice.id }}" class="btn btn-primary btn-sm me-1">
   <i class="bi bi-percent me-1"></i> Komisyon Talebi
 </a>
 {% endif %}
@@ -320,6 +320,15 @@
                               border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,.1); font-size:13px;"></div>
                 </div>
                 <div style="font-size:11px;color:#64748b;margin-top:3px;">Kayıtlı müşteri seçin ya da yeni müşteri adı yazın.</div>
+              </div>
+
+              {# Komisyon modu — ana tedarikçi (gelen) faturası (ZORUNLU) #}
+              <div id="komisyonSourceSection" style="display:none;">
+                <label class="form-label fw-semibold">Ana Tedarikçi Faturası <span class="text-danger">*</span></label>
+                <select name="source_invoice_id" id="fSourceInvoice" class="form-select">
+                  <option value="">— Gelen (tedarikçi) faturası seçin —</option>
+                </select>
+                <div style="font-size:11px;color:#64748b;margin-top:3px;">Komisyon bir gelen faturaya atıfta bulunmalıdır.</div>
               </div>
             </div>
           </div>
@@ -830,6 +839,9 @@ lines = lines.map(l => ({ ...l, vat_rate: _normVat(l.vat_rate) }));
   lines = [{ description: {{ (invoice.description or '') | tojson }}, amount: {{ invoice.amount }}, vat_rate: {{ _vr }}, vat_amount: {{ invoice.vat_amount or 0 }} }];
   {% endif %}
 {% endif %}
+// ── Komisyon ön doldurma verileri (koşulsuz tanımlı) ─────────────────────────
+const GELEN_INVOICES   = {% if gelen_invoices_json %}{{ gelen_invoices_json | safe }}{% else %}[]{% endif %};
+const KOMISYON_PREFILL = {% if komisyon_prefill %}{{ komisyon_prefill | tojson }}{% else %}null{% endif %};
 {% if statement_prefill %}
 // ── Hesap dökümünden ön doldurma ─────────────────────────────────────────────
 const PREFILL_DATA = {{ statement_prefill | tojson }};
@@ -1126,10 +1138,21 @@ function onInvoiceTypeChange(val) {
   // Müşteri / Tedarikçi alanını tipine göre değiştir
   const vendorSec   = document.getElementById('vendorSection');
   const customerSec = document.getElementById('customerSection');
+  const komSec      = document.getElementById('komisyonSourceSection');
   const defineVBox  = document.getElementById('defineVendorBox');
   const defineCBox  = document.getElementById('defineCustomerBox');
+  const isKomisyon  = (val === 'komisyon');
 
-  if (isCustomer) {
+  if (komSec) komSec.style.display = isKomisyon ? '' : 'none';
+  if (isKomisyon) fillKomisyonSelect();
+
+  if (isKomisyon) {
+    // Komisyon: tedarikçi/müşteri yerine ana fatura seçicisi
+    vendorSec.style.display   = 'none';
+    customerSec.style.display = 'none';
+    if (defineVBox) defineVBox.style.display = 'none';
+    if (defineCBox) defineCBox.style.display = 'none';
+  } else if (isCustomer) {
     vendorSec.style.display   = 'none';
     customerSec.style.display = '';
     if (defineVBox) defineVBox.style.display = 'none';
@@ -1159,6 +1182,71 @@ function syncCustomerNameToVendorName() {
 (function() {
   const sel = document.getElementById('invoiceTypeSelect');
   if (sel && sel.value) onInvoiceTypeChange(sel.value);
+})();
+
+// ── Komisyon: ana tedarikçi faturası seçici + ön-doldurma ───────────────────
+let _komFilled = false;
+function fillKomisyonSelect() {
+  const sel = document.getElementById('fSourceInvoice');
+  if (!sel || _komFilled) return;
+  (GELEN_INVOICES || []).forEach(function(g) {
+    const o = document.createElement('option');
+    o.value = g.id;
+    o.textContent = (g.no || g.id) + (g.vendor ? ' · ' + g.vendor : '') + ' · ' +
+      Number(g.amount || 0).toLocaleString('tr-TR', {minimumFractionDigits: 2}) + ' TL';
+    o.setAttribute('data-no', g.no || g.id);
+    o.setAttribute('data-ref', g.ref_id || '');
+    sel.appendChild(o);
+  });
+  _komFilled = true;
+}
+function selectRefById(rid) {
+  if (!rid) return;
+  const items = document.querySelectorAll('.req-drop-item');
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].dataset.id === rid) { selectReq(items[i]); return; }
+  }
+  const rh = document.getElementById('reqIdHidden'); if (rh) rh.value = rid;
+}
+(function() {
+  const sel = document.getElementById('fSourceInvoice');
+  if (!sel) return;
+  sel.addEventListener('change', function() {
+    const opt = this.options[this.selectedIndex];
+    if (!opt || !this.value) return;
+    const no  = opt.getAttribute('data-no') || this.value;
+    const rid = opt.getAttribute('data-ref') || '';
+    const d = document.getElementById('fDescription');
+    if (d && !d.value.trim()) d.value = no + ' numaralı faturaya istinaden komisyon bedelidir.';
+    if (rid && !document.getElementById('reqIdHidden').value) selectRefById(rid);
+  });
+})();
+// "Komisyon Talebi" ile tedarikçi faturasından gelindiyse ön-doldur
+(function() {
+  if (!KOMISYON_PREFILL) return;
+  const sel = document.getElementById('invoiceTypeSelect');
+  if (sel) { sel.value = 'komisyon'; onInvoiceTypeChange('komisyon'); }
+  const ss = document.getElementById('fSourceInvoice');
+  if (ss) ss.value = KOMISYON_PREFILL.source_invoice_id;
+  const d = document.getElementById('fDescription');
+  if (d && !d.value.trim()) d.value = KOMISYON_PREFILL.description || '';
+  if (KOMISYON_PREFILL.ref_id) selectRefById(KOMISYON_PREFILL.ref_id);
+})();
+// Komisyon gönderiminde referans + kaynak fatura zorunlu (client-side)
+(function() {
+  const sel = document.getElementById('invoiceTypeSelect');
+  const form = sel ? sel.closest('form') : null;
+  if (!form) return;
+  form.addEventListener('submit', function(e) {
+    if (sel.value !== 'komisyon') return;
+    if (!document.getElementById('reqIdHidden').value) {
+      e.preventDefault(); alert('Komisyon faturası için referans zorunludur.'); return false;
+    }
+    const ss = document.getElementById('fSourceInvoice');
+    if (!ss || !ss.value) {
+      e.preventDefault(); alert('Komisyon bir ana tedarikçi faturasına atıfta bulunmalıdır.'); return false;
+    }
+  });
 })();
 
 // ── Yardımcılar ───────────────────────────────────────────────────────────────

@@ -90,6 +90,30 @@ def _is_gm(user: User) -> bool:
     return user.is_gm
 
 
+def _komisyon_role_limit(db: Session, user) -> float:
+    """Komisyon onay limiti — rol-bazlı (paylaşımlı system_settings, desk ile aynı kaynak).
+    admin/super_admin/genel_mudur → sınırsız; mudur → _mudur; diğer → _kullanici."""
+    if user.role in ("admin", "super_admin", "genel_mudur"):
+        return float("inf")
+    from sqlalchemy import text as _sql_text
+    key = "invoice_approval_limit_mudur" if user.role == "mudur" else "invoice_approval_limit_kullanici"
+    row = db.execute(
+        _sql_text("SELECT value FROM system_settings WHERE key = :k"), {"k": key}
+    ).fetchone()
+    try:
+        return float(row[0]) if row and row[0] else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _komisyon_to_desk_cut(inv) -> None:
+    """Komisyon onay zinciri bitince muhasebe (desk) kesimine HAZIR hale getir.
+    Komisyon henüz fatura no içermiyorsa desk'in 'Fatura Kes' durumuna geçir:
+    approval_status='onay_bekliyor' + current_approver_id=None → desk muhasebe keser."""
+    if getattr(inv, "invoice_type", None) == "komisyon" and not (inv.invoice_no or "").strip():
+        inv.approval_status = "onay_bekliyor"
+
+
 def _is_above_in_chain(db: Session, candidate_id: str, subordinate_id: str, max_depth: int = 10) -> bool:
     """candidate_id, subordinate_id'nin hiyerarşik üstünde mi kontrol eder."""
     seen: set = set()
@@ -235,13 +259,11 @@ async def invoice_detail(
         req_gelir_total = round(sum(i.total_amount or 0 for i in req_gelirler), 2)
         req_gider_total = round(sum(i.total_amount or 0 for i in req_giderler), 2)
 
-    from auth import DESK_URL as _DESK_URL
     return templates.TemplateResponse("invoices/form.html", {
         "request":          request,
         "current_user":     current_user,
         "page_title":       f"Fatura Talebi — {inv.vendor_name or inv.invoice_no or inv.id[:8]}",
         "invoice":          inv,
-        "desk_url":         _DESK_URL,
         "selected_req":     req,
         "all_requests":     [],
         "undoc_entries":    undoc_entries,
@@ -368,6 +390,7 @@ async def invoices_new_form(
     request: Request,
     request_id: str = "",
     statement_id: str = "",
+    komisyon_source: str = "",   # tedarikçi faturasından "Komisyon Talebi" ile gelindiğinde
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -486,6 +509,29 @@ async def invoices_new_form(
     else:
         _allowed_types = [t for t in INVOICE_TYPES if t["value"] in _talep_types]
 
+    # Komisyon: ana tedarikçi (gelen) faturaları + "Komisyon Talebi" ön-doldurma
+    from database import EVENT_COMPANY_ID as _EVCO
+    _cid = current_user.company_id or _EVCO
+    _gelen = db.query(Invoice).filter(
+        Invoice.company_id == _cid, Invoice.invoice_type == "gelen",
+    ).order_by(Invoice.created_at.desc()).limit(300).all()
+    gelen_invoices_json = json.dumps([
+        {"id": i.id, "no": i.invoice_no or i.id[:8], "vendor": i.vendor_name or "",
+         "amount": round(i.total_amount or 0, 2), "ref_id": i.ref_id or ""}
+        for i in _gelen
+    ], ensure_ascii=False)
+    komisyon_prefill = None
+    if komisyon_source:
+        _si = db.query(Invoice).filter(Invoice.id == komisyon_source,
+                                       Invoice.invoice_type == "gelen").first()
+        if _si:
+            _sno = _si.invoice_no or _si.id[:8]
+            komisyon_prefill = {
+                "source_invoice_id": _si.id, "source_no": _sno,
+                "ref_id": _si.ref_id or "",
+                "description": f"{_sno} numaralı faturaya istinaden komisyon bedelidir.",
+            }
+
     return templates.TemplateResponse("invoices/form.html", {
         "request":           request,
         "current_user":      current_user,
@@ -498,6 +544,8 @@ async def invoices_new_form(
         "edit_mode":         False,
         "statement_prefill": statement_prefill,
         "from_statement":    statement_id,
+        "gelen_invoices_json": gelen_invoices_json,
+        "komisyon_prefill":  komisyon_prefill,
     })
 
 
@@ -527,6 +575,7 @@ async def invoices_create(
     belgesiz_description:str = Form(""),
     belgesiz_date:       str = Form(""),
     from_statement:      str = Form(""),   # statement ID — PM'den gelenler
+    source_invoice_id:   str = Form(""),   # komisyon → atıfta bulunulan ana tedarikçi faturası
     document:            UploadFile = File(None),
 ):
     _log.info(
@@ -540,6 +589,23 @@ async def invoices_create(
     # Muhasebe dışındakiler yalnızca kesilen + komisyon talebi oluşturabilir
     if current_user.role not in FINANCE_ROLES and invoice_type not in {"kesilen", "komisyon"}:
         raise HTTPException(status_code=403, detail="Gelen ve iade fatura kaydı yalnızca muhasebe tarafından yapılabilir.")
+
+    # Komisyon faturası: ZORUNLU atıf = ana tedarikçi (gelen) faturası (source_invoice_id).
+    # "Referans" burada proje (req_id) değil, ana faturadır. Proje req_id boşsa kaynak
+    # faturanın projesini devral (varsa).
+    source_inv = None
+    if invoice_type == "komisyon":
+        if not source_invoice_id.strip():
+            raise HTTPException(status_code=400, detail="Komisyon bir ana tedarikçi faturasına atıfta bulunmalıdır.")
+        source_inv = db.query(Invoice).filter(Invoice.id == source_invoice_id.strip()).first()
+        if not source_inv or source_inv.invoice_type != "gelen":
+            raise HTTPException(status_code=400, detail="Geçerli bir GELEN (tedarikçi) faturası seçmelisiniz.")
+        if not req_id and source_inv.request_id:
+            req_id = source_inv.request_id   # kaynak faturanın projesini devral
+        if not description.strip():
+            _sno = source_inv.invoice_no or source_inv.id[:8]
+            description = f"{_sno} numaralı faturaya istinaden komisyon bedelidir."
+
     req = None
     if req_id:
         req = db.query(ReqModel).filter(ReqModel.id == req_id).first()
@@ -584,7 +650,7 @@ async def invoices_create(
     # Onay zinciri: fatura talebi → oluşturanın yöneticisine gider (GM nihai onaylayıcı)
     # Oluşturan kişi ASLA kendi talebini onaylayamaz.
     _initial_approver_id = None
-    if req:
+    if req or invoice_type == "komisyon":
         creator = db.query(User).filter(User.id == current_user.id).first()
         if creator and creator.manager_id:
             _initial_approver_id = creator.manager_id          # yönetici (müdür)
@@ -633,6 +699,7 @@ async def invoices_create(
         total_amount        = incl,
         status              = "pending",
         current_approver_id = _initial_approver_id,
+        source_invoice_id   = (source_invoice_id.strip() or None) if invoice_type == "komisyon" else None,
         company_id          = current_user.company_id or EVENT_COMPANY_ID,
         created_by          = current_user.id,
         created_at          = _now(),
@@ -959,6 +1026,7 @@ async def invoices_approve(
     if inv.status == "gm_approved":
         inv.status              = "approved"
         inv.current_approver_id = None
+        _komisyon_to_desk_cut(inv)
         inv.approved_by         = current_user.id
         inv.approved_at         = _now()
         inv.rejection_note      = ""
@@ -974,6 +1042,7 @@ async def invoices_approve(
     if current_user.role in ("admin", "muhasebe_muduru") or _is_gm(current_user):
         inv.status              = "approved"
         inv.current_approver_id = None
+        _komisyon_to_desk_cut(inv)
         inv.approved_by         = current_user.id
         inv.approved_at         = _now()
         inv.rejection_note      = ""
@@ -987,12 +1056,17 @@ async def invoices_approve(
 
     # Zincirleme onay: current_approver_id == current_user.id
     approver_user = db.query(User).filter(User.id == current_user.id).first()
-    limit = approver_user.org_title.budget_limit if (approver_user and approver_user.org_title) else None
+    if inv.invoice_type == "komisyon":
+        # Komisyon: rol-bazlı SystemSetting limiti (kullanıcı tercihi)
+        limit = _komisyon_role_limit(db, approver_user) if approver_user else 0.0
+    else:
+        limit = approver_user.org_title.budget_limit if (approver_user and approver_user.org_title) else None
 
     if limit is None or (inv.total_amount or 0) <= limit:
         # Limit yeterli → tamamen onaylandı
         inv.status              = "approved"
         inv.current_approver_id = None
+        _komisyon_to_desk_cut(inv)
         inv.approved_by         = current_user.id
         inv.approved_at         = _now()
         inv.rejection_note      = ""
@@ -1037,6 +1111,7 @@ async def invoices_approve(
             # Zincirde üst yönetici yok → üst kademedeyiz, direkt onayla
             inv.status              = "approved"
             inv.current_approver_id = None
+            _komisyon_to_desk_cut(inv)
             inv.approved_by         = current_user.id
             inv.approved_at         = _now()
             inv.rejection_note      = ""

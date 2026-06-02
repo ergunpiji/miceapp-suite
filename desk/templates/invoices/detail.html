@@ -1,11 +1,6 @@
 {% extends "base.html" %}
 {% block page_title %}Fatura — {{ invoice.invoice_no or ("#" ~ invoice.id) }}{% endblock %}
 {% block topbar_actions %}
-{% if invoice.invoice_type == 'gelen' and invoice.status != 'cancelled' %}
-<a href="/invoices/new?komisyon_source={{ invoice.id }}" class="btn btn-sm btn-primary">
-  <i class="bi bi-percent me-1"></i>Komisyon Talebi
-</a>
-{% endif %}
 <a href="/invoices/{{ invoice.id }}/edit" class="btn btn-sm btn-outline-secondary">Düzenle</a>
 {% if not invoice.is_split_parent and not invoice.split_parent_id and invoice.status != 'cancelled' %}
 {% set _party = invoice.customer.name if invoice.invoice_type in ('kesilen','iade_gelen') else (invoice.vendor.name if invoice.vendor else '') %}

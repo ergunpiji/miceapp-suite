@@ -1244,6 +1244,9 @@ class Invoice(Base):
     # micedesk köprü alanları (micedesk'in yazdığı faturalar için)
     ref_id               = Column(String(36), nullable=True)   # micedesk references.id
     source_invoice_id    = Column(String(36), nullable=True)   # komisyon: ana tedarikçi faturası
+    # Desk muhasebe-kesim köprüsü: event onayı biten komisyon "onay_bekliyor"a çekilir,
+    # Zehra desk'te (approval_status='onay_bekliyor' + current_approver_id IS NULL) keser.
+    approval_status      = Column(String(20), nullable=True)   # desk: onay_bekliyor | approved | reddedildi
     coordinator_status   = Column(String(20), nullable=True)   # beklemede | onaylandi | reddedildi
     coordinator_note     = Column(Text, nullable=True)
     coordinator_reviewed_at = Column(DateTime, nullable=True)
