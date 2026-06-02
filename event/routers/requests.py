@@ -1043,11 +1043,11 @@ async def requests_detail(
                        if inv.status in ("approved", "gm_approved", "active")
                        and not inv.is_split_parent]
 
-    invoice_ciro     = (sum(inv.amount for inv in active_invoices if inv.invoice_type == "kesilen")
-                      - sum(inv.amount for inv in active_invoices if inv.invoice_type == "iade_kesilen"))
-    invoice_komisyon = sum(inv.amount for inv in active_invoices if inv.invoice_type == "komisyon")
-    invoice_maliyet  = (sum(inv.amount for inv in active_invoices if inv.invoice_type == "gelen")
-                      - sum(inv.amount for inv in active_invoices if inv.invoice_type == "iade_gelen"))
+    invoice_ciro     = (sum(inv.total_amount for inv in active_invoices if inv.invoice_type == "kesilen")
+                      - sum(inv.total_amount for inv in active_invoices if inv.invoice_type == "iade_kesilen"))
+    invoice_komisyon = sum(inv.total_amount for inv in active_invoices if inv.invoice_type == "komisyon")
+    invoice_maliyet  = (sum(inv.total_amount for inv in active_invoices if inv.invoice_type == "gelen")
+                      - sum(inv.total_amount for inv in active_invoices if inv.invoice_type == "iade_gelen"))
     # Net maliyet: sadece gelen faturalar (komisyon artık kar'a direkt ekleniyor, maliyet düşümü değil)
     invoice_net_maliyet = invoice_maliyet
     # Kar = kesilen fatura geliri + komisyon geliri − gelen fatura maliyeti
@@ -1160,10 +1160,10 @@ async def requests_detail(
     undoc_gelir_total    = _undoc_gelir
     undoc_gider_total    = _undoc_gider
 
-    # GM onayından geçmiş HBF giderleri → karlılığa eksi etki (KDV hariç)
+    # GM onayından geçmiş HBF giderleri → karlılığa eksi etki
     # (onaylandi=muhasebe bekliyor, kapandi=ödendi; "approved" eski kayıtlar)
     hbf_approved_total = round(
-        sum(r.grand_excl_vat for r in expense_reports
+        sum(r.grand_total for r in expense_reports
             if r.status in ("onaylandi", "kapandi", "approved")), 2
     )
     # Gerçek kar = fatura karı − onaylanan HBF giderleri
