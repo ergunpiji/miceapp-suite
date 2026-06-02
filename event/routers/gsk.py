@@ -1,26 +1,24 @@
 """
 GSK teklif şablonu export router.
-GET  /requests/{req_id}/export/gsk  → mapping formu
+GET  /requests/{req_id}/export/gsk  → minimal header formu + otomatik önizleme
 POST /requests/{req_id}/export/gsk  → doldurulmuş Excel indir
 """
 import io
-import json
 import os
 import tempfile
 from datetime import date as _date
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from auth import get_current_user
 from database import get_db
-from models import Budget, Customer, Request as ReqModel, User
+from models import Request as ReqModel, User
 from templates_config import templates
 
 router = APIRouter(tags=["gsk"])
 
-# GSK şablonu bu path'te olmalı (event/static/gsk_template.xlsx)
 _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
 GSK_TEMPLATE_PATH = os.path.join(_TEMPLATE_DIR, "gsk_template.xlsx")
 
@@ -38,8 +36,6 @@ GSK_SECTION_LABELS = {
 def _get_budget_rows(req: ReqModel) -> list[dict]:
     """Kalemleri döner: önce bütçe satırları, yoksa referansın hizmet talepleri."""
     rows = []
-
-    # 1) Bütçe satırları (satın alma tarafından girilmiş)
     for b in req.budgets:
         for r in (b.rows or []):
             if not r.get("description"):
@@ -55,11 +51,8 @@ def _get_budget_rows(req: ReqModel) -> list[dict]:
                 "budget_name": b.venue_name or "Bütçe",
                 "source":      "budget",
             })
-
     if rows:
         return rows
-
-    # 2) Bütçe yoksa referansın hizmet talepleri (items_json)
     items = req.items or {}
     for section, section_items in items.items():
         if not isinstance(section_items, list):
@@ -72,7 +65,7 @@ def _get_budget_rows(req: ReqModel) -> list[dict]:
                 "id":          f"{section}_{idx}",
                 "section":     section,
                 "description": desc,
-                "sale_price":  0.0,    # Hizmet talebinde fiyat yok — formda girilmeli
+                "sale_price":  0.0,
                 "qty":         float(r.get("qty", 1) or 1),
                 "nights":      1.0,
                 "unit":        r.get("unit", ""),
@@ -82,19 +75,106 @@ def _get_budget_rows(req: ReqModel) -> list[dict]:
     return rows
 
 
-def _auto_gsk_section(row: dict) -> str:
-    """Miceapp section/description'dan GSK bölümü tahmin et."""
-    sec = row.get("section", "").lower()
-    desc = row.get("description", "").lower()
-    if sec == "accommodation" or "konaklama" in desc or "otel" in desc:
-        return "konusmaci_konaklama"
-    if sec == "transfer" or "transfer" in desc or "ulaşım" in desc or "ulasim" in desc:
-        return "konusmaci_ulasim"
-    if sec == "fb" or sec == "f&b":
-        if "içecek" in desc or "icecek" in desc or "drink" in desc:
-            return "hekim_icecek"
-        return "hekim_yiyecek"
-    return "diger_hizmetler"
+def _build_items_auto(req: ReqModel) -> tuple[dict, list[str]]:
+    """Budget satırlarını otomatik GSK bölümlerine dağıtır.
+    Returns: (items_by_section, warnings)
+    """
+    from gsk_export import LineItem, GSK_SECTIONS
+
+    hekim_count = float(req.hekim_count or 0)
+    staff_count = float(req.staff_count or 0)
+
+    raw: dict[str, list] = {k: [] for k in GSK_SECTION_LABELS}
+    warnings: list[str] = []
+    budget_rows = _get_budget_rows(req)
+
+    for r in budget_rows:
+        sec       = (r.get("section") or "").lower()
+        desc_low  = (r.get("description") or "").lower()
+        desc      = r.get("description", "")
+        price     = float(r.get("sale_price") or 0)
+        qty       = float(r.get("qty") or 1)
+        nights    = float(r.get("nights") or 1)
+
+        is_accom    = sec == "accommodation" or any(w in desc_low for w in ("konaklama", "otel", "oda"))
+        is_transfer = sec == "transfer"      or any(w in desc_low for w in ("transfer", "ulaşım", "ulasim", "araç", "arac"))
+        is_drink    = any(w in desc_low for w in ("içecek", "icecek", "drink", "coffee", "su ikramı", "su ikami"))
+        is_fb       = sec in ("fb", "f&b")   or any(w in desc_low for w in (
+                          "yemek", "yiyecek", "kahvaltı", "kahvalti", "öğle", "ogle",
+                          "akşam", "aksam", "gala", "meze", "kokteyl", "coffee", "içecek",
+                          "icecek", "drink", "brunch", "tabldot",
+                      ))
+
+        if is_accom:
+            raw["konusmaci_konaklama"].append(
+                LineItem(description=desc, unit_price=price, quantity=qty, days=nights)
+            )
+        elif is_transfer:
+            raw["konusmaci_ulasim"].append(
+                LineItem(description=desc, unit_price=price, quantity=qty, days=nights)
+            )
+        elif is_fb:
+            explicit_hekim = "hekim" in desc_low
+            explicit_staff = "staff" in desc_low
+
+            if explicit_hekim:
+                gsk_sec = "hekim_icecek" if is_drink else "hekim_yiyecek"
+                raw[gsk_sec].append(LineItem(description=desc, unit_price=price, quantity=qty, days=nights))
+            elif explicit_staff:
+                gsk_sec = "staff_icecek" if is_drink else "staff_yiyecek"
+                raw[gsk_sec].append(LineItem(description=desc, unit_price=price, quantity=qty, days=nights))
+            else:
+                # Genel F&B → hekim_count ve staff_count'a böl
+                if hekim_count > 0:
+                    gsk_sec = "hekim_icecek" if is_drink else "hekim_yiyecek"
+                    raw[gsk_sec].append(LineItem(description=desc, unit_price=price, quantity=hekim_count, days=nights))
+                if staff_count > 0:
+                    gsk_sec = "staff_icecek" if is_drink else "staff_yiyecek"
+                    raw[gsk_sec].append(LineItem(description=desc, unit_price=price, quantity=staff_count, days=nights))
+                if hekim_count == 0 and staff_count == 0:
+                    gsk_sec = "hekim_icecek" if is_drink else "hekim_yiyecek"
+                    raw[gsk_sec].append(LineItem(description=desc, unit_price=price, quantity=qty, days=nights))
+        else:
+            raw["diger_hizmetler"].append(
+                LineItem(description=desc, unit_price=price, quantity=qty, days=nights)
+            )
+
+    # Taşma kontrolü: kapasiteyi aşan kalemler diger_hizmetler'e gider
+    overflow: list = []
+    items: dict[str, list] = {}
+    for key, sec_def in GSK_SECTIONS.items():
+        if key == "diger_hizmetler":
+            continue
+        cap = len(sec_def["rows"])
+        sec_items = raw[key]
+        if len(sec_items) > cap:
+            warnings.append(
+                f"{sec_def['label']}: {len(sec_items)} kalem, max {cap} → "
+                f"{len(sec_items) - cap} kalem 'Diğer Hizmetler'e taşındı"
+            )
+            overflow.extend(sec_items[cap:])
+            items[key] = sec_items[:cap]
+        else:
+            items[key] = sec_items
+
+    diger_items = raw["diger_hizmetler"] + overflow
+    diger_cap = len(GSK_SECTIONS["diger_hizmetler"]["rows"])
+    if len(diger_items) > diger_cap:
+        warnings.append(f"Diğer Hizmetler kapasitesi ({diger_cap}) aşıldı, ilk {diger_cap} kalem alındı")
+        diger_items = diger_items[:diger_cap]
+    items["diger_hizmetler"] = diger_items
+
+    return items, warnings
+
+
+def _auto_preview(req: ReqModel) -> dict:
+    """Önizleme için bölüm bazlı kalem sayılarını hesaplar."""
+    items, warnings = _build_items_auto(req)
+    preview = {
+        key: {"label": GSK_SECTION_LABELS[key], "count": len(v)}
+        for key, v in items.items()
+    }
+    return {"sections": preview, "warnings": warnings, "total": sum(len(v) for v in items.values())}
 
 
 @router.get("/requests/{req_id}/export/gsk", response_class=HTMLResponse, name="gsk_export_form")
@@ -108,20 +188,20 @@ async def gsk_export_form(
     if not req:
         raise HTTPException(404)
 
-    budget_rows = _get_budget_rows(req)
-    # Her satıra otomatik GSK bölümü öner
-    for r in budget_rows:
-        r["suggested_section"] = _auto_gsk_section(r)
+    venue_name = ""
+    if req.budgets:
+        venue_name = req.budgets[0].venue_name or ""
 
     template_exists = os.path.isfile(GSK_TEMPLATE_PATH)
+    preview = _auto_preview(req)
 
     return templates.TemplateResponse("requests/gsk_export.html", {
         "request":        request,
         "current_user":   current_user,
         "req":            req,
-        "budget_rows":    budget_rows,
-        "gsk_sections":   GSK_SECTION_LABELS,
+        "venue_name":     venue_name,
         "template_exists": template_exists,
+        "preview":        preview,
         "page_title":     f"GSK Teklif Export — {req.request_no}",
     })
 
@@ -133,7 +213,7 @@ async def gsk_export_download(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    from gsk_export import fill_gsk_template, LineItem, GSKOverflowError
+    from gsk_export import fill_gsk_template, GSKOverflowError
 
     req = db.query(ReqModel).filter(ReqModel.id == req_id).first()
     if not req:
@@ -144,51 +224,25 @@ async def gsk_export_download(
 
     form = await request.form()
 
-    # Header alanları
     header = {
-        "toplanti_adi":   form.get("toplanti_adi", req.event_name),
-        "tarih":          form.get("tarih", req.check_in or ""),
-        "opsiyon_tarihi": form.get("opsiyon_tarihi", ""),
-        "saat":           form.get("saat", ""),
-        "mekan":          form.get("mekan", ""),
-        "acente":         form.get("acente", "FORTUNA EVENTS"),
-        "gsk_grup":       form.get("gsk_grup", ""),
-        "yetkili":        form.get("yetkili", ""),
+        "toplanti_adi":   form.get("toplanti_adi") or req.event_name,
+        "tarih":          form.get("tarih") or req.check_in or "",
+        "opsiyon_tarihi": form.get("opsiyon_tarihi") or "",
+        "saat":           form.get("saat") or "",
+        "mekan":          form.get("mekan") or "",
+        "acente":         form.get("acente") or "STOK MICE",
+        "gsk_grup":       form.get("gsk_grup") or req.client_name or "",
+        "yetkili":        form.get("yetkili") or "",
     }
 
-    commission_str = form.get("commission_rate", "5.5").replace(",", ".")
+    commission_str = (form.get("commission_rate") or "5.5").replace(",", ".")
     try:
         commission_rate = float(commission_str) / 100
     except ValueError:
         commission_rate = 0.055
 
-    # Bütçe satırlarını GSK bölümlerine grupla
-    budget_rows = _get_budget_rows(req)
-    items_by_section: dict[str, list[LineItem]] = {k: [] for k in GSK_SECTION_LABELS}
+    items_by_section, _ = _build_items_auto(req)
 
-    for r in budget_rows:
-        row_id = r["id"]
-        gsk_sec = form.get(f"gsk_section_{row_id}", "")
-        if not gsk_sec or gsk_sec == "skip":
-            continue
-        # Hizmet talebinden gelen satırlarda fiyat formdan okunur
-        if r.get("source") == "request":
-            try:
-                unit_price = float(form.get(f"price_{row_id}", "0").replace(",", ".") or 0)
-            except ValueError:
-                unit_price = 0.0
-        else:
-            unit_price = r["sale_price"]
-        items_by_section.setdefault(gsk_sec, []).append(
-            LineItem(
-                description=r["description"],
-                unit_price=unit_price,
-                quantity=r["qty"],
-                days=r["nights"],
-            )
-        )
-
-    # Temp dosyaya yaz, stream olarak döndür
     with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
         tmp_path = tmp.name
 
