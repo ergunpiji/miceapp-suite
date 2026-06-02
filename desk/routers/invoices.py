@@ -93,6 +93,7 @@ async def invoice_new_get(
     request: Request,
     ref_id: str = None,
     vendor_id: str = None,
+    komisyon_source: str = None,   # tedarikçi faturasından "Komisyon Talebi" ile gelindiğinde
     current_user: User = Depends(require_module("invoices", edit=True)),
     db: Session = Depends(get_db),
     cid: int = Depends(get_company_id),
@@ -120,6 +121,39 @@ async def invoice_new_get(
     else:
         allowed_types = [(k, v) for k, v in INVOICE_TYPES if k in REQUEST_INVOICE_TYPES]
 
+    # Komisyon kaynağı için GELEN (tedarikçi) faturaları
+    gelen_invs = db.query(Invoice).filter(
+        Invoice.company_id == cid, Invoice.invoice_type == "gelen",
+        Invoice.deleted_at == None,  # noqa: E711
+    ).order_by(Invoice.invoice_date.desc()).limit(300).all()
+    gelen_invoices_json = json.dumps([
+        {"id": i.id,
+         "no": i.invoice_no or (i.id[:8]),
+         "vendor": (i.vendor.name if getattr(i, "vendor", None) else (i.vendor_name or "")),
+         "amount": round(i.total_amount or 0, 2),
+         "ref_id": i.ref_id or "",
+         "date": i.invoice_date.isoformat() if i.invoice_date else ""}
+        for i in gelen_invs
+    ])
+
+    # "Komisyon Talebi" ile tedarikçi faturasından gelindiyse ön-doldur
+    komisyon_prefill = None
+    if komisyon_source:
+        si = db.query(Invoice).filter(
+            Invoice.id == komisyon_source, Invoice.company_id == cid,
+            Invoice.invoice_type == "gelen",
+        ).first()
+        if si:
+            _sno = si.invoice_no or si.id[:8]
+            komisyon_prefill = {
+                "source_invoice_id": si.id,
+                "source_no": _sno,
+                "ref_id": si.ref_id or "",
+                "description": f"{_sno} numaralı faturaya istinaden komisyon bedelidir.",
+            }
+            if not ref_id and si.ref_id:
+                ref_id = si.ref_id
+
     return templates.TemplateResponse(
         "invoices/form.html",
         {
@@ -127,6 +161,8 @@ async def invoice_new_get(
             "invoice": None, "refs": refs, "vendors": vendors,
             "vendors_json": vendors_json, "customers_json": customers_json,
             "refs_json": refs_json,
+            "gelen_invoices_json": gelen_invoices_json,
+            "komisyon_prefill": komisyon_prefill,
             "invoice_types": allowed_types, "vat_rates": VAT_RATES,
             "preselected_ref_id": ref_id,
             "preselected_vendor_id": vendor_id,
@@ -149,6 +185,7 @@ async def invoice_new_post(
     notes: str = Form(""),
     items_json: str = Form("[]"),
     send_to_gib: str = Form(""),
+    source_invoice_id: str = Form(None),
     attachment_file: UploadFile = File(None),
     current_user: User = Depends(require_module("invoices", edit=True)),
     db: Session = Depends(get_db),
@@ -157,6 +194,26 @@ async def invoice_new_post(
     # Muhasebe dışındakiler sadece kesilen/komisyon girebilir
     if not _is_muhasebe(current_user) and invoice_type not in REQUEST_INVOICE_TYPES:
         raise HTTPException(403, "Gelen ve iade fatura kaydı yalnızca muhasebe tarafından yapılabilir.")
+
+    # Komisyon faturası: ZORUNLU referans + ana tedarikçi (kaynak) faturası
+    source_inv = None
+    if invoice_type == "komisyon":
+        source_invoice_id = (source_invoice_id or "").strip() or None
+        if not ref_id:
+            raise HTTPException(400, "Komisyon faturası için referans zorunludur.")
+        if not source_invoice_id:
+            raise HTTPException(400, "Komisyon faturası bir ana tedarikçi faturasına atıfta bulunmalıdır.")
+        source_inv = db.query(Invoice).filter(
+            Invoice.id == source_invoice_id, Invoice.company_id == cid
+        ).first()
+        if not source_inv:
+            raise HTTPException(404, "Atıfta bulunulan ana tedarikçi faturası bulunamadı.")
+        if source_inv.invoice_type != "gelen":
+            raise HTTPException(400, "Komisyon yalnızca bir GELEN (tedarikçi) faturasına atıfta bulunabilir.")
+        # Otomatik açıklama
+        if not notes.strip():
+            _sno = source_inv.invoice_no or source_invoice_id[:8]
+            notes = f"{_sno} numaralı faturaya istinaden komisyon bedelidir."
 
     net_total, vat_total = _parse_items(items_json)
     amount = net_total
@@ -170,6 +227,7 @@ async def invoice_new_post(
             coll_date = _compute_collection_date(inv_date, c.payment_term, c.payment_dow)
     inv = Invoice(
         ref_id=ref_id,
+        source_invoice_id=(source_invoice_id if invoice_type == "komisyon" else None),
         vendor_id=None if _is_kesilen else vendor_id,
         customer_id=customer_id if _is_kesilen else None,
         invoice_type=invoice_type,
@@ -200,11 +258,14 @@ async def invoice_new_post(
     db.add(inv)
     db.flush()
     # Çok kademeli onay zinciri başlat (temsilci → müdür → GM, limit dahilinde)
-    # Admin/GM kendisi yaratıyorsa onay zincirini atla — direkt approved.
-    if current_user.role in ("admin", "super_admin", "genel_mudur"):
+    from invoice_approval import start_approval
+    if invoice_type == "komisyon":
+        # Komisyon: admin/GM bile oluştursa müdür onayı + muhasebe kesimi zorunlu
+        start_approval(db, inv, current_user)
+    elif current_user.role in ("admin", "super_admin", "genel_mudur"):
+        # Admin/GM kendisi yaratıyorsa onay zincirini atla — direkt approved.
         inv.approval_status = "approved"
     else:
-        from invoice_approval import start_approval
         start_approval(db, inv, current_user)
     # Koordinatör onay akışı: kesilen fatura bir referansa bağlıysa miceapp onayına gönder
     if invoice_type == "kesilen" and ref_id:

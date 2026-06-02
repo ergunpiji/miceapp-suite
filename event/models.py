@@ -1243,6 +1243,7 @@ class Invoice(Base):
     updated_at           = Column(DateTime, default=_now, onupdate=_now, nullable=False)
     # micedesk köprü alanları (micedesk'in yazdığı faturalar için)
     ref_id               = Column(String(36), nullable=True)   # micedesk references.id
+    source_invoice_id    = Column(String(36), nullable=True)   # komisyon: ana tedarikçi faturası
     coordinator_status   = Column(String(20), nullable=True)   # beklemede | onaylandi | reddedildi
     coordinator_note     = Column(Text, nullable=True)
     coordinator_reviewed_at = Column(DateTime, nullable=True)

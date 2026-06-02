@@ -647,6 +647,7 @@ def migrate_db():
         conn.commit()
         _safe_add_column(conn, "users",     "avatar_b64",          "TEXT", "''")
         _safe_add_column(conn, "invoices",  "lines_json",          "TEXT", "'[]'")
+        _safe_add_column(conn, "invoices",  "source_invoice_id",   "VARCHAR(36)")
         _safe_add_column(conn, "invoices",  "approved_by",         "TEXT")
         _safe_add_column(conn, "invoices",  "approved_at",         "TEXT")
         _safe_add_column(conn, "invoices",  "rejection_note",      "TEXT", "''")

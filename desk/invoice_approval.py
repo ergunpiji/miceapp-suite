@@ -46,6 +46,14 @@ def find_first_approver(db: Session, invoice) -> Optional[int]:
        4) Şirketin admin'i (son çare)
     """
     from models import User, Customer, Reference
+    # Komisyon: ÖNCE oluşturanın kendi müdürü onaylar (limit aşılırsa GM'e gider)
+    if invoice.invoice_type == "komisyon" and invoice.created_by:
+        creator = db.query(User).get(invoice.created_by)
+        if creator and creator.manager_id:
+            mgr = db.query(User).get(creator.manager_id)
+            if mgr and mgr.active:
+                return mgr.id
+        # müdür yoksa aşağıdaki GM/admin fallback'e düşer
     if invoice.customer_id:
         cust = db.query(Customer).get(invoice.customer_id)
         if cust and cust.owner_id:
@@ -163,24 +171,39 @@ def approve_step(db: Session, invoice, approver_user, note: str = "") -> tuple[b
     })
 
     if amount <= limit:
-        # Zincir biter
-        invoice.approval_status = "approved"
+        # Zincir biter — onay tamamlandı
         invoice.current_approver_id = None
+        # Kesilen/komisyon TALEBİ henüz fatura no içermiyorsa → muhasebe KESİMİ bekliyor.
+        # approval_status 'onay_bekliyor' + approver yok → listede "Fatura Kes" butonu çıkar.
+        _needs_cut = (invoice.invoice_type in ("kesilen", "komisyon")
+                      and not (invoice.invoice_no or "").strip())
+        invoice.approval_status = "onay_bekliyor" if _needs_cut else "approved"
         invoice.approval_history = json.dumps(history, ensure_ascii=False)
-        # Bildirim: faturayı yaratan muhasebeciye
+        # Bildirim: faturayı yaratan kişiye
         from notification_helper import notify
         if invoice.created_by:
+            _msg = ("onaylandı — muhasebe kesimi bekliyor"
+                    if _needs_cut else "onaylandı")
             notify(
                 db,
                 user_id=invoice.created_by,
                 title="Faturanız onaylandı",
                 message=f"#{invoice.invoice_no or invoice.id} · "
-                        f"{approver_user.name} ({approver_user.role}) tarafından onaylandı.",
+                        f"{approver_user.name} ({approver_user.role}) tarafından {_msg}.",
                 link=f"/invoices/{invoice.id}",
                 notif_type="success",
                 ref_id=invoice.id,
             )
-        return (True, "Onay tamamlandı.")
+        # Muhasebe kesimi bekliyorsa muhasebe ekibine de bildir
+        if _needs_cut:
+            from models import User as _U
+            for _m in db.query(_U).filter(_U.company_id == invoice.company_id,
+                                          _U.role.in_(("muhasebe", "muhasebe_muduru")),
+                                          _U.active == True).all():  # noqa: E712
+                notify(db, user_id=_m.id, title="Fatura kesilmeli",
+                       message=f"Onaylanan {invoice.invoice_type} faturası kesim bekliyor · {_money(amount)} TL",
+                       link=f"/invoices/{invoice.id}", notif_type="info", ref_id=invoice.id)
+        return (True, "Onay tamamlandı." + (" Muhasebe kesimi bekliyor." if _needs_cut else ""))
 
     # Limit aştı → bir üst kademeye
     next_id = find_next_approver(db, approver_user.id)

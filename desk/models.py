@@ -576,6 +576,7 @@ class Invoice(Base):
     company_id = Column(String(36), ForeignKey("companies.id"), nullable=True, index=True)
     ref_id = Column(String(36), ForeignKey("references.id"), nullable=True)   # muhasebe bağı (references)
     request_id = Column(String(36), nullable=True, index=True)                # satış bağı (event requests) — FK yok (paylaşımlı DB)
+    source_invoice_id = Column(String(36), nullable=True, index=True)         # komisyon: refere ettiği ana tedarikçi (gelen) faturası
     vendor_id = Column(String(36), ForeignKey("vendors.id"), nullable=True)
     invoice_type = Column(
         Enum("gelen", "kesilen", "komisyon", "iade_gelen", "iade_kesilen", name="invoice_type_enum"),
