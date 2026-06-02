@@ -21,6 +21,19 @@ from templates_config import templates
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
+# Muhasebe tipine özgü fatura tipleri (sadece muhasebe girebilir)
+MUHASEBE_ONLY_TYPES = {"gelen", "iade_gelen", "iade_kesilen"}
+# Fatura talebi yapabilecek tipler (herkes)
+REQUEST_INVOICE_TYPES = {"kesilen", "komisyon"}
+
+
+def _is_muhasebe(user) -> bool:
+    """Kullanıcı muhasebe departmanında mı?"""
+    return (
+        user.role in ("muhasebe", "muhasebe_muduru")
+        or (hasattr(user, "has_department_key") and user.has_department_key("accounting"))
+    )
+
 
 @router.get("", response_class=HTMLResponse, name="invoices_list")
 async def invoices_list(
@@ -101,6 +114,12 @@ async def invoice_new_get(
         {"id": r.id, "text": r.ref_no + " — " + r.title}
         for r in refs
     ])
+    # Muhasebe dışındakiler yalnızca kesilen+komisyon tipi seçebilir
+    if _is_muhasebe(current_user):
+        allowed_types = INVOICE_TYPES
+    else:
+        allowed_types = [(k, v) for k, v in INVOICE_TYPES if k in REQUEST_INVOICE_TYPES]
+
     return templates.TemplateResponse(
         "invoices/form.html",
         {
@@ -108,7 +127,7 @@ async def invoice_new_get(
             "invoice": None, "refs": refs, "vendors": vendors,
             "vendors_json": vendors_json, "customers_json": customers_json,
             "refs_json": refs_json,
-            "invoice_types": INVOICE_TYPES, "vat_rates": VAT_RATES,
+            "invoice_types": allowed_types, "vat_rates": VAT_RATES,
             "preselected_ref_id": ref_id,
             "preselected_vendor_id": vendor_id,
             "page_title": "Fatura Girişi",
@@ -135,6 +154,10 @@ async def invoice_new_post(
     db: Session = Depends(get_db),
     cid: int = Depends(get_company_id),
 ):
+    # Muhasebe dışındakiler sadece kesilen/komisyon girebilir
+    if not _is_muhasebe(current_user) and invoice_type not in REQUEST_INVOICE_TYPES:
+        raise HTTPException(403, "Gelen ve iade fatura kaydı yalnızca muhasebe tarafından yapılabilir.")
+
     net_total, vat_total = _parse_items(items_json)
     amount = net_total
     vat_rate = (vat_total / net_total) if net_total else 0.0
@@ -448,11 +471,9 @@ async def invoice_detail(
         .options(joinedload(Invoice.reference))
         .all()
     ) if inv.is_split_parent else []
-    is_accounting = (
-        current_user.has_department_key("accounting")
-        or current_user.role in ("muhasebe", "muhasebe_muduru")
-        or current_user.is_admin
-    )
+    is_accounting = _is_muhasebe(current_user)
+    cut_mode = request.query_params.get("cut") == "1"
+
     cut_mode = request.query_params.get("cut") == "1"
     return templates.TemplateResponse(
         "invoices/detail.html",
@@ -833,14 +854,9 @@ async def invoice_muhasebe_cut(
     db: Session = Depends(get_db),
     cid: int = Depends(get_company_id),
 ):
-    """Muhasebe/admin fatura talebini direkt keser (onay zincirini atlar)."""
-    is_accounting = (
-        current_user.has_department_key("accounting")
-        or current_user.role in ("muhasebe", "muhasebe_muduru")
-        or current_user.is_admin
-    )
-    if not is_accounting:
-        raise HTTPException(403, "Bu işlem için muhasebe yetkisi gereklidir.")
+    """Muhasebe fatura talebini keser. Sadece muhasebe/muhasebe_muduru yapabilir."""
+    if not _is_muhasebe(current_user):
+        raise HTTPException(403, "Fatura kesme yetkisi yalnızca muhasebe departmanına aittir.")
 
     inv = db.query(Invoice).filter_by(id=invoice_id, company_id=cid).first()
     if not inv:

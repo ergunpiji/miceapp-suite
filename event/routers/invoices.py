@@ -473,6 +473,13 @@ async def invoices_new_form(
 
     page_title = "Fatura Talebi Oluştur" if statement_prefill else "Yeni Fatura"
 
+    # Muhasebe dışındakiler sadece kesilen + komisyon talebi oluşturabilir
+    _talep_types = {"kesilen", "komisyon"}
+    if current_user.role in FINANCE_ROLES:
+        _allowed_types = INVOICE_TYPES
+    else:
+        _allowed_types = [t for t in INVOICE_TYPES if t["value"] in _talep_types]
+
     return templates.TemplateResponse("invoices/form.html", {
         "request":           request,
         "current_user":      current_user,
@@ -481,7 +488,7 @@ async def invoices_new_form(
         "selected_req":      req,
         "all_requests":      all_requests,
         "undoc_entries":     undoc_entries,
-        "invoice_types":     INVOICE_TYPES,
+        "invoice_types":     _allowed_types,
         "edit_mode":         False,
         "statement_prefill": statement_prefill,
         "from_statement":    statement_id,
@@ -524,6 +531,9 @@ async def invoices_create(
     # Herkes fatura talebi oluşturabilir
     if current_user.role not in INVOICE_REQUEST_ROLES and not current_user.is_gm:
         raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz yok.")
+    # Muhasebe dışındakiler yalnızca kesilen + komisyon talebi oluşturabilir
+    if current_user.role not in FINANCE_ROLES and invoice_type not in {"kesilen", "komisyon"}:
+        raise HTTPException(status_code=403, detail="Gelen ve iade fatura kaydı yalnızca muhasebe tarafından yapılabilir.")
     req = None
     if req_id:
         req = db.query(ReqModel).filter(ReqModel.id == req_id).first()
