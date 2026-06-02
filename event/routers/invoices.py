@@ -235,11 +235,13 @@ async def invoice_detail(
         req_gelir_total = round(sum(i.total_amount or 0 for i in req_gelirler), 2)
         req_gider_total = round(sum(i.total_amount or 0 for i in req_giderler), 2)
 
+    from auth import DESK_URL as _DESK_URL
     return templates.TemplateResponse("invoices/form.html", {
         "request":          request,
         "current_user":     current_user,
         "page_title":       f"Fatura Talebi — {inv.vendor_name or inv.invoice_no or inv.id[:8]}",
         "invoice":          inv,
+        "desk_url":         _DESK_URL,
         "selected_req":     req,
         "all_requests":     [],
         "undoc_entries":    undoc_entries,
