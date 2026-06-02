@@ -25,24 +25,25 @@ router = APIRouter(prefix="/request-templates", tags=["request_templates"])
 
 def _visible_templates(db: Session, user: User):
     """Kullanıcının görebileceği şablonlar: kendi takımı + kendi oluşturduğu."""
-    from sqlalchemy import or_ as _or_cid
-    q = db.query(RequestTemplate).filter(
-        RequestTemplate.active == True,
-        _or_cid(RequestTemplate.company_id == EVENT_COMPANY_ID,
-                RequestTemplate.company_id.is_(None)),  # NULL kaydedilenleri de göster
-    )
+    from sqlalchemy import or_
+    q = db.query(RequestTemplate).filter(RequestTemplate.active == True)
     if user.is_gm or user.role in ("admin", "super_admin"):
         return q.order_by(RequestTemplate.name).all()
     if user.team_id:
-        from sqlalchemy import or_
         q = q.filter(
             or_(
                 RequestTemplate.team_id == user.team_id,
+                RequestTemplate.team_id.is_(None),   # "Tüm Takımlar" herkes görür
                 RequestTemplate.created_by == user.id,
             )
         )
     else:
-        q = q.filter(RequestTemplate.created_by == user.id)
+        q = q.filter(
+            or_(
+                RequestTemplate.team_id.is_(None),
+                RequestTemplate.created_by == user.id,
+            )
+        )
     return q.order_by(RequestTemplate.name).all()
 
 

@@ -574,19 +574,19 @@ async def requests_new(
 
     # RFQ şablonları — kullanıcının takımına veya kendisine ait
     from sqlalchemy import or_ as _or_tmpl
-    _tmpl_q = db.query(RequestTemplate).filter(
-        RequestTemplate.active == True,
-        _or_tmpl(RequestTemplate.company_id == EVENT_COMPANY_ID,
-                 RequestTemplate.company_id.is_(None)),
-    )
+    _tmpl_q = db.query(RequestTemplate).filter(RequestTemplate.active == True)
     if not (current_user.is_gm or current_user.role in ("admin", "super_admin")):
         if current_user.team_id:
             _tmpl_q = _tmpl_q.filter(
                 _or_tmpl(RequestTemplate.team_id == current_user.team_id,
+                         RequestTemplate.team_id.is_(None),
                          RequestTemplate.created_by == current_user.id)
             )
         else:
-            _tmpl_q = _tmpl_q.filter(RequestTemplate.created_by == current_user.id)
+            _tmpl_q = _tmpl_q.filter(
+                _or_tmpl(RequestTemplate.team_id.is_(None),
+                         RequestTemplate.created_by == current_user.id)
+            )
     rfq_templates = _tmpl_q.order_by(RequestTemplate.name).all()
 
     return templates.TemplateResponse(
