@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from auth import get_current_user
 from database import get_db
-from models import Vendor, Invoice, InvoiceLog, VendorPrepayment, PREPAYMENT_STATUSES, User, _uuid, _now
+from models import Vendor, Invoice, InvoiceLog, VendorPrepayment, PREPAYMENT_STATUSES, SUPPLIER_TYPES, User, _uuid, _now
 from templates_config import templates
 
 router = APIRouter(prefix="/vendors", tags=["vendors"])
@@ -245,11 +245,12 @@ async def vendors_new(
 ):
     _require_finance(current_user)
     return templates.TemplateResponse("vendors/form.html", {
-        "request":      request,
-        "current_user": current_user,
-        "page_title":   "Yeni Tedarikçi",
-        "vendor":       None,
-        "edit_mode":    False,
+        "request":        request,
+        "current_user":   current_user,
+        "page_title":     "Yeni Tedarikçi",
+        "vendor":         None,
+        "edit_mode":      False,
+        "supplier_types": SUPPLIER_TYPES,
     })
 
 
@@ -262,30 +263,32 @@ async def vendors_create(
     request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    name:         str = Form(...),
-    tax_number:   str = Form(""),
-    tax_office:   str = Form(""),
-    address:      str = Form(""),
-    email:        str = Form(""),
-    phone:        str = Form(""),
-    payment_term: str = Form("30"),
-    notes:        str = Form(""),
+    name:          str = Form(...),
+    supplier_type: str = Form("diger"),
+    tax_number:    str = Form(""),
+    tax_office:    str = Form(""),
+    address:       str = Form(""),
+    email:         str = Form(""),
+    phone:         str = Form(""),
+    payment_term:  str = Form("30"),
+    notes:         str = Form(""),
 ):
     _require_finance(current_user)
     vendor = Vendor(
-        id           = _uuid(),
-        name         = name.strip(),
-        tax_no       = tax_number.strip(),
-        tax_office   = tax_office.strip(),
-        address      = address.strip(),
-        email        = email.strip(),
-        phone        = phone.strip(),
-        payment_term = int(payment_term or 30),
-        notes        = notes.strip(),
-        active       = True,
-        created_by   = current_user.id,
-        created_at   = _now(),
-        updated_at   = _now(),
+        id            = _uuid(),
+        name          = name.strip(),
+        supplier_type = supplier_type or "diger",
+        tax_no        = tax_number.strip(),
+        tax_office    = tax_office.strip(),
+        address       = address.strip(),
+        email         = email.strip(),
+        phone         = phone.strip(),
+        payment_term  = int(payment_term or 30),
+        notes         = notes.strip(),
+        active        = True,
+        created_by    = current_user.id,
+        created_at    = _now(),
+        updated_at    = _now(),
     )
     db.add(vendor)
     db.commit()
@@ -397,11 +400,12 @@ async def vendors_edit(
     if not vendor:
         raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı.")
     return templates.TemplateResponse("vendors/form.html", {
-        "request":      request,
-        "current_user": current_user,
-        "page_title":   f"Düzenle — {vendor.name}",
-        "vendor":       vendor,
-        "edit_mode":    True,
+        "request":        request,
+        "current_user":   current_user,
+        "page_title":     f"Düzenle — {vendor.name}",
+        "vendor":         vendor,
+        "edit_mode":      True,
+        "supplier_types": SUPPLIER_TYPES,
     })
 
 
@@ -415,28 +419,30 @@ async def vendors_update(
     request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    name:         str = Form(...),
-    tax_number:   str = Form(""),
-    tax_office:   str = Form(""),
-    address:      str = Form(""),
-    email:        str = Form(""),
-    phone:        str = Form(""),
-    payment_term: str = Form("30"),
-    notes:        str = Form(""),
+    name:          str = Form(...),
+    supplier_type: str = Form("diger"),
+    tax_number:    str = Form(""),
+    tax_office:    str = Form(""),
+    address:       str = Form(""),
+    email:         str = Form(""),
+    phone:         str = Form(""),
+    payment_term:  str = Form("30"),
+    notes:         str = Form(""),
 ):
     _require_finance(current_user)
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
         raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı.")
-    vendor.name         = name.strip()
-    vendor.tax_no       = tax_number.strip()
-    vendor.tax_office   = tax_office.strip()
-    vendor.address      = address.strip()
-    vendor.email        = email.strip()
-    vendor.phone        = phone.strip()
-    vendor.payment_term = int(payment_term or 30)
-    vendor.notes        = notes.strip()
-    vendor.updated_at   = _now()
+    vendor.name          = name.strip()
+    vendor.supplier_type = supplier_type or "diger"
+    vendor.tax_no        = tax_number.strip()
+    vendor.tax_office    = tax_office.strip()
+    vendor.address       = address.strip()
+    vendor.email         = email.strip()
+    vendor.phone         = phone.strip()
+    vendor.payment_term  = int(payment_term or 30)
+    vendor.notes         = notes.strip()
+    vendor.updated_at    = _now()
     db.commit()
     return RedirectResponse(url=f"/vendors/{vendor.id}", status_code=303)
 

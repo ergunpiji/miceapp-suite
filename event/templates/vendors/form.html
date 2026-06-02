@@ -12,10 +12,24 @@
       </div>
       <div class="card-body">
 
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Tedarikçi Adı <span class="text-danger">*</span></label>
-          <input type="text" name="name" class="form-control"
-                 value="{{ vendor.name if vendor else '' }}" required>
+        <div class="row g-3 mb-3">
+          <div class="col-md-8">
+            <label class="form-label fw-semibold">Tedarikçi Adı <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control"
+                   value="{{ vendor.name if vendor else '' }}" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Tedarikçi Türü</label>
+            <select name="supplier_type" class="form-select">
+              {% for st in (supplier_types or []) %}
+              <option value="{{ st.value }}"
+                {% if vendor and vendor.supplier_type == st.value %}selected
+                {% elif not vendor and st.value == 'diger' %}selected{% endif %}>
+                {{ st.label }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
         </div>
 
         <div class="row g-3 mb-3">
