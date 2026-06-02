@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/request-templates" class="btn btn-outline-secondary btn-sm">
+  <i class="bi bi-arrow-left me-1"></i> Şablonlara Dön
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        <h5 class="fw-bold mb-4">
+          <i class="bi bi-journal-plus me-2 text-primary"></i>{{ page_title }}
+        </h5>
+
+        {% if error %}
+        <div class="alert alert-danger py-2 small">{{ error }}</div>
+        {% endif %}
+
+        <form method="post"
+              action="{% if tmpl %}/request-templates/{{ tmpl.id }}/edit{% else %}/request-templates/new{% endif %}">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label fw-semibold">Şablon Adı <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="form-control" required
+                     value="{{ tmpl.name if tmpl else '' }}"
+                     placeholder="örn. GSK Ürün Tanıtım Toplantısı Standart">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Etkinlik Tipi</label>
+              <input type="text" name="event_type" class="form-control"
+                     value="{{ tmpl.event_type if tmpl else '' }}"
+                     placeholder="örn. yi, toplanti">
+              <div class="form-text">Bilgi amaçlı — etkinlik tipini filtreler.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Takım</label>
+              <select name="team_id" class="form-select">
+                <option value="">— Tüm Takımlar (herkese açık) —</option>
+                {% for t in teams %}
+                <option value="{{ t.id }}"
+                  {% if tmpl and tmpl.team_id == t.id %}selected
+                  {% elif not tmpl and current_user.team_id == t.id %}selected{% endif %}>
+                  {{ t.name }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Açıklama</label>
+              <textarea name="description" class="form-control" rows="2"
+                        placeholder="Şablon hakkında kısa not">{{ tmpl.description if tmpl else '' }}</textarea>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">
+                Hizmet Kalemleri (items_json)
+                <span class="text-muted fw-normal small ms-1">— genellikle referanstan "Şablon Kaydet" ile otomatik dolar</span>
+              </label>
+              <textarea name="items_json" class="form-control font-monospace" rows="8"
+                        style="font-size:11px;"
+                        placeholder='{"meeting": [...], "accommodation": [...]}'
+>{{ tmpl.items_json if tmpl else '{}' }}</textarea>
+            </div>
+          </div>
+          <div class="d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-primary px-4">
+              <i class="bi bi-check-lg me-1"></i>Kaydet
+            </button>
+            <a href="/request-templates" class="btn btn-outline-secondary">İptal</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

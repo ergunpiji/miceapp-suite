@@ -324,6 +324,10 @@
              class="sidebar-link {% if cp == '/requests' and 'view=' not in cq %}active{% endif %}">
             <i class="bi bi-list-ul nav-icon"></i> Referans Listesi
           </a>
+          <a href="/request-templates"
+             class="sidebar-link {% if '/request-templates' in cp %}active{% endif %}">
+            <i class="bi bi-bookmark nav-icon"></i> RFQ Şablonları
+          </a>
           <a href="/requests?view=pending_work"
              class="sidebar-link {% if 'view=pending_work' in cq %}active{% endif %}">
             <i class="bi bi-hourglass-split nav-icon"></i> Yeni & İşlemdekiler

@@ -157,6 +157,26 @@
       action="{{ '/requests/' + req.id + '/edit' if req else '/requests/new' }}"
       id="requestForm">
 
+  {# ─── RFQ Şablon Seçici (sadece yeni talep, şablon varsa) ─── #}
+  {% if not req and rfq_templates %}
+  <div class="alert d-flex align-items-center gap-3 mb-3"
+       style="background:#f0f9ff; border:1px solid #93c5fd; border-radius:8px;">
+    <i class="bi bi-bookmark-fill text-primary fs-5"></i>
+    <div class="flex-grow-1">
+      <div class="fw-semibold" style="font-size:13px; color:#1e3a5f;">Şablondan Başla</div>
+      <div class="text-muted" style="font-size:12px;">Kaydedilmiş bir şablonu yükleyerek hizmet kalemlerini otomatik doldurun.</div>
+    </div>
+    <select id="rfqTemplateSelect" class="form-select form-select-sm" style="max-width:280px;"
+            onchange="loadRfqTemplate(this.value)">
+      <option value="">— Şablon Seç —</option>
+      {% for t in rfq_templates %}
+      <option value="{{ t.id }}">{{ t.name }}{% if t.team %} ({{ t.team.name }}){% endif %}</option>
+      {% endfor %}
+    </select>
+    <span id="tmplLoadingSpinner" style="display:none;" class="spinner-border spinner-border-sm text-primary"></span>
+  </div>
+  {% endif %}
+
   {# ─── BÖLÜM 1: GENEL BİLGİLER ─── #}
   <div class="card mb-4">
     <div class="card-body">
@@ -1483,6 +1503,68 @@ function sendFromPreview() {
     document.getElementById('requestForm').appendChild(btn);
     btn.click();
   }, 300);
+}
+
+// ─── RFQ Şablon yükleme ──────────────────────────────────────────────────
+async function loadRfqTemplate(tmplId) {
+  if (!tmplId) return;
+  const spinner = document.getElementById('tmplLoadingSpinner');
+  if (spinner) spinner.style.display = 'inline-block';
+  try {
+    const resp = await fetch(`/request-templates/${tmplId}/json`);
+    if (!resp.ok) { showFieldError('Şablon yüklenemedi.'); return; }
+    const data = await resp.json();
+    if (!data.items || !Object.keys(data.items).length) {
+      showFieldError('Bu şablonda kalem yok.'); return;
+    }
+    // Global REQUEST_ITEMS_JSON varsa güncelle, yoksa items_json hidden input'u doldur
+    if (typeof applyTemplateItems === 'function') {
+      applyTemplateItems(data.items);
+    } else {
+      // Fallback: hidden input aracılığıyla form submit eder, sayfa yenilenir
+      let inp = document.getElementById('preload_items_json');
+      if (!inp) {
+        inp = document.createElement('input');
+        inp.type = 'hidden'; inp.name = 'items_json'; inp.id = 'preload_items_json';
+        document.getElementById('requestForm').appendChild(inp);
+      }
+      inp.value = JSON.stringify(data.items);
+    }
+    // Şablon adını topbar'da göster
+    const sel = document.getElementById('rfqTemplateSelect');
+    if (sel) {
+      sel.style.borderColor = '#16a34a';
+      sel.style.background  = '#f0fdf4';
+    }
+    if (typeof showToast === 'function') showToast('✓ "' + data.name + '" şablonu yüklendi. Kalemleri aşağıda kontrol edin.');
+    // Hizmetler sekmelerine gidip kalemleri JS ile inject et
+    _applyTemplateToSections(data.items);
+  } catch(e) {
+    console.error('Template load error', e);
+  } finally {
+    if (spinner) spinner.style.display = 'none';
+  }
+}
+
+function _applyTemplateToSections(items) {
+  // items = {accommodation:[...], meeting:[...], fb:[...], ...}
+  // Her section için mevcut kalemleri sil, şablondakini ekle
+  if (typeof ALL_ITEMS === 'undefined') {
+    // Basit fallback: form'a hidden input olarak ekle ve kullanıcıya bilgi ver
+    let el = document.getElementById('_tmpl_items_hidden');
+    if (!el) {
+      el = document.createElement('input');
+      el.type = 'hidden'; el.name = 'items_json'; el.id = '_tmpl_items_hidden';
+      document.getElementById('requestForm').appendChild(el);
+    }
+    el.value = JSON.stringify(items);
+    document.querySelectorAll('.section-row-add-btn, [data-add-row]').forEach(b => b.click && b.click());
+    return;
+  }
+  // ALL_ITEMS mevcutsa direkt set et
+  Object.keys(items).forEach(sec => { ALL_ITEMS[sec] = items[sec] || []; });
+  if (typeof renderAllSections === 'function') renderAllSections();
+  else if (typeof reRenderSections === 'function') reRenderSections();
 }
 </script>
 {% endblock %}

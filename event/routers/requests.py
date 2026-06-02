@@ -17,12 +17,12 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Stre
 from sqlalchemy.orm import Session, joinedload
 
 from auth import get_current_user, has_permission, get_company_id
-from database import generate_ref_no, get_db
+from database import generate_ref_no, get_db, EVENT_COMPANY_ID
 from models import (
     Budget, Customer, CustomCategory, EmailTemplate, EventType, PrepaymentRequest,
     REQUEST_STATUSES, REQUEST_TABS,
     TR_CITIES, SUPPLIER_TYPES, Service, SERVICE_CATEGORIES, Request as ReqModel, RequestModule, Team, User, Vendor,
-    _uuid, _now, REQUEST_STATUS_LABELS, DeskReference,
+    _uuid, _now, REQUEST_STATUS_LABELS, DeskReference, RequestTemplate,
 )
 from routers.library import log_activity
 
@@ -572,6 +572,22 @@ async def requests_new(
         pass
     teams = db.query(Team).filter(Team.active == True).order_by(Team.name).all() if current_user.is_gm else []
 
+    # RFQ şablonları — kullanıcının takımına veya kendisine ait
+    from sqlalchemy import or_ as _or_tmpl
+    _tmpl_q = db.query(RequestTemplate).filter(
+        RequestTemplate.active == True,
+        RequestTemplate.company_id == EVENT_COMPANY_ID,
+    )
+    if not (current_user.is_gm or current_user.role in ("admin", "super_admin")):
+        if current_user.team_id:
+            _tmpl_q = _tmpl_q.filter(
+                _or_tmpl(RequestTemplate.team_id == current_user.team_id,
+                         RequestTemplate.created_by == current_user.id)
+            )
+        else:
+            _tmpl_q = _tmpl_q.filter(RequestTemplate.created_by == current_user.id)
+    rfq_templates = _tmpl_q.order_by(RequestTemplate.name).all()
+
     return templates.TemplateResponse(
         "requests/form.html",
         {
@@ -590,6 +606,7 @@ async def requests_new(
             "custom_cats":      custom_cats,
             "teams":            teams,
             "show_team_selector": current_user.is_gm,
+            "rfq_templates":    rfq_templates,
             "error":            None,
         },
     )

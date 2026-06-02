@@ -358,6 +358,9 @@ app.include_router(my_requests_router.router)
 from routers import gsk as gsk_router
 app.include_router(gsk_router.router)
 
+from routers import request_templates as request_templates_router
+app.include_router(request_templates_router.router)
+
 # ---------------------------------------------------------------------------
 # Operasyon Ajanı — sub-app olarak mount et (/operasyon/...)
 # ---------------------------------------------------------------------------

@@ -572,6 +572,9 @@ def migrate_db():
         _safe_add_column(conn, "invoices",           "company_id", "VARCHAR(36)")
         _safe_add_column(conn, "budgets",            "company_id", "VARCHAR(36)")
         _safe_add_column(conn, "vendor_prepayments", "company_id", "VARCHAR(36)")
+        # ── RFQ Şablon tablosu (create_all yeterli, ama eksik sütun koruması) ──
+        _safe_add_column(conn, "request_templates", "description", "TEXT DEFAULT ''")
+        _safe_add_column(conn, "request_templates", "company_id",  "VARCHAR(36)")
         _safe_add_column(conn, "prepayment_requests", "needed_date", "VARCHAR(10)")
         _safe_add_column(conn, "prepayment_requests", "document_path", "VARCHAR(500)")
         _safe_add_column(conn, "prepayment_requests", "document_name", "VARCHAR(255)")

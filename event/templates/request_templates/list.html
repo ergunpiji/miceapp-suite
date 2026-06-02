@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/request-templates/new" class="btn btn-primary btn-sm">
+  <i class="bi bi-plus-lg me-1"></i>Yeni Şablon
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3" style="max-width:900px;">
+
+  {% if request.query_params.get('saved') %}
+  <div class="alert alert-success py-2 mb-3"><i class="bi bi-check-circle me-1"></i>Kaydedildi.</div>
+  {% endif %}
+
+  {% if not tmpls %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5">
+      <i class="bi bi-journal-text" style="font-size:40px; color:#cbd5e1;"></i>
+      <p class="mt-3 text-muted">Henüz şablon oluşturulmadı.</p>
+      <a href="/request-templates/new" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-lg me-1"></i>İlk Şablonu Oluştur
+      </a>
+    </div>
+  </div>
+  {% else %}
+  <div class="card border-0 shadow-sm">
+    <table class="table table-hover mb-0">
+      <thead style="background:#f8fafc; font-size:11px;">
+        <tr>
+          <th class="ps-3 py-2 fw-semibold text-muted">ŞABLON ADI</th>
+          <th class="py-2 fw-semibold text-muted">ETKİNLİK TİPİ</th>
+          <th class="py-2 fw-semibold text-muted">TAKIM</th>
+          <th class="py-2 fw-semibold text-muted">OLUŞTURAN</th>
+          <th class="py-2 fw-semibold text-muted">GÜNCELLEME</th>
+          <th class="pe-3 py-2"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in tmpls %}
+        <tr>
+          <td class="ps-3 py-2 fw-semibold">
+            {{ t.name }}
+            {% if t.description %}
+            <div class="text-muted" style="font-size:11px; font-weight:400;">{{ t.description }}</div>
+            {% endif %}
+          </td>
+          <td class="py-2 text-muted small">{{ t.event_type or '—' }}</td>
+          <td class="py-2">
+            {% if t.team %}
+            <span class="badge" style="background:#dbeafe; color:#1d4ed8; font-size:11px;">
+              {{ t.team.name }}
+            </span>
+            {% else %}
+            <span class="text-muted small">Tüm Takımlar</span>
+            {% endif %}
+          </td>
+          <td class="py-2 text-muted small">{{ t.creator.full_name if t.creator else '—' }}</td>
+          <td class="py-2 text-muted small">{{ t.updated_at.strftime('%d.%m.%Y') if t.updated_at else '—' }}</td>
+          <td class="pe-3 py-2 text-end">
+            <a href="/request-templates/{{ t.id }}/edit" class="btn btn-sm btn-outline-secondary py-0 px-2">
+              <i class="bi bi-pencil"></i>
+            </a>
+            <form method="post" action="/request-templates/{{ t.id }}/delete" class="d-inline ms-1"
+                  onsubmit="return confirm('{{ t.name }} şablonunu silmek istiyor musunuz?')">
+              <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

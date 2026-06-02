@@ -227,6 +227,15 @@
           </a>
         {% endif %}
 
+        {# RFQ Şablon Kaydet #}
+        {% if current_user.role in ('admin','mudur','yonetici','satinalma','asistan') or current_user.is_gm %}
+        <button type="button" class="btn btn-outline-secondary btn-sm"
+                onclick="openSaveTemplateModal()"
+                title="Bu referansın hizmet kalemlerini şablon olarak kaydet">
+          <i class="bi bi-bookmark-plus me-1"></i>Şablon Kaydet
+        </button>
+        {% endif %}
+
         {# GSK Export — müşteri GSK VE etkinlik tipi ut/yi ise #}
         {% set _is_gsk = (customer and ('gsk' in customer.name|lower or 'glaxo' in customer.name|lower))
                          and req.event_type in ('yi', 'ut') %}
@@ -4013,6 +4022,81 @@ function copyLink(url, btn) {
     setTimeout(() => { btn.textContent = orig; }, 2000);
   });
 }
+
+// ─── RFQ Şablon Kaydet ───────────────────────────────────────────────────
+function openSaveTemplateModal() {
+  new bootstrap.Modal(document.getElementById('saveTemplateModal')).show();
+}
+
+document.getElementById('saveTemplateForm')?.addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const fd = new FormData(this);
+  // Mevcut items_json'ı ekle
+  fd.set('items_json', JSON.stringify(REQ_DATA.items || {}));
+  fd.set('event_type', {{ req.event_type | tojson }});
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.textContent = 'Kaydediliyor…';
+  try {
+    const resp = await fetch('/request-templates/save-from-request', {method:'POST', body: fd});
+    const data = await resp.json();
+    if (data.ok) {
+      bootstrap.Modal.getInstance(document.getElementById('saveTemplateModal')).hide();
+      showToast('✓ "' + data.name + '" şablonu kaydedildi.');
+    } else {
+      showToast('Hata: ' + (data.detail || 'Bilinmeyen hata'));
+    }
+  } catch(err) {
+    showToast('Bağlantı hatası.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Kaydet';
+  }
+});
 </script>
+
+{# ── Şablon Kaydet Modalı ── #}
+<div class="modal fade" id="saveTemplateModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#1a3a5c; color:#fff; border:none;">
+        <h6 class="modal-title mb-0"><i class="bi bi-bookmark-plus me-2"></i>RFQ Şablonu Olarak Kaydet</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="saveTemplateForm">
+        <div class="modal-body">
+          <div class="alert alert-info py-2 mb-3" style="font-size:12px;">
+            <i class="bi bi-info-circle me-1"></i>
+            Tarihler sıfırlanır — şablon yeniden kullanılabilir kalır.
+            Hizmet açıklamaları, miktarlar ve kalemler kaydedilir.
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Şablon Adı <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required
+                   value="{{ req.event_name }} Şablonu"
+                   placeholder="örn. GSK Ürün Tanıtım Standart">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Takım</label>
+            <select name="team_id" class="form-select">
+              <option value="">— Tüm Takımlar —</option>
+              {% for t in (teams or []) %}
+              <option value="{{ t.id }}"
+                {% if current_user.team_id == t.id %}selected{% endif %}>{{ t.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Açıklama</label>
+            <input type="text" name="description" class="form-control"
+                   placeholder="Kısa not (opsiyonel)">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Kaydet</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 {% endblock %}

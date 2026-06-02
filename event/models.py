@@ -729,6 +729,33 @@ class Request(Base):
         }
 
 
+class RequestTemplate(Base):
+    """Tekrar eden RFQ/talep şablonu — takım bazlı."""
+    __tablename__ = "request_templates"
+
+    id          = Column(String(36), primary_key=True, default=_uuid)
+    name        = Column(String(200), nullable=False)
+    description = Column(Text, default="")
+    event_type  = Column(String(32), default="")         # önerilen etkinlik tipi
+    items_json  = Column(Text, default="{}")             # Request.items_json ile aynı yapı
+    team_id     = Column(String(36), ForeignKey("teams.id"), nullable=True)
+    company_id  = Column(String(36), nullable=True, index=True)
+    created_by  = Column(String(36), ForeignKey("users.id"), nullable=False)
+    active      = Column(Boolean, default=True, nullable=False)
+    created_at  = Column(DateTime, default=_now, nullable=False)
+    updated_at  = Column(DateTime, default=_now, onupdate=_now, nullable=False)
+
+    team    = relationship("Team",   foreign_keys=[team_id])
+    creator = relationship("User",   foreign_keys=[created_by])
+
+    @property
+    def items(self) -> dict:
+        try:
+            return json.loads(self.items_json or "{}")
+        except Exception:
+            return {}
+
+
 class FundTransfer(Base):
     """Fon havuzundan alt referansa yapılan iki yönlü transfer.
 
