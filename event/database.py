@@ -572,6 +572,9 @@ def migrate_db():
         _safe_add_column(conn, "invoices",           "company_id", "VARCHAR(36)")
         _safe_add_column(conn, "budgets",            "company_id", "VARCHAR(36)")
         _safe_add_column(conn, "vendor_prepayments", "company_id", "VARCHAR(36)")
+        # ── ut/yi tipi etkinlik: hekim + staff sayıları ────────────────────────
+        _safe_add_column(conn, "requests", "hekim_count", "INTEGER")
+        _safe_add_column(conn, "requests", "staff_count",  "INTEGER")
         # ── RFQ Şablon tablosu (create_all yeterli, ama eksik sütun koruması) ──
         _safe_add_column(conn, "request_templates", "description", "TEXT DEFAULT ''")
         _safe_add_column(conn, "request_templates", "company_id",  "VARCHAR(36)")

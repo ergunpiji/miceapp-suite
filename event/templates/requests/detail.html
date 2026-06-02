@@ -440,7 +440,14 @@ document.addEventListener('DOMContentLoaded', function() {
             </tr>
             <tr>
               <td class="info-label">Katılımcı</td>
-              <td class="info-value">{{ req.attendee_count or '—' }} kişi</td>
+              <td class="info-value">
+                {{ req.attendee_count or '—' }} kişi
+                {% if req.hekim_count is not none or req.staff_count is not none %}
+                <span class="text-muted ms-1" style="font-size:11px;">
+                  (Hekim: {{ req.hekim_count or 0 }} · Staff: {{ req.staff_count or 0 }})
+                </span>
+                {% endif %}
+              </td>
             </tr>
             <tr>
               <td class="info-label">Etkinlik Başlangıç</td>

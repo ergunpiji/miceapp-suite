@@ -636,6 +636,8 @@ async def requests_create(
     parent_fund_request_id: str = Form(""),   # fon havuzu (is_funded=on ise doldurulur)
     action:               str = Form("draft"),  # 'draft' veya 'send'
     team_id:              str = Form(""),       # GM seçimi için
+    hekim_count:          str = Form(""),       # ut/yi: hekim sayısı
+    staff_count:          str = Form(""),       # ut/yi: staff sayısı
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -700,6 +702,8 @@ async def requests_create(
         parent_fund_request_id=parent_fund_request_id or None,
         team_id=_team_id,
         company_id=EVENT_COMPANY_ID,
+        hekim_count=int(hekim_count) if hekim_count.strip().isdigit() else None,
+        staff_count=int(staff_count) if staff_count.strip().isdigit() else None,
         created_by=current_user.id,
         created_at=_now(),
         updated_at=_now(),
@@ -1362,7 +1366,9 @@ async def requests_update(
     funding_source:       str = Form(""),
     parent_fund_request_id: str = Form(""),
     action:               str = Form("draft"),
-    team_id:              str = Form(""),       # GM seçimi için
+    team_id:              str = Form(""),
+    hekim_count:          str = Form(""),
+    staff_count:          str = Form(""),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -1396,6 +1402,8 @@ async def requests_update(
     req.cities_json           = cities_json
     req.city                  = ", ".join(cities_list)
     req.attendee_count        = int(attendee_count) if attendee_count.isdigit() else 0
+    req.hekim_count           = int(hekim_count) if hekim_count.strip().isdigit() else None
+    req.staff_count           = int(staff_count) if staff_count.strip().isdigit() else None
     req.check_in              = check_in or None
     req.check_out             = check_out or None
     req.accom_check_in        = accom_check_in or None

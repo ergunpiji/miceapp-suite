@@ -269,10 +269,30 @@
         </div>
 
         {# Katılımcı #}
-        <div class="col-md-3">
+        <div class="col-md-3" id="attendeeCountBlock">
           <label class="form-label fw-semibold" style="font-size:13px;">Katılımcı Sayısı</label>
           <input type="number" name="attendee_count" id="attendeeCount" class="form-control" min="0"
                  value="{{ req.attendee_count if req else 0 }}">
+        </div>
+
+        {# ut/yi tipi: Hekim + Staff sayısı #}
+        <div class="col-md-3" id="hekimBlock" style="display:none;">
+          <label class="form-label fw-semibold" style="font-size:13px;">
+            Hekim Sayısı
+            <span class="text-muted fw-normal" style="font-size:11px;">Katılımcı</span>
+          </label>
+          <input type="number" name="hekim_count" id="hekimCount" class="form-control" min="0"
+                 value="{{ req.hekim_count if req and req.hekim_count is not none else '' }}"
+                 oninput="syncAttendeeFromParts()" placeholder="0">
+        </div>
+        <div class="col-md-3" id="staffBlock" style="display:none;">
+          <label class="form-label fw-semibold" style="font-size:13px;">
+            Staff Sayısı
+            <span class="text-muted fw-normal" style="font-size:11px;">Katılımcı</span>
+          </label>
+          <input type="number" name="staff_count" id="staffCount" class="form-control" min="0"
+                 value="{{ req.staff_count if req and req.staff_count is not none else '' }}"
+                 oninput="syncAttendeeFromParts()" placeholder="0">
         </div>
 
         {# Teklif Son Tarihi #}
@@ -1566,5 +1586,35 @@ function _applyTemplateToSections(items) {
   if (typeof renderAllSections === 'function') renderAllSections();
   else if (typeof reRenderSections === 'function') reRenderSections();
 }
+
+// ─── Hekim / Staff sayısı (ut/yi tipi) ────────────────────────────────────
+const UT_TYPES = new Set(['yi', 'ut']);
+
+function toggleHekimStaffBlocks() {
+  const evSel = document.getElementById('eventTypeSelect');
+  if (!evSel) return;
+  const val = evSel.value;
+  const isUT = UT_TYPES.has(val);
+  document.getElementById('attendeeCountBlock').style.display = isUT ? 'none' : '';
+  document.getElementById('hekimBlock').style.display  = isUT ? '' : 'none';
+  document.getElementById('staffBlock').style.display  = isUT ? '' : 'none';
+  if (isUT) syncAttendeeFromParts();
+}
+
+function syncAttendeeFromParts() {
+  const h = parseInt(document.getElementById('hekimCount')?.value || '0', 10) || 0;
+  const s = parseInt(document.getElementById('staffCount')?.value || '0', 10) || 0;
+  const total = h + s;
+  const att = document.getElementById('attendeeCount');
+  if (att) att.value = total;
+}
+
+// Sayfa yüklenince + event_type değişince çalıştır
+(function initHekimStaff() {
+  const evSel = document.getElementById('eventTypeSelect');
+  if (!evSel) return;
+  toggleHekimStaffBlocks();
+  evSel.addEventListener('change', toggleHekimStaffBlocks);
+})();
 </script>
 {% endblock %}

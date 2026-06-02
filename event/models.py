@@ -570,6 +570,8 @@ class Request(Base):
     city             = Column(String(255), default="")
     cities_json      = Column(Text, default="[]")
     attendee_count   = Column(Integer, default=0)
+    hekim_count      = Column(Integer, nullable=True)   # ut/yi tipi: hekim katılımcı sayısı
+    staff_count      = Column(Integer, nullable=True)   # ut/yi tipi: staff katılımcı sayısı
     check_in         = Column(String(10), nullable=True)    # YYYY-MM-DD string
     check_out        = Column(String(10), nullable=True)
     accom_check_in   = Column(String(10), nullable=True)
