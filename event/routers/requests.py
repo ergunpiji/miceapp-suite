@@ -2136,9 +2136,9 @@ async def requests_cari(
         .all()
     )
 
-    gelir_total  = round(sum(i.amount or 0 for i in gelirler), 2)
-    gider_total  = round(sum(i.amount or 0 for i in giderler), 2)
-    hbf_total    = round(sum(h.grand_excl_vat for h in hbf_list), 2)
+    gelir_total  = round(sum(i.total_amount or 0 for i in gelirler), 2)
+    gider_total  = round(sum(i.total_amount or 0 for i in giderler), 2)
+    hbf_total    = round(sum(h.grand_total for h in hbf_list), 2)
     net          = round(gelir_total - gider_total - hbf_total, 2)
 
     return templates.TemplateResponse("requests/cari.html", {
