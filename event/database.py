@@ -574,6 +574,10 @@ def migrate_db():
         _safe_add_column(conn, "vendor_prepayments", "company_id",  "VARCHAR(36)")
         _safe_add_column(conn, "vendor_prepayments", "request_id",  "VARCHAR(36)")
         _safe_add_column(conn, "vendor_prepayments", "updated_at",  "TIMESTAMP")
+        # Event modeli applied_amount + status kullanıyor (fatura onayında _apply_prepayments);
+        # tablo desk tarafından şekillendiği için bu kolonlar eksikti → fatura onayı 500 veriyordu.
+        _safe_add_column(conn, "vendor_prepayments", "applied_amount", "DOUBLE PRECISION", "0")
+        _safe_add_column(conn, "vendor_prepayments", "status",         "VARCHAR(16)", "'open'")
         # ── ut/yi tipi etkinlik: hekim + staff sayıları ────────────────────────
         _safe_add_column(conn, "requests", "hekim_count", "INTEGER")
         _safe_add_column(conn, "requests", "staff_count",  "INTEGER")
