@@ -280,8 +280,10 @@ async def invoices_list(
 
     from database import EVENT_COMPANY_ID
     from sqlalchemy import or_ as _or_cid
+    # Çok-kiracılı: kullanıcının GERÇEK şirketi (yoksa EVENT_COMPANY_ID fallback)
+    _eff_cid = current_user.company_id or EVENT_COMPANY_ID
     query = db.query(Invoice).outerjoin(Invoice.request).filter(
-        _or_cid(Invoice.company_id == EVENT_COMPANY_ID, Invoice.company_id.is_(None))
+        _or_cid(Invoice.company_id == _eff_cid, Invoice.company_id.is_(None))
     )
 
     # "Onaylarım" görünümü — sadece benim onayımı bekleyen faturalar
@@ -629,7 +631,7 @@ async def invoices_create(
         total_amount        = incl,
         status              = "pending",
         current_approver_id = _initial_approver_id,
-        company_id          = EVENT_COMPANY_ID,
+        company_id          = current_user.company_id or EVENT_COMPANY_ID,
         created_by          = current_user.id,
         created_at          = _now(),
         updated_at          = _now(),

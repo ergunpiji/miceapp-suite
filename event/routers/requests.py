@@ -115,9 +115,10 @@ async def requests_list(
     """Rol bazlı talep listesi"""
     from database import EVENT_COMPANY_ID
     from sqlalchemy import or_ as _or_cid
-    # Tenant filtresi: her zaman EVENT_COMPANY_ID kullan (user'ın desk company_id'si değil)
+    # Çok-kiracılı: kullanıcının GERÇEK şirketi (yoksa EVENT_COMPANY_ID fallback)
+    _eff_cid = current_user.company_id or EVENT_COMPANY_ID
     query = db.query(ReqModel).filter(
-        _or_cid(ReqModel.company_id == EVENT_COMPANY_ID, ReqModel.company_id.is_(None))
+        _or_cid(ReqModel.company_id == _eff_cid, ReqModel.company_id.is_(None))
     )
 
     # ── ADIM 1: Rol bazlı BASE SCOPE — tüm view filtreleri bunun üstüne eklenir ──
@@ -702,7 +703,7 @@ async def requests_create(
         funding_source=funding_source.strip(),
         parent_fund_request_id=parent_fund_request_id or None,
         team_id=_team_id,
-        company_id=EVENT_COMPANY_ID,
+        company_id=current_user.company_id or EVENT_COMPANY_ID,
         hekim_count=int(hekim_count) if hekim_count.strip().isdigit() else None,
         staff_count=int(staff_count) if staff_count.strip().isdigit() else None,
         created_by=current_user.id,
