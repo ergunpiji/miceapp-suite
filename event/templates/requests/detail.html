@@ -227,6 +227,18 @@
           </a>
         {% endif %}
 
+        {# GSK Export — müşteri GSK veya etkinlik tipi "ut" ise #}
+        {% set _is_gsk = (customer and ('gsk' in customer.name|lower or 'glaxo' in customer.name|lower))
+                         or req.event_type == 'yi' %}
+        {% if _is_gsk and req.budgets %}
+        <a href="/requests/{{ req.id }}/export/gsk"
+           class="btn btn-sm"
+           style="background:#e8f5e9; color:#2e7d32; border:1px solid #a5d6a7;"
+           title="GSK teklif şablonunu doldur">
+          <i class="bi bi-file-earmark-excel me-1"></i> GSK Export
+        </a>
+        {% endif %}
+
         {# Proje Durumu — aktif statülerde göster, kapama ve sonrasında gizle #}
         {% if current_user.role in ('admin', 'mudur', 'yonetici', 'satinalma') and req.status not in ('cancelled', 'completed', 'postponed', 'closing', 'closed', 'confirmed') %}
         <button type="button" class="btn btn-primary btn-sm"

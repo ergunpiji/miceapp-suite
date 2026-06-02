@@ -355,6 +355,9 @@ app.include_router(prepayment_requests_router.router)
 app.include_router(coordinator_router.router)
 app.include_router(my_requests_router.router)
 
+from routers import gsk as gsk_router
+app.include_router(gsk_router.router)
+
 # ---------------------------------------------------------------------------
 # Operasyon Ajanı — sub-app olarak mount et (/operasyon/...)
 # ---------------------------------------------------------------------------

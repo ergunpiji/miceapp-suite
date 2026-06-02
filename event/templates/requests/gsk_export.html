@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_block %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/requests/{{ req.id }}" class="btn btn-outline-secondary btn-sm">
+  <i class="bi bi-arrow-left me-1"></i> Referansa Dön
+</a>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .gsk-row { font-size: 13px; }
+  .gsk-row td { padding: 6px 10px; vertical-align: middle; }
+  .section-badge { font-size: 11px; padding: 3px 8px; border-radius: 10px; }
+  .header-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid" style="max-width: 1000px;">
+
+  {% if not template_exists %}
+  <div class="alert alert-danger d-flex align-items-center gap-2 mb-4">
+    <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+    <div>
+      <div class="fw-bold">GSK Şablon Dosyası Bulunamadı</div>
+      <div class="small">Boş GSK şablonunu <code>event/static/gsk_template.xlsx</code> olarak yükleyin, sonra tekrar deneyin.</div>
+    </div>
+  </div>
+  {% endif %}
+
+  <form method="post" action="/requests/{{ req.id }}/export/gsk">
+
+    {# ── Başlık Bilgileri ── #}
+    <div class="card mb-4">
+      <div class="card-header py-2 px-3 d-flex align-items-center gap-2" style="background:#1a3a5c; color:#fff; border-radius:7px 7px 0 0;">
+        <i class="bi bi-file-earmark-spreadsheet me-1"></i>
+        <span class="fw-bold">GSK Şablon Bilgileri</span>
+        <span class="ms-2 opacity-75 small">{{ req.request_no }} — {{ req.event_name }}</span>
+      </div>
+      <div class="card-body">
+        <div class="header-grid mb-3">
+          <div>
+            <label class="form-label fw-semibold" style="font-size:12px;">Toplantı Adı</label>
+            <input type="text" name="toplanti_adi" class="form-control form-control-sm"
+                   value="{{ req.event_name }}">
+          </div>
+          <div>
+            <label class="form-label fw-semibold" style="font-size:12px;">Tarih</label>
+            <input type="text" name="tarih" class="form-control form-control-sm"
+                   value="{{ req.check_in or '' }}">
+          </div>
+          <div>
+            <label class="form-label fw-semibold" style="font-size:12px;">Opsiyon Tarihi</label>
+            <input type="text" name="opsiyon_tarihi" class="form-control form-control-sm" placeholder="GG.AA.YYYY">
+          </div>
+          <div>
+            <label class="form-label fw-semibold" style="font-size:12px;">Saat</label>
+            <input type="text" name="saat" class="form-control form-control-sm" placeholder="09:00 - 17:00">
+          </div>
+          <div>
+            <label class="form-label fw-semibold" style="font-size:12px;">Mekan</label>
+            <input type="text" name="mekan" class="form-control form-control-sm" placeholder="Otel / Lokasyon adı">
+          </div>
+          <div>
+            <label class="form-label fw-semibold" style="font-size:12px;">Acente</label>
+            <input type="text" name="acente" class="form-control form-control-sm" value="FORTUNA EVENTS">
+          </div>
+          <div>
+            <label class="form-label fw-semibold" style="font-size:12px;">GSK Grup</label>
+            <input type="text" name="gsk_grup" class="form-control form-control-sm"
+                   value="{{ req.client_name or '' }}">
+          </div>
+          <div>
+            <label class="form-label fw-semibold" style="font-size:12px;">Yetkili</label>
+            <input type="text" name="yetkili" class="form-control form-control-sm">
+          </div>
+        </div>
+
+        <div style="max-width:200px;">
+          <label class="form-label fw-semibold" style="font-size:12px;">
+            Komisyon / Servis Bedeli (%)
+            <span class="text-muted fw-normal">— B10 hücresi</span>
+          </label>
+          <div class="input-group input-group-sm">
+            <input type="number" name="commission_rate" class="form-control"
+                   value="5.5" step="0.1" min="0" max="100">
+            <span class="input-group-text">%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# ── Kalem Eşleme ── #}
+    <div class="card mb-4">
+      <div class="card-header py-2 px-3 d-flex align-items-center gap-2" style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
+        <i class="bi bi-arrow-left-right text-primary"></i>
+        <span class="fw-bold">Kalem → GSK Bölüm Eşleme</span>
+        <span class="text-muted ms-1 small">Her kalemi doğru GSK bölümüne atayın</span>
+        <button type="button" class="btn btn-outline-secondary btn-sm ms-auto"
+                onclick="setAllSections('diger_hizmetler')">
+          Tümünü "Diğer Hizmetler" Yap
+        </button>
+      </div>
+      <div class="table-responsive">
+        <table class="table mb-0">
+          <thead style="background:#f8fafc; font-size:11px;">
+            <tr>
+              <th class="ps-3 py-2">Açıklama</th>
+              <th class="py-2">Kaynak</th>
+              <th class="py-2 text-end">Satış Fiyatı</th>
+              <th class="py-2 text-end">Adet</th>
+              <th class="py-2 text-end">Gün/Gece</th>
+              <th class="py-2" style="min-width:200px;">GSK Bölüm</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if not budget_rows %}
+            <tr>
+              <td colspan="6" class="text-center text-muted py-4">
+                Bu referans için onaylı bütçe kalemi bulunamadı.
+              </td>
+            </tr>
+            {% endif %}
+            {% for row in budget_rows %}
+            <tr class="gsk-row">
+              <td class="ps-3 fw-semibold">{{ row.description }}</td>
+              <td class="text-muted" style="font-size:11px;">{{ row.budget_name }}</td>
+              <td class="text-end">₺{{ '{:,.0f}'.format(row.sale_price).replace(',','.') }}</td>
+              <td class="text-end text-muted">{{ row.qty | int }}</td>
+              <td class="text-end text-muted">{{ row.nights | int }}</td>
+              <td>
+                <select name="gsk_section_{{ row.id }}" class="form-select form-select-sm gsk-section-select">
+                  <option value="skip">— Dahil Etme —</option>
+                  {% for key, label in gsk_sections.items() %}
+                  <option value="{{ key }}"
+                    {% if row.suggested_section == key %}selected{% endif %}>
+                    {{ label }}
+                  </option>
+                  {% endfor %}
+                </select>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {# ── GSK Bölüm Özeti ── #}
+    <div class="card mb-4">
+      <div class="card-header py-2 px-3" style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
+        <span class="fw-bold" style="font-size:13px;"><i class="bi bi-list-check me-1 text-success"></i>GSK Bölüm Özeti</span>
+        <span class="text-muted ms-1 small">(gerçek zamanlı güncellenir)</span>
+      </div>
+      <div class="card-body p-3">
+        <div class="row g-2" id="sectionSummary">
+          {% for key, label in gsk_sections.items() %}
+          <div class="col-6 col-md-3">
+            <div class="border rounded p-2 text-center" id="sumcard_{{ key }}">
+              <div class="text-muted" style="font-size:10px; text-transform:uppercase;">{{ label }}</div>
+              <div class="fw-bold" id="sumval_{{ key }}">0 kalem</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex gap-2 mb-5">
+      <button type="submit" class="btn btn-success px-4" {% if not template_exists %}disabled{% endif %}>
+        <i class="bi bi-file-earmark-excel me-1"></i>
+        GSK Excel İndir
+      </button>
+      <a href="/requests/{{ req.id }}" class="btn btn-outline-secondary">İptal</a>
+    </div>
+
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function setAllSections(val) {
+  document.querySelectorAll('.gsk-section-select').forEach(s => s.value = val);
+  updateSummary();
+}
+
+function updateSummary() {
+  const counts = {};
+  document.querySelectorAll('.gsk-section-select').forEach(s => {
+    const v = s.value;
+    if (v && v !== 'skip') counts[v] = (counts[v] || 0) + 1;
+  });
+  document.querySelectorAll('[id^="sumval_"]').forEach(el => {
+    const key = el.id.replace('sumval_', '');
+    const n = counts[key] || 0;
+    el.textContent = n + ' kalem';
+    el.closest('.border').style.borderColor = n > 0 ? '#86efac' : '#e2e8f0';
+    el.closest('.border').style.background  = n > 0 ? '#f0fdf4' : '';
+  });
+}
+
+document.querySelectorAll('.gsk-section-select').forEach(s =>
+  s.addEventListener('change', updateSummary)
+);
+updateSummary();
+</script>
+{% endblock %}
