@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from openpyxl import load_workbook
+from openpyxl.cell import MergedCell
 
 
 # ---------------------------------------------------------------------------
@@ -83,23 +84,29 @@ def _abs(cell: str) -> str:
 _COMM_ABS = _abs(COMMISSION_CELL)   # "$B$10"
 
 
+def _safe_set(ws, cell_ref: str, value) -> None:
+    """MergedCell ikincil hücrelerini atlar; sadece yazılabilir hücrelere değer atar."""
+    cell = ws[cell_ref]
+    if not isinstance(cell, MergedCell):
+        cell.value = value
+
+
 def _write_item(ws, r: int, item: LineItem, vat_abs: str) -> None:
-    ws[f"A{r}"] = item.description
-    ws[f"B{r}"] = item.unit_price
-    ws[f"C{r}"] = item.rate
-    ws[f"D{r}"] = f"=B{r}*C{r}"
-    ws[f"E{r}"] = f"=B{r}*(1+{_COMM_ABS})"
-    ws[f"F{r}"] = item.quantity
-    ws[f"G{r}"] = item.days
-    ws[f"H{r}"] = f"=B{r}*F{r}*G{r}"
-    ws[f"I{r}"] = f"=E{r}*F{r}*G{r}"
-    # Servis bedelinin KDV'si üründen bağımsız, her zaman %20
-    ws[f"J{r}"] = f"=H{r}*(1+{vat_abs})+(I{r}-H{r})*1.2"
+    _safe_set(ws, f"A{r}", item.description)
+    _safe_set(ws, f"B{r}", item.unit_price)
+    _safe_set(ws, f"C{r}", item.rate)
+    _safe_set(ws, f"D{r}", f"=B{r}*C{r}")
+    _safe_set(ws, f"E{r}", f"=B{r}*(1+{_COMM_ABS})")
+    _safe_set(ws, f"F{r}", item.quantity)
+    _safe_set(ws, f"G{r}", item.days)
+    _safe_set(ws, f"H{r}", f"=B{r}*F{r}*G{r}")
+    _safe_set(ws, f"I{r}", f"=E{r}*F{r}*G{r}")
+    _safe_set(ws, f"J{r}", f"=H{r}*(1+{vat_abs})+(I{r}-H{r})*1.2")
 
 
 def _clear_row(ws, r: int) -> None:
     for col in DATA_COLS:
-        ws[f"{col}{r}"] = None
+        _safe_set(ws, f"{col}{r}", None)
 
 
 def compute_totals(
@@ -163,18 +170,20 @@ def fill_gsk_template(
     if header:
         for field, cell in HEADER_CELLS.items():
             if field in header and header[field] is not None:
-                ws[cell] = header[field]
+                _safe_set(ws, cell, header[field])
 
-    ws[COMMISSION_CELL] = commission_rate
+    _safe_set(ws, COMMISSION_CELL, commission_rate)
     try:
-        ws[COMMISSION_CELL].number_format = "0.0%"
+        if not isinstance(ws[COMMISSION_CELL], MergedCell):
+            ws[COMMISSION_CELL].number_format = "0.0%"
     except Exception:
         pass
 
     for cell_ref, rate in vat_rates.items():
-        ws[cell_ref] = rate
+        _safe_set(ws, cell_ref, rate)
         try:
-            ws[cell_ref].number_format = "0%"
+            if not isinstance(ws[cell_ref], MergedCell):
+                ws[cell_ref].number_format = "0%"
         except Exception:
             pass
 
