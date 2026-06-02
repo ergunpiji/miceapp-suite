@@ -1043,11 +1043,11 @@ async def requests_detail(
                        if inv.status in ("approved", "gm_approved", "active")
                        and not inv.is_split_parent]
 
-    invoice_ciro     = (sum(inv.total_amount for inv in active_invoices if inv.invoice_type == "kesilen")
-                      - sum(inv.total_amount for inv in active_invoices if inv.invoice_type == "iade_kesilen"))
-    invoice_komisyon = sum(inv.total_amount for inv in active_invoices if inv.invoice_type == "komisyon")
-    invoice_maliyet  = (sum(inv.total_amount for inv in active_invoices if inv.invoice_type == "gelen")
-                      - sum(inv.total_amount for inv in active_invoices if inv.invoice_type == "iade_gelen"))
+    invoice_ciro     = (sum((inv.total_amount or 0) for inv in active_invoices if inv.invoice_type == "kesilen")
+                      - sum((inv.total_amount or 0) for inv in active_invoices if inv.invoice_type == "iade_kesilen"))
+    invoice_komisyon = sum((inv.total_amount or 0) for inv in active_invoices if inv.invoice_type == "komisyon")
+    invoice_maliyet  = (sum((inv.total_amount or 0) for inv in active_invoices if inv.invoice_type == "gelen")
+                      - sum((inv.total_amount or 0) for inv in active_invoices if inv.invoice_type == "iade_gelen"))
     # Net maliyet: sadece gelen faturalar (komisyon artık kar'a direkt ekleniyor, maliyet düşümü değil)
     invoice_net_maliyet = invoice_maliyet
     # Kar = kesilen fatura geliri + komisyon geliri − gelen fatura maliyeti
