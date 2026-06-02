@@ -1286,6 +1286,8 @@ async def requests_detail(
             # Operasyon Ajanı modülü
             "oa_module":  _get_oa_module(req.id, db),
             "oa_active":  _get_oa_module(req.id, db) is not None,
+            # Şablon kaydetme modalı için takım listesi
+            "teams": db.query(Team).filter(Team.active == True).order_by(Team.name).all(),
         },
     )
 
