@@ -152,7 +152,7 @@
             </td>
             <td style="cursor:pointer;" onclick="window.location.href='/invoices/{{ gi.id }}/detail'">{{ gi.vendor_name or '—' }}</td>
             <td class="text-end fw-semibold text-success" style="cursor:pointer;" onclick="window.location.href='/invoices/{{ gi.id }}/detail'">
-              ₺{{ '{:,.2f}'.format(gi.total_amount or 0).replace(',','.') }}
+              ₺{{ '{:,.2f}'.format(gi.amount or 0).replace(',','.') }}
             </td>
             {% else %}
             <td></td><td></td><td></td><td></td>
@@ -168,7 +168,7 @@
             </td>
             <td style="cursor:pointer;" onclick="window.location.href='/invoices/{{ ci.id }}/detail'">{{ ci.vendor_name or '—' }}</td>
             <td class="text-end fw-semibold text-danger" style="cursor:pointer;" onclick="window.location.href='/invoices/{{ ci.id }}/detail'">
-              ₺{{ '{:,.2f}'.format(ci.total_amount or 0).replace(',','.') }}
+              ₺{{ '{:,.2f}'.format(ci.amount or 0).replace(',','.') }}
             </td>
             {% else %}
             <td></td><td></td><td></td><td></td>
@@ -209,7 +209,7 @@
             </td>
             <td colspan="3" class="text-end text-muted" style="font-size:12px;">
               Karlılık: <strong style="color:#1d4ed8;">{{ '+' if karlılık_oran >= 0 else '' }}%{{ '{:,.1f}'.format(karlılık_oran).replace(',','.') }}</strong>
-              &nbsp;·&nbsp; KDV Hariç Gider: ₺{{ '{:,.2f}'.format((giderler|sum(attribute='amount') or 0)).replace(',','.') }}
+              &nbsp;·&nbsp; <span class="text-muted">Tüm tutarlar KDV hariçtir</span>
             </td>
             <td></td>
           </tr>
@@ -249,7 +249,7 @@
             <td class="text-center">{{ hbf.items|length }}</td>
             <td class="text-end">₺{{ '{:,.2f}'.format(hbf.grand_excl_vat).replace(',','.') }}</td>
             <td class="text-end text-muted">₺{{ '{:,.2f}'.format(hbf.grand_vat).replace(',','.') }}</td>
-            <td class="text-end fw-semibold" style="color:#d97706;">₺{{ '{:,.2f}'.format(hbf.grand_total).replace(',','.') }}</td>
+            <td class="text-end fw-semibold" style="color:#d97706;">₺{{ '{:,.2f}'.format(hbf.grand_excl_vat).replace(',','.') }}</td>
             <td><span class="badge bg-{{ hbf.status_color }}" style="font-size:11px;">{{ hbf.status_label }}</span></td>
           </tr>
           {% endfor %}
@@ -257,7 +257,7 @@
             <td colspan="4" class="text-end" style="font-size:12px; color:#64748b;">TOPLAM</td>
             <td class="text-end">₺{{ '{:,.2f}'.format(hbf_list|sum(attribute='grand_excl_vat') or 0).replace(',','.') }}</td>
             <td class="text-end">₺{{ '{:,.2f}'.format(hbf_list|sum(attribute='grand_vat') or 0).replace(',','.') }}</td>
-            <td class="text-end" style="color:#d97706;">₺{{ '{:,.2f}'.format(hbf_total).replace(',','.') }}</td>
+            <td class="text-end" style="color:#d97706;">₺{{ '{:,.2f}'.format(hbf_list|sum(attribute='grand_excl_vat') or 0).replace(',','.') }}</td>
             <td></td>
           </tr>
         </tbody>
