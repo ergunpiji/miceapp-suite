@@ -2144,7 +2144,7 @@ document.addEventListener('DOMContentLoaded', function() {
           <td class="py-2 fw-semibold">{{ inv.vendor_name or '—' }}</td>
           <td class="py-2 text-muted small">{{ inv.creator.full_name if inv.creator else '—' }}</td>
           <td class="py-2 text-muted small">{{ inv.invoice_date or '—' }}</td>
-          <td class="py-2 text-end fw-semibold">₺{{ '{:,.0f}'.format(inv.total_amount or 0).replace(',','.') }}</td>
+          <td class="py-2 text-end fw-semibold">₺{{ '{:,.0f}'.format(inv.amount or 0).replace(',','.') }}</td>
           <td class="py-2">
             {% if inv.status == 'pending' %}<span class="badge bg-warning text-dark">Onay Bekliyor</span>
             {% elif inv.status == 'approved' %}<span class="badge bg-success">Onaylandı</span>
