@@ -36,11 +36,9 @@ GSK_SECTION_LABELS = {
 
 
 def _get_budget_rows(req: ReqModel) -> list[dict]:
-    """Onaylı bütçelerdeki tüm kalemleri düz liste olarak döner."""
+    """Referansa bağlı tüm bütçelerin kalemlerini döner (taslak dahil)."""
     rows = []
     for b in req.budgets:
-        if b.budget_status not in ("approved", "confirmed", "statement"):
-            continue
         for r in (b.rows or []):
             if not r.get("description"):
                 continue
