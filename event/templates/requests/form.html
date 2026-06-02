@@ -1566,25 +1566,30 @@ async function loadRfqTemplate(tmplId) {
   }
 }
 
-function _applyTemplateToSections(items) {
-  // items = {accommodation:[...], meeting:[...], fb:[...], ...}
-  // Her section için mevcut kalemleri sil, şablondakini ekle
-  if (typeof ALL_ITEMS === 'undefined') {
-    // Basit fallback: form'a hidden input olarak ekle ve kullanıcıya bilgi ver
-    let el = document.getElementById('_tmpl_items_hidden');
-    if (!el) {
-      el = document.createElement('input');
-      el.type = 'hidden'; el.name = 'items_json'; el.id = '_tmpl_items_hidden';
-      document.getElementById('requestForm').appendChild(el);
-    }
-    el.value = JSON.stringify(items);
-    document.querySelectorAll('.section-row-add-btn, [data-add-row]').forEach(b => b.click && b.click());
+function _applyTemplateToSections(tmplItems) {
+  // tmplItems = {accommodation:[...], meeting:[...], fb:[...], ...}
+  // Form'un global 'items' değişkenine yaz, her section'ı yeniden render et
+  if (typeof items === 'undefined' || typeof renderItems === 'undefined') {
+    console.warn('Template: items/renderItems bulunamadı');
     return;
   }
-  // ALL_ITEMS mevcutsa direkt set et
-  Object.keys(items).forEach(sec => { ALL_ITEMS[sec] = items[sec] || []; });
-  if (typeof renderAllSections === 'function') renderAllSections();
-  else if (typeof reRenderSections === 'function') reRenderSections();
+  let count = 0;
+  Object.keys(tmplItems).forEach(function(sec) {
+    const secItems = tmplItems[sec];
+    if (!Array.isArray(secItems) || !secItems.length) return;
+    items[sec] = secItems.map(function(r) {
+      // Tarihleri sıfırla — şablon yeni kullanım için
+      return Object.assign({}, r, {date_from: '', date_to: '',
+        daily_attendees: (r.daily_attendees||[]).map(function(da){
+          return Object.assign({}, da, {date: ''});
+        })
+      });
+    });
+    renderItems(sec);
+    count += secItems.length;
+  });
+  if (typeof saveItemsJson === 'function') saveItemsJson();
+  if (typeof showToast === 'function') showToast('✓ Şablon yüklendi — ' + count + ' kalem eklendi.');
 }
 
 // ─── Hekim / Staff sayısı (ut/yi tipi) ────────────────────────────────────
