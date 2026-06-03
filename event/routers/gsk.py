@@ -78,96 +78,15 @@ def _get_budget_rows(req: ReqModel) -> list[dict]:
 
 
 def _build_items_auto(req: ReqModel, price_overrides: dict | None = None) -> tuple[dict, list[str]]:
-    """Budget satırlarını otomatik GSK bölümlerine dağıtır.
-    price_overrides: {row_id: float} — formdan gelen fiyat düzeltmeleri
-    Returns: (items_by_section, warnings)
-    """
-    from gsk_export import LineItem, GSK_SECTIONS
+    from gsk_export import rows_to_items
+    return rows_to_items(
+        rows=_get_budget_rows(req),
+        hekim=float(req.hekim_count or 0),
+        staff=float(req.staff_count or 0),
+        price_overrides=price_overrides,
+    )
 
-    hekim_count = float(req.hekim_count or 0)
-    staff_count = float(req.staff_count or 0)
-    price_overrides = price_overrides or {}
 
-    raw: dict[str, list] = {k: [] for k in GSK_SECTION_LABELS}
-    warnings: list[str] = []
-    budget_rows = _get_budget_rows(req)
-
-    for r in budget_rows:
-        sec       = (r.get("section") or "").lower()
-        desc_low  = (r.get("description") or "").lower()
-        desc      = r.get("description", "")
-        row_id    = r.get("id", "")
-        price     = price_overrides.get(row_id, float(r.get("sale_price") or 0))
-        qty       = float(r.get("qty") or 1)
-        nights    = float(r.get("nights") or 1)
-
-        is_accom    = sec == "accommodation" or any(w in desc_low for w in ("konaklama", "otel", "oda"))
-        is_transfer = sec == "transfer"      or any(w in desc_low for w in ("transfer", "ulaşım", "ulasim", "araç", "arac"))
-        is_drink    = any(w in desc_low for w in ("içecek", "icecek", "drink", "coffee", "su ikramı", "su ikami"))
-        is_fb       = sec in ("fb", "f&b")   or any(w in desc_low for w in (
-                          "yemek", "yiyecek", "kahvaltı", "kahvalti", "öğle", "ogle",
-                          "akşam", "aksam", "gala", "meze", "kokteyl", "coffee", "içecek",
-                          "icecek", "drink", "brunch", "tabldot",
-                      ))
-
-        if is_accom:
-            raw["konusmaci_konaklama"].append(
-                LineItem(description=desc, unit_price=price, quantity=qty, days=nights)
-            )
-        elif is_transfer:
-            raw["konusmaci_ulasim"].append(
-                LineItem(description=desc, unit_price=price, quantity=qty, days=nights)
-            )
-        elif is_fb:
-            explicit_hekim = "hekim" in desc_low
-            explicit_staff = "staff" in desc_low
-
-            if explicit_hekim:
-                gsk_sec = "hekim_icecek" if is_drink else "hekim_yiyecek"
-                raw[gsk_sec].append(LineItem(description=desc, unit_price=price, quantity=qty, days=nights))
-            elif explicit_staff:
-                gsk_sec = "staff_icecek" if is_drink else "staff_yiyecek"
-                raw[gsk_sec].append(LineItem(description=desc, unit_price=price, quantity=qty, days=nights))
-            else:
-                # Genel F&B → hekim_count ve staff_count'a böl
-                if hekim_count > 0:
-                    gsk_sec = "hekim_icecek" if is_drink else "hekim_yiyecek"
-                    raw[gsk_sec].append(LineItem(description=desc, unit_price=price, quantity=hekim_count, days=nights))
-                if staff_count > 0:
-                    gsk_sec = "staff_icecek" if is_drink else "staff_yiyecek"
-                    raw[gsk_sec].append(LineItem(description=desc, unit_price=price, quantity=staff_count, days=nights))
-                if hekim_count == 0 and staff_count == 0:
-                    gsk_sec = "hekim_icecek" if is_drink else "hekim_yiyecek"
-                    raw[gsk_sec].append(LineItem(description=desc, unit_price=price, quantity=qty, days=nights))
-        else:
-            raw["diger_hizmetler"].append(
-                LineItem(description=desc, unit_price=price, quantity=qty, days=nights)
-            )
-
-    # Taşma kontrolü: kapasiteyi aşan kalemler diger_hizmetler'e gider
-    overflow: list = []
-    items: dict[str, list] = {}
-    for key, sec_def in GSK_SECTIONS.items():
-        if key == "diger_hizmetler":
-            continue
-        cap = len(sec_def["rows"])
-        sec_items = raw[key]
-        if len(sec_items) > cap:
-            warnings.append(
-                f"{sec_def['label']}: {len(sec_items)} kalem, max {cap} → "
-                f"{len(sec_items) - cap} kalem 'Diğer Hizmetler'e taşındı"
-            )
-            overflow.extend(sec_items[cap:])
-            items[key] = sec_items[:cap]
-        else:
-            items[key] = sec_items
-
-    diger_items = raw["diger_hizmetler"] + overflow
-    diger_cap = len(GSK_SECTIONS["diger_hizmetler"]["rows"])
-    if len(diger_items) > diger_cap:
-        warnings.append(f"Diğer Hizmetler kapasitesi ({diger_cap}) aşıldı, ilk {diger_cap} kalem alındı")
-        diger_items = diger_items[:diger_cap]
-    items["diger_hizmetler"] = diger_items
 
     return items, warnings
 
