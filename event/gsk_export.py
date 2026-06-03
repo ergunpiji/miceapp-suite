@@ -227,6 +227,7 @@ def gsk_doldur(
     sablon_yolu: str,
     commission_rate: float = 0.055,
     price_overrides: dict[str, float] | None = None,
+    sheet_name: str | None = "Örnek",
 ) -> bytes:
     """
     GSK şablonunu doldurur ve xlsx bytes döner.
@@ -260,8 +261,7 @@ def gsk_doldur(
         "yetkili":        yetkili,
     }
 
-    # Belleğe yaz (disk I/O yok)
-    wb = _fill_workbook(sablon_yolu, items, header, commission_rate)
+    wb = _fill_workbook(sablon_yolu, items, header, commission_rate, sheet_name=sheet_name)
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()

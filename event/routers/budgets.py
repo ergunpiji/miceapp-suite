@@ -974,9 +974,11 @@ async def budgets_gsk_gonder(
     customer = db.query(Customer).filter(Customer.id == req.customer_id).first() if req and req.customer_id else None
 
     import os as _os
-    sablon = _os.path.join(_os.path.dirname(__file__), "sablonlar", "GSK_BOS.xlsx")
+    sablon = _os.path.abspath(
+        _os.path.join(_os.path.dirname(__file__), "..", "static", "GSK Boş Template Bütçe.xlsx")
+    )
     if not _os.path.isfile(sablon):
-        raise HTTPException(400, "GSK şablon dosyası bulunamadı (routers/sablonlar/GSK_BOS.xlsx).")
+        raise HTTPException(400, "GSK şablon dosyası bulunamadı.")
 
     from gsk_export import gsk_doldur
 
@@ -1003,11 +1005,22 @@ async def budgets_gsk_gonder(
     xlsx_bytes = gsk_doldur(
         data=data, hekim=hekim, staff=staff,
         yetkili=yetkili, sablon_yolu=sablon,
+        sheet_name="Örnek",
     )
 
     import io as _io
+    from datetime import date as _date
     req_no = req.request_no if req else budget_id[:8]
-    filename = f"GSK_{req_no}_{budget.venue_name or 'teklif'}.xlsx".replace(" ", "_")
+    filename = f"GSK_{req_no}_{_date.today().isoformat()}.xlsx".replace(" ", "_")
+
+    # R2'ye yükle (audit kaydı — hata gelirse sessizce geç)
+    try:
+        from storage import save_upload
+        r2_key = save_upload(xlsx_bytes, "gsk", filename)
+        print(f"[GSK] R2'ye yüklendi: {r2_key}", flush=True)
+    except Exception as _e:
+        print(f"[GSK] R2 upload atlandı: {_e}", flush=True)
+
     return StreamingResponse(
         _io.BytesIO(xlsx_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

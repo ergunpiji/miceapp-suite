@@ -980,16 +980,17 @@ async def budgets_gsk_gonder(
     from models import CustomCategory
     custom_cats = [{"id": cc.id, "name": cc.name} for cc in db.query(CustomCategory).all()]
 
-    import os as _os
-    sablon = _os.path.join(_os.path.dirname(__file__), "..", "..", "event", "routers", "sablonlar", "GSK_BOS.xlsx")
-    sablon = _os.path.abspath(sablon)
-    if not _os.path.isfile(sablon):
-        raise HTTPException(400, "GSK şablon dosyası bulunamadı.")
+    import os as _os, sys as _sys, io as _io
+    from datetime import date as _date
 
-    import sys as _sys
     event_path = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), "..", "..", "event"))
     if event_path not in _sys.path:
         _sys.path.insert(0, event_path)
+
+    sablon = _os.path.join(event_path, "static", "GSK Boş Template Bütçe.xlsx")
+    if not _os.path.isfile(sablon):
+        raise HTTPException(400, "GSK şablon dosyası bulunamadı.")
+
     from gsk_export import gsk_doldur
 
     data = {
@@ -1015,11 +1016,21 @@ async def budgets_gsk_gonder(
     xlsx_bytes = gsk_doldur(
         data=data, hekim=hekim, staff=staff,
         yetkili=yetkili, sablon_yolu=sablon,
+        sheet_name="Örnek",
     )
 
-    import io as _io
     req_no = req.request_no if req else budget_id[:8]
-    filename = f"GSK_{req_no}_{budget.venue_name or 'teklif'}.xlsx".replace(" ", "_")
+    filename = f"GSK_{req_no}_{_date.today().isoformat()}.xlsx".replace(" ", "_")
+
+    # R2'ye yükle (audit kaydı — hata gelirse sessizce geç)
+    try:
+        from storage_helper import upload_file
+        r2_key = upload_file(xlsx_bytes, f"gsk/{filename}",
+                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        print(f"[GSK] R2'ye yüklendi: {r2_key}", flush=True)
+    except Exception as _e:
+        print(f"[GSK] R2 upload atlandı: {_e}", flush=True)
+
     from fastapi.responses import StreamingResponse as _SR
     return _SR(
         _io.BytesIO(xlsx_bytes),
