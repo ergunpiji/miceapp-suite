@@ -149,12 +149,14 @@ def get_current_user(
     """
     token = _get_token_from_cookie(request)
     if not token:
+        print(f"[AUTH] get_current_user: cookie YOK — path={request.url.path} cookies={list(request.cookies.keys())}", flush=True)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Oturum bulunamadı. Lütfen giriş yapın.",
         )
     payload = decode_token(token)
     if not payload:
+        print(f"[AUTH] get_current_user: token DECODE HATA — path={request.url.path} token[:20]={token[:20]}", flush=True)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Geçersiz veya süresi dolmuş oturum. Lütfen tekrar giriş yapın.",
@@ -167,6 +169,7 @@ def get_current_user(
         )
     user = get_user_by_id(db, user_id)
     if not user:
+        print(f"[AUTH] get_current_user: kullanici BULUNAMADI — user_id={user_id}", flush=True)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Kullanıcı bulunamadı veya hesap devre dışı.",
