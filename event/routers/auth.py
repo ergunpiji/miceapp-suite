@@ -46,6 +46,11 @@ async def login_post(
     db: Session = Depends(get_db),
 ):
     """Kullanıcı girişini doğrula ve JWT cookie set et"""
+    from sqlalchemy.orm import Session as _Sess
+    from models import User as _User
+    _raw = db.query(_User).filter(_User.email == email.lower().strip()).first()
+    print(f"[LOGIN] email={email!r} db_found={_raw is not None} "
+          f"active={getattr(_raw,'active',None)} role={getattr(_raw,'role',None)}", flush=True)
     user = auth_module.authenticate_user(db, email, password)
     if not user:
         return templates.TemplateResponse(

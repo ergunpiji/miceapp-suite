@@ -1513,29 +1513,21 @@ def migrate_db():
         db.close()
 
     # is_gm unification (2026-06): org_title.grade=1 olan kullanıcıları genel_mudur yap
-    # is_gm artık yalnızca role='genel_mudur' kontrolü yapıyor; grade bazlı GM'lerin
-    # rolü güncellenmezse sisteme giriş yapamaz hale gelirler.
-    db = SessionLocal()
-    try:
-        gm_users = (
-            db.query(User)
-            .join(User.org_title)
-            .filter(
-                OrgTitle.grade == 1,
-                User.role.notin_(["admin", "super_admin", "genel_mudur"]),
-            )
-            .all()
-        )
-        for u in gm_users:
-            u.role = "genel_mudur"
-            print(f"  [migrate] {u.email} → genel_mudur (org_title.grade=1)", flush=True)
-        if gm_users:
-            db.commit()
-    except Exception as e:
-        db.rollback()
-        print(f"  [migrate] GM rol yükseltme atlandı: {e}", flush=True)
-    finally:
-        db.close()
+    # Raw SQL — ORM join kullanmıyoruz, PostgreSQL/SQLite uyumlu.
+    with engine.connect() as _conn:
+        try:
+            _result = _conn.execute(text(
+                "UPDATE users SET role='genel_mudur' "
+                "WHERE role NOT IN ('admin','super_admin','genel_mudur') "
+                "AND org_title_id IS NOT NULL "
+                "AND org_title_id IN (SELECT id FROM org_titles WHERE grade = 1)"
+            ))
+            if _result.rowcount > 0:
+                print(f"  [migrate] {_result.rowcount} kullanıcı genel_mudur rolüne yükseltildi.", flush=True)
+            _conn.commit()
+        except Exception as _e:
+            _conn.rollback()
+            print(f"  [migrate] GM rol yükseltme atlandı: {_e}", flush=True)
 
 
 def _seed_event_company() -> None:
