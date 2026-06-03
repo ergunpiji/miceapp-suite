@@ -19,8 +19,8 @@ from templates_config import templates
 
 router = APIRouter(tags=["gsk"])
 
-_TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
-GSK_TEMPLATE_PATH = os.path.join(_TEMPLATE_DIR, "gsk_template.xlsx")
+SABLON_YOLU = os.path.join(os.path.dirname(__file__), "sablonlar", "GSK_BOS.xlsx")
+GSK_TEMPLATE_PATH = SABLON_YOLU
 
 GSK_SECTION_LABELS = {
     "hekim_yiyecek":       "Hekim Yiyecek",
