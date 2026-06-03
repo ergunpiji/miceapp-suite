@@ -656,6 +656,18 @@ function renderTable() {
           onchange="rows[${i}].currency=this.value;updateRateBlockVisibility();updateTotals();saveRows()">
           ${Object.keys(CURRENCIES).map(c => `<option value="${c}" ${c===rowCur?'selected':''}>${c}</option>`).join('')}
         </select>`;
+        const gskHedef = row.gsk_hedef || '';
+        const gskSelect = sec === 'fb' ? `
+          <select class="form-select form-select-sm mt-1"
+                  style="font-size:10px;padding:1px 4px;height:22px;color:#7c3aed;border-color:#ddd8fe;background:#f5f3ff;"
+                  title="GSK: bu kalem kimin bölümüne gitsin?"
+                  onchange="rows[${i}].gsk_hedef=this.value;saveRows()">
+            <option value=""   ${gskHedef===''    ?'selected':''}>GSK: Otomatik</option>
+            <option value="hekim"  ${gskHedef==='hekim' ?'selected':''}>GSK: Sadece Hekim</option>
+            <option value="staff"  ${gskHedef==='staff' ?'selected':''}>GSK: Sadece Staff</option>
+            <option value="ikisi"  ${gskHedef==='ikisi' ?'selected':''}>GSK: Hekim + Staff</option>
+            <option value="diger"  ${gskHedef==='diger' ?'selected':''}>GSK: Diğer Hizmetler</option>
+          </select>` : '';
         html += `<tr class="${isRevFlagged ? 'revision-flagged-row' : ''}">
           <td class="ps-3">
             <div class="d-flex align-items-center gap-1 flex-wrap">
@@ -669,6 +681,7 @@ function renderTable() {
               </button>
               ${selBadge}
             </div>
+            ${gskSelect}
           </td>
           <td>
             <input type="text" class="form-control form-control-sm"

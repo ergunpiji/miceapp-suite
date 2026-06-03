@@ -155,6 +155,7 @@ def rows_to_items(
         qty      = float(r.get("qty") or 1)
         nights   = float(r.get("nights") or 1)
 
+        gsk_hedef   = (r.get("gsk_hedef") or "").lower()
         is_accom    = sec == "accommodation" or any(w in desc_low for w in ("konaklama", "otel", "oda"))
         is_transfer = sec == "transfer"      or any(w in desc_low for w in ("transfer", "ulaşım", "ulasim", "araç", "arac"))
         is_salon    = any(w in desc_low for w in _SALON_WORDS)
@@ -166,24 +167,42 @@ def rows_to_items(
         elif is_transfer:
             raw["konusmaci_ulasim"].append(LineItem(desc, price, qty, nights))
         elif is_fb:
-            explicit_hekim = "hekim" in desc_low
-            explicit_staff = "staff" in desc_low
-            if explicit_hekim:
+            # Kullanıcı açıkça hedef seçmişse onu kullan
+            if gsk_hedef == "diger":
+                raw["diger_hizmetler"].append(LineItem(desc, price, qty, nights))
+            elif gsk_hedef == "hekim":
                 gsk_sec = "hekim_icecek" if is_drink else "hekim_yiyecek"
-                raw[gsk_sec].append(LineItem(desc, price, qty, nights))
-            elif explicit_staff:
+                raw[gsk_sec].append(LineItem(desc, price, hekim or qty, nights))
+            elif gsk_hedef == "staff":
                 gsk_sec = "staff_icecek" if is_drink else "staff_yiyecek"
-                raw[gsk_sec].append(LineItem(desc, price, qty, nights))
-            else:
+                raw[gsk_sec].append(LineItem(desc, price, staff or qty, nights))
+            elif gsk_hedef == "ikisi":
+                h_sec = "hekim_icecek" if is_drink else "hekim_yiyecek"
+                s_sec = "staff_icecek" if is_drink else "staff_yiyecek"
                 if hekim > 0:
-                    gsk_sec = "hekim_icecek" if is_drink else "hekim_yiyecek"
-                    raw[gsk_sec].append(LineItem(desc, price, hekim, nights))
+                    raw[h_sec].append(LineItem(desc, price, hekim, nights))
                 if staff > 0:
-                    gsk_sec = "staff_icecek" if is_drink else "staff_yiyecek"
-                    raw[gsk_sec].append(LineItem(desc, price, staff, nights))
-                if hekim == 0 and staff == 0:
+                    raw[s_sec].append(LineItem(desc, price, staff, nights))
+            else:
+                # Otomatik: açıklamadaki hekim/staff kelimesine bak, yoksa ikisine de
+                explicit_hekim = "hekim" in desc_low
+                explicit_staff = "staff" in desc_low
+                if explicit_hekim:
                     gsk_sec = "hekim_icecek" if is_drink else "hekim_yiyecek"
                     raw[gsk_sec].append(LineItem(desc, price, qty, nights))
+                elif explicit_staff:
+                    gsk_sec = "staff_icecek" if is_drink else "staff_yiyecek"
+                    raw[gsk_sec].append(LineItem(desc, price, qty, nights))
+                else:
+                    if hekim > 0:
+                        gsk_sec = "hekim_icecek" if is_drink else "hekim_yiyecek"
+                        raw[gsk_sec].append(LineItem(desc, price, hekim, nights))
+                    if staff > 0:
+                        gsk_sec = "staff_icecek" if is_drink else "staff_yiyecek"
+                        raw[gsk_sec].append(LineItem(desc, price, staff, nights))
+                    if hekim == 0 and staff == 0:
+                        gsk_sec = "hekim_icecek" if is_drink else "hekim_yiyecek"
+                        raw[gsk_sec].append(LineItem(desc, price, qty, nights))
         else:
             raw["diger_hizmetler"].append(LineItem(desc, price, qty, nights))
 
