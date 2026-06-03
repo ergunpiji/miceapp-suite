@@ -1512,6 +1512,31 @@ def migrate_db():
     finally:
         db.close()
 
+    # is_gm unification (2026-06): org_title.grade=1 olan kullanıcıları genel_mudur yap
+    # is_gm artık yalnızca role='genel_mudur' kontrolü yapıyor; grade bazlı GM'lerin
+    # rolü güncellenmezse sisteme giriş yapamaz hale gelirler.
+    db = SessionLocal()
+    try:
+        gm_users = (
+            db.query(User)
+            .join(User.org_title)
+            .filter(
+                OrgTitle.grade == 1,
+                User.role.notin_(["admin", "super_admin", "genel_mudur"]),
+            )
+            .all()
+        )
+        for u in gm_users:
+            u.role = "genel_mudur"
+            print(f"  [migrate] {u.email} → genel_mudur (org_title.grade=1)", flush=True)
+        if gm_users:
+            db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"  [migrate] GM rol yükseltme atlandı: {e}", flush=True)
+    finally:
+        db.close()
+
 
 def _seed_event_company() -> None:
     """Event app için varsayılan şirket kaydı oluşturur ve mevcut verileri atar.
