@@ -952,6 +952,66 @@ async def budgets_export(
     )
 
 
+# ── GSK: export'u üret + hekim/staff/yetkili'yi göm + OneDrive/GSK/Gelen'e yaz ──
+@router.post("/{budget_id}/gsk-gonder", name="budgets_gsk_gonder")
+async def budgets_gsk_gonder(
+    budget_id: str,
+    hekim: int = Form(...),
+    staff: int = Form(...),
+    yetkili: str = Form(""),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """GSK formatı için: Hesap Dökümü export'unu üretir, hekim/staff/yetkili'yi
+    gömer ve OneDrive /GSK/Gelen klasörüne yazar. Power Automate gerisini halleder."""
+    if current_user.role not in ("admin", "mudur", "yonetici"):
+        raise HTTPException(403)
+
+    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    if not budget:
+        return RedirectResponse(url="/budgets", status_code=status.HTTP_302_FOUND)
+
+    req = db.query(ReqModel).filter(ReqModel.id == budget.request_id).first()
+    customer = (db.query(Customer).filter(Customer.id == req.customer_id).first()
+                if req and req.customer_id else None)
+    manager_user_id = req.created_by if req else budget.created_by
+    creator = db.query(User).filter(User.id == manager_user_id).first()
+
+    from models import CustomCategory
+    custom_cats = [{"id": cc.id, "name": cc.name} for cc in db.query(CustomCategory).all()]
+
+    from excel_export import build_standard
+    output = build_standard(
+        budget=budget, request=req, customer=customer, creator=creator,
+        vat_mode="exclusive", custom_sections=custom_cats,
+    )
+
+    import io as _io, os as _os, datetime as _dt, openpyxl as _ox
+    output.seek(0)
+    wb = _ox.load_workbook(output)
+    ws = wb["Hesap Dökümü"] if "Hesap Dökümü" in wb.sheetnames else wb.active
+    ws["I1"] = "HEKIM";        ws["J1"] = int(hekim)
+    ws["I2"] = "STAFF";        ws["J2"] = int(staff)
+    ws["I3"] = "GSK_YETKILI";  ws["J3"] = (yetkili or "").strip()
+    buf = _io.BytesIO(); wb.save(buf)
+
+    onedrive_gelen = _os.path.expanduser(
+        "~/Library/CloudStorage/OneDrive-S.T.O.K.MICE/GSK/Gelen"
+    )
+    _os.makedirs(onedrive_gelen, exist_ok=True)
+    ts = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe = (budget.venue_name or "teklif").replace("/", "-").replace(" ", "_")[:40]
+    fpath = _os.path.join(onedrive_gelen, f"export_{safe}_{ts}.xlsx")
+    with open(fpath, "wb") as f:
+        f.write(buf.getvalue())
+
+    print(f"[GSK] OneDrive'a yazildi: {fpath}", flush=True)
+    return RedirectResponse(
+        url=f"/budgets/{budget_id}?gsk=ok",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
 @router.post("/{budget_id}/delete", name="budgets_delete")
 async def budgets_delete(
     budget_id: str,
