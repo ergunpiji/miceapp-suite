@@ -980,35 +980,51 @@ async def budgets_gsk_gonder(
     from models import CustomCategory
     custom_cats = [{"id": cc.id, "name": cc.name} for cc in db.query(CustomCategory).all()]
 
-    from excel_export import build_standard
-    output = build_standard(
-        budget=budget, request=req, customer=customer, creator=creator,
-        vat_mode="exclusive", custom_sections=custom_cats,
+    import os as _os
+    sablon = _os.path.join(_os.path.dirname(__file__), "..", "..", "event", "routers", "sablonlar", "GSK_BOS.xlsx")
+    sablon = _os.path.abspath(sablon)
+    if not _os.path.isfile(sablon):
+        raise HTTPException(400, "GSK şablon dosyası bulunamadı.")
+
+    import sys as _sys
+    event_path = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), "..", "..", "event"))
+    if event_path not in _sys.path:
+        _sys.path.insert(0, event_path)
+    from gsk_export import gsk_doldur
+
+    data = {
+        "toplanti_adi": req.event_name if req else (budget.venue_name or ""),
+        "tarih":        req.check_in   if req else "",
+        "mekan":        budget.venue_name or "",
+        "gsk_grup":     customer.name  if customer else (req.client_name if req else ""),
+        "acente":       "STOK MICE",
+        "rows": [
+            {
+                "id":          r.get("id", ""),
+                "section":     r.get("section", ""),
+                "description": r.get("service_name") or r.get("description", ""),
+                "sale_price":  float(r.get("sale_price") or r.get("cost_price") or 0),
+                "qty":         float(r.get("qty", 1) or 1),
+                "nights":      float(r.get("nights", 1) or 1),
+            }
+            for r in (budget.rows or [])
+            if r.get("service_name") or r.get("description")
+        ],
+    }
+
+    xlsx_bytes = gsk_doldur(
+        data=data, hekim=hekim, staff=staff,
+        yetkili=yetkili, sablon_yolu=sablon,
     )
 
-    import io as _io, os as _os, datetime as _dt, openpyxl as _ox
-    output.seek(0)
-    wb = _ox.load_workbook(output)
-    ws = wb["Hesap Dökümü"] if "Hesap Dökümü" in wb.sheetnames else wb.active
-    ws["I1"] = "HEKIM";        ws["J1"] = int(hekim)
-    ws["I2"] = "STAFF";        ws["J2"] = int(staff)
-    ws["I3"] = "GSK_YETKILI";  ws["J3"] = (yetkili or "").strip()
-    buf = _io.BytesIO(); wb.save(buf)
-
-    onedrive_gelen = _os.path.expanduser(
-        "~/Library/CloudStorage/OneDrive-S.T.O.K.MICE/GSK/Gelen"
-    )
-    _os.makedirs(onedrive_gelen, exist_ok=True)
-    ts = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe = (budget.venue_name or "teklif").replace("/", "-").replace(" ", "_")[:40]
-    fpath = _os.path.join(onedrive_gelen, f"export_{safe}_{ts}.xlsx")
-    with open(fpath, "wb") as f:
-        f.write(buf.getvalue())
-
-    print(f"[GSK] OneDrive'a yazildi: {fpath}", flush=True)
-    return RedirectResponse(
-        url=f"/budgets/{budget_id}?gsk=ok",
-        status_code=status.HTTP_303_SEE_OTHER,
+    import io as _io
+    req_no = req.request_no if req else budget_id[:8]
+    filename = f"GSK_{req_no}_{budget.venue_name or 'teklif'}.xlsx".replace(" ", "_")
+    from fastapi.responses import StreamingResponse as _SR
+    return _SR(
+        _io.BytesIO(xlsx_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

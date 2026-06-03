@@ -953,7 +953,7 @@ async def budgets_export(
     )
 
 
-# ── GSK: export'u üret + hekim/staff/yetkili'yi göm + OneDrive/GSK/Gelen'e yaz ──
+# ── GSK: budget satırlarından GSK template'ini doldur → direkt indir ──
 @router.post("/{budget_id}/gsk-gonder", name="budgets_gsk_gonder")
 async def budgets_gsk_gonder(
     budget_id: str,
@@ -963,53 +963,55 @@ async def budgets_gsk_gonder(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """GSK formatı için: Hesap Dökümü export'unu üretir, hekim/staff/yetkili'yi
-    gömer ve OneDrive /GSK/Gelen klasörüne yazar. Power Automate gerisini halleder."""
     if current_user.role not in ("admin", "mudur", "yonetici"):
         raise HTTPException(403)
 
     budget = db.query(Budget).filter(Budget.id == budget_id).first()
     if not budget:
-        return RedirectResponse(url="/budgets", status_code=status.HTTP_302_FOUND)
+        raise HTTPException(404)
 
-    req = db.query(ReqModel).filter(ReqModel.id == budget.request_id).first()
-    customer = (db.query(Customer).filter(Customer.id == req.customer_id).first()
-                if req and req.customer_id else None)
-    manager_user_id = req.created_by if req else budget.created_by
-    creator = db.query(User).filter(User.id == manager_user_id).first()
+    req      = db.query(ReqModel).filter(ReqModel.id == budget.request_id).first() if budget.request_id else None
+    customer = db.query(Customer).filter(Customer.id == req.customer_id).first() if req and req.customer_id else None
 
-    from models import CustomCategory
-    custom_cats = [{"id": cc.id, "name": cc.name} for cc in db.query(CustomCategory).all()]
+    import os as _os
+    sablon = _os.path.join(_os.path.dirname(__file__), "sablonlar", "GSK_BOS.xlsx")
+    if not _os.path.isfile(sablon):
+        raise HTTPException(400, "GSK şablon dosyası bulunamadı (routers/sablonlar/GSK_BOS.xlsx).")
 
-    from excel_export import build_standard
-    output = build_standard(
-        budget=budget, request=req, customer=customer, creator=creator,
-        vat_mode="exclusive", custom_sections=custom_cats,
+    from gsk_export import gsk_doldur
+
+    data = {
+        "toplanti_adi": req.event_name if req else (budget.venue_name or ""),
+        "tarih":        req.check_in   if req else "",
+        "mekan":        budget.venue_name or "",
+        "gsk_grup":     customer.name  if customer else (req.client_name if req else ""),
+        "acente":       "STOK MICE",
+        "rows": [
+            {
+                "id":          r.get("id", ""),
+                "section":     r.get("section", ""),
+                "description": r.get("service_name") or r.get("description", ""),
+                "sale_price":  float(r.get("sale_price") or r.get("cost_price") or 0),
+                "qty":         float(r.get("qty", 1) or 1),
+                "nights":      float(r.get("nights", 1) or 1),
+            }
+            for r in (budget.rows or [])
+            if r.get("service_name") or r.get("description")
+        ],
+    }
+
+    xlsx_bytes = gsk_doldur(
+        data=data, hekim=hekim, staff=staff,
+        yetkili=yetkili, sablon_yolu=sablon,
     )
 
-    import io as _io, os as _os, datetime as _dt, openpyxl as _ox
-    output.seek(0)
-    wb = _ox.load_workbook(output)
-    ws = wb["Hesap Dökümü"] if "Hesap Dökümü" in wb.sheetnames else wb.active
-    ws["I1"] = "HEKIM";        ws["J1"] = int(hekim)
-    ws["I2"] = "STAFF";        ws["J2"] = int(staff)
-    ws["I3"] = "GSK_YETKILI";  ws["J3"] = (yetkili or "").strip()
-    buf = _io.BytesIO(); wb.save(buf)
-
-    onedrive_gelen = _os.path.expanduser(
-        "~/Library/CloudStorage/OneDrive-S.T.O.K.MICE/GSK/Gelen"
-    )
-    _os.makedirs(onedrive_gelen, exist_ok=True)
-    ts = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe = (budget.venue_name or "teklif").replace("/", "-").replace(" ", "_")[:40]
-    fpath = _os.path.join(onedrive_gelen, f"export_{safe}_{ts}.xlsx")
-    with open(fpath, "wb") as f:
-        f.write(buf.getvalue())
-
-    print(f"[GSK] OneDrive'a yazildi: {fpath}", flush=True)
-    return RedirectResponse(
-        url=f"/budgets/{budget_id}?gsk=ok",
-        status_code=status.HTTP_303_SEE_OTHER,
+    import io as _io
+    req_no = req.request_no if req else budget_id[:8]
+    filename = f"GSK_{req_no}_{budget.venue_name or 'teklif'}.xlsx".replace(" ", "_")
+    return StreamingResponse(
+        _io.BytesIO(xlsx_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

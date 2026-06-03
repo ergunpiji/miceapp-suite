@@ -36,12 +36,6 @@
 
 {% block content %}
 
-{% if request.query_params.get('gsk') == 'ok' %}
-<div class="alert alert-success alert-dismissible fade show" role="alert">
-  GSK teklifi oluşturuldu ve işleme alındı. Hazır dosya birkaç dakika içinde e-posta ile gelecek.
-  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-</div>
-{% endif %}
 
 <div class="mb-3">
   <a href="{{ back_url }}" class="text-muted text-decoration-none" style="font-size:13px;">
@@ -117,37 +111,67 @@
 {% if budget.budget_status == 'approved' and current_user.role in ('admin', 'mudur', 'yonetici') %}
 <div class="modal fade" id="gskModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
-    <form method="post" action="/budgets/{{ budget.id }}/gsk-gonder" class="modal-content">
+    <form id="gskForm" action="/budgets/{{ budget.id }}/gsk-gonder" class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">GSK Teklifi Oluştur</h5>
+        <h5 class="modal-title"><i class="bi bi-file-earmark-spreadsheet me-2"></i>GSK Teklifi Oluştur</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
       </div>
       <div class="modal-body">
-        <p class="text-muted small mb-3">
-          Hesap Dökümü OneDrive'a yazılacak; GSK formatlı teklif birkaç dakika içinde e-posta ile gelecek.
-        </p>
         <div class="mb-3">
-          <label class="form-label">Hekim sayısı</label>
+          <label class="form-label fw-semibold">Hekim sayısı</label>
           <input type="number" name="hekim" class="form-control" min="0" required
                  value="{{ req.hekim_count or 0 if req else 0 }}">
         </div>
         <div class="mb-3">
-          <label class="form-label">Staff sayısı</label>
+          <label class="form-label fw-semibold">Staff sayısı</label>
           <input type="number" name="staff" class="form-control" min="0" required
                  value="{{ req.staff_count or 0 if req else 0 }}">
         </div>
         <div class="mb-3">
-          <label class="form-label">GSK Yetkili Kişi</label>
+          <label class="form-label fw-semibold">GSK Yetkili Kişi</label>
           <input type="text" name="yetkili" class="form-control" placeholder="Örn. Buse Altun">
         </div>
+        <div id="gskError" class="text-danger small" style="display:none;"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
-        <button type="submit" class="btn btn-primary">Oluştur &amp; Gönder</button>
+        <button type="submit" id="gskSubmitBtn" class="btn btn-primary">
+          <i class="bi bi-download me-1"></i> Oluştur &amp; İndir
+        </button>
       </div>
     </form>
   </div>
 </div>
+<script>
+document.getElementById('gskForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = document.getElementById('gskSubmitBtn');
+  const errEl = document.getElementById('gskError');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Oluşturuluyor…';
+  errEl.style.display = 'none';
+  try {
+    const resp = await fetch(this.action, {method: 'POST', body: new FormData(this)});
+    if (!resp.ok) {
+      const txt = await resp.text();
+      throw new Error(txt || resp.statusText);
+    }
+    const blob = await resp.blob();
+    const cd = resp.headers.get('Content-Disposition') || '';
+    const fname = cd.match(/filename="([^"]+)"/)?.[1] || 'GSK_teklif.xlsx';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = fname; a.click();
+    URL.revokeObjectURL(url);
+    bootstrap.Modal.getInstance(document.getElementById('gskModal')).hide();
+  } catch(err) {
+    errEl.textContent = 'Hata: ' + err.message;
+    errEl.style.display = '';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-download me-1"></i> Oluştur &amp; İndir';
+  }
+});
+</script>
 {% endif %}
 
 {% if budget.revision_notes and current_user.role in ('admin', 'satinalma') %}
