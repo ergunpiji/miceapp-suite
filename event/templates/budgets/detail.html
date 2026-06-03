@@ -156,6 +156,7 @@ document.getElementById('gskForm').addEventListener('submit', async function(e) 
       const txt = await resp.text();
       throw new Error(txt || resp.statusText);
     }
+    const warnHeader = resp.headers.get('X-GSK-Warnings');
     const blob = await resp.blob();
     const cd = resp.headers.get('Content-Disposition') || '';
     const fname = cd.match(/filename="([^"]+)"/)?.[1] || 'GSK_teklif.xlsx';
@@ -163,6 +164,13 @@ document.getElementById('gskForm').addEventListener('submit', async function(e) 
     const a = document.createElement('a'); a.href = url; a.download = fname; a.click();
     URL.revokeObjectURL(url);
     bootstrap.Modal.getInstance(document.getElementById('gskModal')).hide();
+    if (warnHeader) {
+      const warns = JSON.parse(warnHeader);
+      const wDiv = document.getElementById('gskWarningAlert');
+      document.getElementById('gskWarningList').innerHTML = warns.map(w => `<li>${w}</li>`).join('');
+      wDiv.style.display = '';
+      wDiv.scrollIntoView({behavior:'smooth', block:'nearest'});
+    }
   } catch(err) {
     errEl.textContent = 'Hata: ' + err.message;
     errEl.style.display = '';
@@ -173,6 +181,14 @@ document.getElementById('gskForm').addEventListener('submit', async function(e) 
 });
 </script>
 {% endif %}
+
+<div id="gskWarningAlert" class="alert alert-warning alert-dismissible mb-3" style="display:none;">
+  <i class="bi bi-exclamation-triangle me-2"></i>
+  <strong>GSK Export Uyarısı</strong> — Dosya indirildi, ancak bazı kalemler kapasiteyi aştığı için taşındı:
+  <ul class="mb-1 mt-1" id="gskWarningList"></ul>
+  <small class="text-muted">Bütçe editöründe F&B kalemlerin GSK Hedef seçimini yaparak düzeltebilirsiniz.</small>
+  <button type="button" class="btn-close" onclick="this.parentElement.style.display='none'"></button>
+</div>
 
 {% if budget.revision_notes and current_user.role in ('admin', 'satinalma') %}
 <div class="alert alert-danger mb-3">

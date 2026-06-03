@@ -411,6 +411,8 @@ async def budgets_edit(
     if not _can_satinalma_edit(budget) and current_user.role not in ("admin", "asistan"):
         return RedirectResponse(url=f"/budgets/{budget_id}", status_code=status.HTTP_302_FOUND)
     req = db.query(ReqModel).filter(ReqModel.id == budget.request_id).first()
+    if req and req.status == "cancelled":
+        raise HTTPException(403, "İptal edilmiş talebe ait bütçe düzenlenemez.")
     services = db.query(Service).filter(Service.active == True).order_by(Service.category, Service.sort_order, Service.name).all()
     grouped_services: dict = {}
     for svc in services:
@@ -677,9 +679,13 @@ async def budgets_price_save(
         budget.venue_name      = venue_name.strip()
     if offer_currency and offer_currency.upper() in ("TRY", "EUR", "USD"):
         budget.offer_currency  = offer_currency.upper()
-    # Onaylanmış bütçe düzenlenince onay durumunu koru
-    if budget.budget_status != "approved":
-        budget.budget_status   = "draft_manager"
+    # Onaylı bütçe düzenleniyor → yeniden onay gerekir
+    if budget.budget_status in ("confirmed", "closed", "completed"):
+        raise HTTPException(403, "Teyitlenmiş veya kapatılmış bütçe düzenlenemez.")
+    req_for_check = db.query(ReqModel).filter(ReqModel.id == budget.request_id).first()
+    if req_for_check and req_for_check.status == "cancelled":
+        raise HTTPException(403, "İptal edilmiş talebe ait bütçe düzenlenemez.")
+    budget.budget_status   = "draft_manager"
     budget.updated_at          = _now()
     db.commit()
 
@@ -716,19 +722,54 @@ async def budgets_approve(
     if current_user.role not in ("admin", "mudur", "yonetici"):
         raise HTTPException(403)
     budget = db.query(Budget).filter(Budget.id == budget_id).first()
-    if budget:
-        budget.budget_status = "approved"
-        budget.updated_at    = _now()
-        req = db.query(ReqModel).filter(ReqModel.id == budget.request_id).first()
-        if req:
-            req.status     = "offer_sent"
-            req.updated_at = _now()
-            log_activity(
-                db, req.id, "budget_approved",
-                f"Bütçe fiyatlandırıldı ve onaylandı ({budget.venue_name or 'bütçe'})",
-                user_id=current_user.id,
-            )
-        db.commit()
+    if not budget:
+        raise HTTPException(404)
+
+    # İptal edilmiş talep kontrolü
+    req = db.query(ReqModel).filter(ReqModel.id == budget.request_id).first()
+    if req and req.status == "cancelled":
+        raise HTTPException(403, "İptal edilmiş talebe ait bütçe onaylanamaz.")
+
+    # Aynı talep için zaten onaylı bütçe var mı?
+    existing_approved = db.query(Budget).filter(
+        Budget.request_id == budget.request_id,
+        Budget.id != budget_id,
+        Budget.budget_status == "approved",
+    ).first()
+    if existing_approved:
+        raise HTTPException(400, f"Bu talep için zaten onaylı bir bütçe var ({existing_approved.venue_name or existing_approved.id[:8]}). Önce onu iptal edin.")
+
+    # Satış fiyatı validasyonu
+    try:
+        rows = json.loads(budget.rows_json or "[]")
+    except Exception:
+        rows = []
+    price_errors = []
+    for r in rows:
+        if r.get("is_service_fee"):
+            continue
+        sale = float(r.get("sale_price") or 0)
+        cost = float(r.get("cost_price") or 0)
+        name = (r.get("service_name") or r.get("description") or "?")[:40]
+        if sale == 0 and cost > 0:
+            price_errors.append(f"'{name}': satış fiyatı sıfır")
+        elif 0 < sale < cost:
+            price_errors.append(f"'{name}': satış ({sale:,.0f}) < maliyet ({cost:,.0f})")
+    if price_errors:
+        err_msg = "Bütçe onaylanamaz — fiyat hataları: " + " | ".join(price_errors)
+        raise HTTPException(400, err_msg)
+
+    budget.budget_status = "approved"
+    budget.updated_at    = _now()
+    if req:
+        req.status     = "offer_sent"
+        req.updated_at = _now()
+        log_activity(
+            db, req.id, "budget_approved",
+            f"Bütçe fiyatlandırıldı ve onaylandı ({budget.venue_name or 'bütçe'})",
+            user_id=current_user.id,
+        )
+    db.commit()
     if back:
         return RedirectResponse(url=f"/requests/{back}#tab-summary", status_code=status.HTTP_302_FOUND)
     return RedirectResponse(url=f"/budgets/{budget_id}", status_code=status.HTTP_302_FOUND)
@@ -980,7 +1021,24 @@ async def budgets_gsk_gonder(
     if not _os.path.isfile(sablon):
         raise HTTPException(400, "GSK şablon dosyası bulunamadı.")
 
-    from gsk_export import gsk_doldur
+    from gsk_export import gsk_doldur, rows_to_items
+
+    budget_rows = [
+        {
+            "id":          r.get("id", ""),
+            "section":     r.get("section", ""),
+            "description": r.get("service_name") or r.get("description", ""),
+            "sale_price":  float(r.get("sale_price") or r.get("cost_price") or 0),
+            "qty":         float(r.get("qty", 1) or 1),
+            "nights":      float(r.get("nights", 1) or 1),
+            "gsk_hedef":   r.get("gsk_hedef", ""),
+        }
+        for r in (budget.rows or [])
+        if r.get("service_name") or r.get("description")
+    ]
+
+    # Kategorilendirmeyi önceden çalıştır → uyarıları yakala
+    _, warnings = rows_to_items(budget_rows, float(hekim), float(staff))
 
     data = {
         "toplanti_adi": req.event_name if req else (budget.venue_name or ""),
@@ -988,18 +1046,7 @@ async def budgets_gsk_gonder(
         "mekan":        budget.venue_name or "",
         "gsk_grup":     customer.name  if customer else (req.client_name if req else ""),
         "acente":       "STOK MICE",
-        "rows": [
-            {
-                "id":          r.get("id", ""),
-                "section":     r.get("section", ""),
-                "description": r.get("service_name") or r.get("description", ""),
-                "sale_price":  float(r.get("sale_price") or r.get("cost_price") or 0),
-                "qty":         float(r.get("qty", 1) or 1),
-                "nights":      float(r.get("nights", 1) or 1),
-            }
-            for r in (budget.rows or [])
-            if r.get("service_name") or r.get("description")
-        ],
+        "rows":         budget_rows,
     }
 
     xlsx_bytes = gsk_doldur(
@@ -1021,10 +1068,16 @@ async def budgets_gsk_gonder(
     except Exception as _e:
         print(f"[GSK] R2 upload atlandı: {_e}", flush=True)
 
+    import json as _json
+    resp_headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    if warnings:
+        resp_headers["X-GSK-Warnings"] = _json.dumps(warnings, ensure_ascii=False)
+        resp_headers["Access-Control-Expose-Headers"] = "X-GSK-Warnings"
+
     return StreamingResponse(
         _io.BytesIO(xlsx_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers=resp_headers,
     )
 
 

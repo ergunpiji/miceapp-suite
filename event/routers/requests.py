@@ -645,6 +645,12 @@ async def requests_create(
 ):
     _check_pm_or_admin(current_user, db)
 
+    # Tarih validasyonu
+    if check_in and check_out and check_in > check_out:
+        raise HTTPException(400, "Bitiş tarihi başlangıç tarihinden önce olamaz.")
+    if accom_check_in and accom_check_out and accom_check_in > accom_check_out:
+        raise HTTPException(400, "Konaklama çıkış tarihi giriş tarihinden önce olamaz.")
+
     # Müşteri kodu + takım tespiti
     customer_code = "xxx"
     _team_id = current_user.team_id  # varsayılan: creator'ın takımı
