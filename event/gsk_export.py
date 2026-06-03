@@ -28,13 +28,13 @@ from openpyxl.cell import MergedCell
 # ---------------------------------------------------------------------------
 
 GSK_SECTIONS: dict[str, dict] = {
-    "hekim_yiyecek":       {"label": "Hekim Yiyecek",       "rows": (13, 14, 15),                "vat_cell": "J12"},
-    "hekim_icecek":        {"label": "Hekim İçecek",         "rows": (17,),                       "vat_cell": "J16"},
-    "staff_yiyecek":       {"label": "Staff Yiyecek",        "rows": (20, 21),                    "vat_cell": "J19"},
-    "staff_icecek":        {"label": "Staff İçecek",          "rows": (23,),                       "vat_cell": "J22"},
-    "konusmaci_konaklama": {"label": "Konuşmacı Konaklama",  "rows": (26, 27),                    "vat_cell": "J25"},
-    "konusmaci_ulasim":    {"label": "Konuşmacı Ulaşım",     "rows": (30,),                       "vat_cell": "J29"},
-    "diger_hizmetler":     {"label": "Diğer Hizmetler",      "rows": (33, 34, 35, 36, 37, 38, 39), "vat_cell": "J32"},
+    "hekim_yiyecek":       {"label": "Hekim Yiyecek",       "rows": (13, 14),     "vat_cell": "J12"},
+    "hekim_icecek":        {"label": "Hekim İçecek",         "rows": (16,),        "vat_cell": "J15"},
+    "staff_yiyecek":       {"label": "Staff Yiyecek",        "rows": (19, 20),     "vat_cell": "J18"},
+    "staff_icecek":        {"label": "Staff İçecek",          "rows": (22,),        "vat_cell": "J21"},
+    "konusmaci_konaklama": {"label": "Konuşmacı Konaklama",  "rows": (25, 26),     "vat_cell": "J24"},
+    "konusmaci_ulasim":    {"label": "Konuşmacı Ulaşım",     "rows": (29,),        "vat_cell": "J28"},
+    "diger_hizmetler":     {"label": "Diğer Hizmetler",      "rows": (32, 33, 34), "vat_cell": "J31"},
 }
 
 SECTION_LABELS = {k: v["label"] for k, v in GSK_SECTIONS.items()}
@@ -43,12 +43,12 @@ COMMISSION_CELL = "B10"
 
 DEFAULT_VAT_RATES: dict[str, float] = {
     "J12": 0.10,
-    "J16": 0.20,
-    "J19": 0.10,
-    "J22": 0.20,
-    "J25": 0.10,
-    "J29": 0.20,
-    "J32": 0.20,
+    "J15": 0.20,
+    "J18": 0.10,
+    "J21": 0.20,
+    "J24": 0.10,
+    "J28": 0.20,
+    "J31": 0.20,
 }
 
 HEADER_CELLS: dict[str, str] = {
@@ -64,11 +64,22 @@ HEADER_CELLS: dict[str, str] = {
 
 DATA_COLS = "ABCDEFGHIJ"
 
+_TR_TABLE = str.maketrans("ışçğöüŞÇĞÖÜ", "iscgouSCGOU")
+
+
+def _tr_lower(s: str) -> str:
+    """İ/ı gibi Türkçe karakterleri ASCII'ye çevirerek küçük harf döner."""
+    return s.replace("İ", "i").replace("I", "i").lower().replace("̇", "").translate(_TR_TABLE)
+
+
 # F&B algılama anahtar kelimeleri
 _FB_WORDS    = ("yemek", "yiyecek", "kahvaltı", "kahvalti", "öğle", "ogle",
-                "akşam", "aksam", "gala", "meze", "kokteyl", "coffee",
-                "içecek", "icecek", "drink", "brunch", "tabldot")
-_DRINK_WORDS = ("içecek", "icecek", "drink", "coffee", "su ikramı", "su ikami")
+                "gala", "meze", "kokteyl", "coffee",
+                "icecek", "drink", "brunch", "tabldot",
+                "set menü", "set menu", "alkol")
+_DRINK_WORDS = ("icecek", "drink", "coffee", "su ikrami", "alkol", "kokteyl")
+# Saf salon/toplantı odası kalemleri F&B değil, Diğer Hizmetler'e gider
+_SALON_WORDS = ("salon kullanimi", "toplanti salonu")
 
 
 @dataclass
@@ -91,37 +102,28 @@ class GSKOverflowError(Exception):
 # Yardımcı
 # ---------------------------------------------------------------------------
 
-def _abs(cell: str) -> str:
-    col = "".join(c for c in cell if c.isalpha())
-    row = "".join(c for c in cell if c.isdigit())
-    return f"${col}${row}"
-
-
-_COMM_ABS = _abs(COMMISSION_CELL)
-
-
 def _safe_set(ws, cell_ref: str, value) -> None:
     cell = ws[cell_ref]
     if not isinstance(cell, MergedCell):
         cell.value = value
 
 
-def _write_item(ws, r: int, item: LineItem, vat_abs: str) -> None:
+def _write_item(ws, r: int, item: LineItem) -> None:
+    """Sadece giriş sütunlarını yazar; D/E/H/I/J formülleri template'den korunur."""
     _safe_set(ws, f"A{r}", item.description)
     _safe_set(ws, f"B{r}", item.unit_price)
     _safe_set(ws, f"C{r}", item.rate)
-    _safe_set(ws, f"D{r}", f"=B{r}*C{r}")
-    _safe_set(ws, f"E{r}", f"=B{r}*(1+{_COMM_ABS})")
     _safe_set(ws, f"F{r}", item.quantity)
     _safe_set(ws, f"G{r}", item.days)
-    _safe_set(ws, f"H{r}", f"=B{r}*F{r}*G{r}")
-    _safe_set(ws, f"I{r}", f"=E{r}*F{r}*G{r}")
-    _safe_set(ws, f"J{r}", f"=H{r}*(1+{vat_abs})+(I{r}-H{r})*1.2")
 
 
 def _clear_row(ws, r: int) -> None:
-    for col in DATA_COLS:
-        _safe_set(ws, f"{col}{r}", None)
+    """Giriş sütunlarını sıfırlar; formüller korunur ve 0 hesaplar."""
+    _safe_set(ws, f"A{r}", None)
+    _safe_set(ws, f"B{r}", 0)
+    _safe_set(ws, f"C{r}", 1)
+    _safe_set(ws, f"F{r}", 0)
+    _safe_set(ws, f"G{r}", 1)
 
 
 # ---------------------------------------------------------------------------
@@ -147,16 +149,17 @@ def rows_to_items(
     for r in rows:
         row_id   = r.get("id", "")
         sec      = (r.get("section") or "").lower()
-        desc_low = (r.get("description") or "").lower()
         desc     = r.get("description", "")
+        desc_low = _tr_lower(desc)
         price    = price_overrides.get(row_id, float(r.get("sale_price") or 0))
         qty      = float(r.get("qty") or 1)
         nights   = float(r.get("nights") or 1)
 
         is_accom    = sec == "accommodation" or any(w in desc_low for w in ("konaklama", "otel", "oda"))
         is_transfer = sec == "transfer"      or any(w in desc_low for w in ("transfer", "ulaşım", "ulasim", "araç", "arac"))
+        is_salon    = any(w in desc_low for w in _SALON_WORDS)
         is_drink    = any(w in desc_low for w in _DRINK_WORDS)
-        is_fb       = sec in ("fb", "f&b")   or any(w in desc_low for w in _FB_WORDS)
+        is_fb       = (not is_salon) and (sec in ("fb", "f&b") or any(w in desc_low for w in _FB_WORDS))
 
         if is_accom:
             raw["konusmaci_konaklama"].append(LineItem(desc, price, qty, nights))
@@ -335,27 +338,16 @@ def _fill_workbook(
             if field in header and header[field] is not None:
                 _safe_set(ws, cell, header[field])
 
-    _safe_set(ws, COMMISSION_CELL, commission_rate)
-    try:
-        if not isinstance(ws[COMMISSION_CELL], MergedCell):
-            ws[COMMISSION_CELL].number_format = "0.0%"
-    except Exception:
-        pass
+    # Template B10'da commission multiplier bekler (örn. 1.055 = %5.5)
+    _safe_set(ws, COMMISSION_CELL, 1 + commission_rate)
 
-    for cell_ref, rate in vat_rates.items():
-        _safe_set(ws, cell_ref, rate)
-        try:
-            if not isinstance(ws[cell_ref], MergedCell):
-                ws[cell_ref].number_format = "0%"
-        except Exception:
-            pass
+    # VAT hücrelerine yazma — template'deki 1.1/1.2 multiplier değerleri korunur
 
     for key, sec in GSK_SECTIONS.items():
         items = items_by_section.get(key) or []
-        vat_abs = _abs(sec["vat_cell"])
         for idx, r in enumerate(sec["rows"]):
             if idx < len(items):
-                _write_item(ws, r, items[idx], vat_abs)
+                _write_item(ws, r, items[idx])
             else:
                 _clear_row(ws, r)
 

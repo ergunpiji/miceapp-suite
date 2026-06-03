@@ -19,7 +19,7 @@ from templates_config import templates
 
 router = APIRouter(tags=["gsk"])
 
-SABLON_YOLU = os.path.join(os.path.dirname(__file__), "sablonlar", "GSK_BOS.xlsx")
+SABLON_YOLU = os.path.join(os.path.dirname(__file__), "..", "static", "GSK Boş Template Bütçe.xlsx")
 GSK_TEMPLATE_PATH = SABLON_YOLU
 
 GSK_SECTION_LABELS = {
@@ -87,10 +87,6 @@ def _build_items_auto(req: ReqModel, price_overrides: dict | None = None) -> tup
         staff=float(req.staff_count or 0),
         price_overrides=price_overrides,
     )
-
-
-
-    return items, warnings
 
 
 def _auto_preview(req: ReqModel) -> dict:
@@ -193,6 +189,7 @@ async def gsk_export_download(
             items_by_section=items_by_section,
             header=header,
             commission_rate=commission_rate,
+            gsk_sheet_name="Örnek",
         )
         with open(tmp_path, "rb") as f:
             content = f.read()
