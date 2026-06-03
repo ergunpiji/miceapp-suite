@@ -38,15 +38,17 @@ def _get_budget_rows(req: ReqModel) -> list[dict]:
     rows = []
     for b in req.budgets:
         for r in (b.rows or []):
-            if not r.get("description"):
+            # Bütçe editörü "service_name" kullanır; fallback "description"
+            desc = r.get("service_name") or r.get("description", "")
+            if not desc:
                 continue
             sale  = float(r.get("sale_price", 0) or 0)
             cost  = float(r.get("cost_price", 0) or 0)
             rows.append({
                 "id":          r.get("id", ""),
                 "section":     r.get("section", ""),
-                "description": r.get("description", ""),
-                "sale_price":  sale if sale > 0 else cost,  # cost_price fallback
+                "description": desc,
+                "sale_price":  sale if sale > 0 else cost,
                 "qty":         float(r.get("qty", 1) or 1),
                 "nights":      float(r.get("nights", 1) or 1),
                 "unit":        r.get("unit", ""),
