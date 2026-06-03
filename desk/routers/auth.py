@@ -65,6 +65,7 @@ async def login_post(
         key=COOKIE_NAME,
         value=token,
         httponly=True,
+        path="/",
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         samesite="lax",
         secure=_is_production,
@@ -77,7 +78,7 @@ async def login_post(
 @router.post("/logout", name="logout_post")
 async def logout(request: Request):
     response = RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
-    response.delete_cookie(key=COOKIE_NAME, domain=COOKIE_DOMAIN)
+    response.delete_cookie(key=COOKIE_NAME, path="/", domain=COOKIE_DOMAIN)
     return response
 
 

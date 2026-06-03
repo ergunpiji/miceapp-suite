@@ -50,6 +50,17 @@ COOKIE_NAME = "access_token"
 # tek oturum (SSO) için ".miceapp.net" olmalı. Yerelde boş bırakılır (host-only).
 COOKIE_DOMAIN = os.environ.get("COOKIE_DOMAIN") or None
 
+_is_prod = os.environ.get("ENVIRONMENT", "").lower() == "production"
+if _is_prod and not COOKIE_DOMAIN:
+    print(
+        "[AUTH] ⚠️  COOKIE_DOMAIN ayarlı değil! "
+        "event + desk SSO için COOKIE_DOMAIN=.miceapp.net olarak ayarlayın. "
+        "Aksi hâlde logout yalnızca bu app'i kapatır.",
+        flush=True,
+    )
+else:
+    print(f"[AUTH] Cookie domain: {COOKIE_DOMAIN or '(host-only — dev modu)'}", flush=True)
+
 # ---------------------------------------------------------------------------
 # Rol → ana app yönlendirmesi
 # Muhasebe ve İK çalışanları işlerini micedesk (desk) üzerinden yapar; bu roller

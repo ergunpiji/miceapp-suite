@@ -321,10 +321,8 @@ class User(Base):
 
     @property
     def is_gm(self) -> bool:
-        """Genel Müdür mü? admin/super_admin/genel_mudur rolü VEYA org_title.grade == 1."""
-        if self.role in ("admin", "super_admin", "genel_mudur"):
-            return True
-        return self.org_title is not None and self.org_title.grade == 1
+        """Genel Müdür mü? Desk ile tutarlı: yalnızca rol bazlı kontrol."""
+        return self.role in ("admin", "super_admin", "genel_mudur")
 
     @property
     def is_pm_side(self) -> bool:
