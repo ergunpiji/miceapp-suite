@@ -418,6 +418,10 @@ async def invoices_new_form(
         if stmt:
             from collections import defaultdict
             ACCOM_SECTIONS = {"accommodation"}
+            FB_SECTIONS    = {"fb", "f&b"}
+
+            hekim_count = int(req.hekim_count or 0) if req else 0
+            staff_count = int(req.staff_count or 0) if req else 0
 
             # Detaylı satırlar (tüm kalemler ayrı)
             invoice_lines = []
@@ -425,41 +429,47 @@ async def invoices_new_form(
             accom_groups = defaultdict(float)   # vat_rate(int) -> total_amount (TRY)
             other_groups = defaultdict(float)   # vat_rate(int) -> total_amount (TRY)
 
-            for row in stmt.rows:
-                if row.get("is_service_fee"):
-                    sale = float(row.get("sale_price", 0))
-                    cur  = row.get("currency", "TRY") or "TRY"
-                    sale_try = stmt.amount_to_try(sale, cur)
-                    _vr  = float(row.get("vat_rate", 20) or 20)
-                    vat  = int(_vr * 100 if 0 < _vr <= 1 else _vr)
-                    if sale_try > 0:
-                        invoice_lines.append({
-                            "description": row.get("service_name", "Hizmet Bedeli"),
-                            "amount":      round(sale_try, 2),
-                            "vat_rate":    vat,
-                            "vat_amount":  round(sale_try * vat / 100, 2),
-                        })
-                        other_groups[vat] += sale_try
+            def _add_line(desc, amount_try, vat, section):
+                if amount_try <= 0:
+                    return
+                invoice_lines.append({
+                    "description": desc,
+                    "amount":      round(amount_try, 2),
+                    "vat_rate":    vat,
+                    "vat_amount":  round(amount_try * vat / 100, 2),
+                })
+                if section in ACCOM_SECTIONS:
+                    accom_groups[vat] += amount_try
                 else:
-                    sale   = float(row.get("sale_price", 0))
-                    qty    = float(row.get("qty", 1))
-                    nights = float(row.get("nights", 1))
-                    cur    = row.get("currency", "TRY") or "TRY"
+                    other_groups[vat] += amount_try
+
+            for row in stmt.rows:
+                section = row.get("section", "")
+                desc    = row.get("service_name", row.get("description", ""))
+                cur     = row.get("currency", "TRY") or "TRY"
+                _vr     = float(row.get("vat_rate", 20) or 20)
+                vat     = int(_vr * 100 if 0 < _vr <= 1 else _vr)
+
+                if row.get("is_service_fee"):
+                    sale_try = stmt.amount_to_try(float(row.get("sale_price", 0)), cur)
+                    _add_line(row.get("service_name", "Hizmet Bedeli"), sale_try, vat, section)
+                    continue
+
+                sale   = float(row.get("sale_price", 0))
+                qty    = float(row.get("qty", 1))
+                nights = float(row.get("nights", 1))
+
+                # F&B + hekim/staff sayısı varsa → hekim ve staff olarak ayrı satır
+                is_fb = section in FB_SECTIONS
+                if is_fb and hekim_count > 0 and staff_count > 0:
+                    total_qty = hekim_count + staff_count
+                    hekim_total = stmt.amount_to_try(sale * hekim_count * nights, cur)
+                    staff_total = stmt.amount_to_try(sale * staff_count * nights, cur)
+                    _add_line(f"{desc} (Hekim × {hekim_count})", hekim_total, vat, section)
+                    _add_line(f"{desc} (Staff × {staff_count})",  staff_total, vat, section)
+                else:
                     total_try = stmt.amount_to_try(sale * qty * nights, cur)
-                    _vr2   = float(row.get("vat_rate", 20) or 20)
-                    vat    = int(_vr2 * 100 if 0 < _vr2 <= 1 else _vr2)
-                    if total_try > 0:
-                        invoice_lines.append({
-                            "description": row.get("service_name", row.get("description", "")),
-                            "amount":      round(total_try, 2),
-                            "vat_rate":    vat,
-                            "vat_amount":  round(total_try * vat / 100, 2),
-                        })
-                        section = row.get("section", "")
-                        if section in ACCOM_SECTIONS:
-                            accom_groups[vat] += total_try
-                        else:
-                            other_groups[vat] += total_try
+                    _add_line(desc, total_try, vat, section)
 
             # KDV gruplu satırlar oluştur
             grouped_lines = []
