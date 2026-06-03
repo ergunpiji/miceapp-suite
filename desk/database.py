@@ -156,8 +156,16 @@ def generate_hbf_no(db) -> str:
     from datetime import date as _date
     yymm = _date.today().strftime("%y%m")
     prefix = f"HBF-{yymm}-"
-    count = db.query(HBF).filter(HBF.hbf_no.like(f"{prefix}%")).count()
-    return f"{prefix}{count + 1:03d}"
+    # max()+1 kullan — count()+1 silinen kayıtlarda veya eş zamanlı oluşturmada çakışır
+    existing = db.query(HBF.hbf_no).filter(HBF.hbf_no.like(f"{prefix}%")).all()
+    nums = []
+    for (no,) in existing:
+        try:
+            nums.append(int(no.replace(prefix, "")))
+        except (ValueError, AttributeError):
+            pass
+    next_num = (max(nums) + 1) if nums else 1
+    return f"{prefix}{next_num:03d}"
 
 
 def generate_ref_no(db, event_type: str, customer_code: str, check_in,

@@ -34,12 +34,24 @@ from templates_config import templates
 router = APIRouter(prefix="/hbf", tags=["hbf"])
 
 
+def _recalc_item(item: dict) -> dict:
+    """amount_with_vat'ı amount_without_vat + vat_rate'den yeniden hesapla (frontend manipülasyonunu önler)."""
+    net = float(item.get("amount_without_vat") or 0)
+    vat_rate = float(item.get("vat_rate") or 0)
+    if net > 0:
+        vat_amt = round(net * vat_rate / 100, 2)
+        item["vat_amount"] = vat_amt
+        item["amount_with_vat"] = round(net + vat_amt, 2)
+    return item
+
+
 def _parse_items(items_json: str) -> tuple[list, float]:
     """
     items_json iki formatta gelebilir:
       - Yeni (gruplu): [{ref_id, ref_no, ref_title, items:[...]}]
       - Eski (düz):    [{description, amount, ...}]
     Her zaman gruplu listeyi döndürür (detay/liste şablonu için tutarlılık).
+    Backend tarafında KDV tutarları yeniden hesaplanır.
     """
     try:
         data = json.loads(items_json or "[]")
@@ -50,6 +62,8 @@ def _parse_items(items_json: str) -> tuple[list, float]:
     # Gruplu format tespiti: ilk elemanın "items" anahtarı varsa
     if isinstance(data[0], dict) and "items" in data[0]:
         sections = data
+        for sec in sections:
+            sec["items"] = [_recalc_item(i) for i in sec.get("items", [])]
         total = sum(
             float(item.get("amount_with_vat", item.get("amount", 0)))
             for sec in sections
@@ -57,6 +71,7 @@ def _parse_items(items_json: str) -> tuple[list, float]:
         )
         return sections, total
     # Eski düz format → tek anonim section olarak sar
+    data = [_recalc_item(i) for i in data]
     total = sum(float(i.get("amount_with_vat", i.get("amount", 0))) for i in data)
     return [{"ref_id": None, "ref_no": "", "ref_title": "", "items": data}], total
 
@@ -98,11 +113,18 @@ def _hbf_expense_category(db, company_id: str) -> int:
 # Geçici yükleme yardımcısı
 # ---------------------------------------------------------------------------
 
+def _delete_hbf_file(hbf_id: str, filename: str, company_id: str | None) -> None:
+    """R2 path tutarlılığı: company prefix ile sil."""
+    prefix = f"companies/{company_id}/" if company_id else ""
+    storage_helper.delete_file(f"{prefix}uploads/hbf/{hbf_id}/{filename}")
+
+
 def _process_row_attachments(
     hbf_id: str,
     form_token: str,
     row_atts_input: dict,
     existing_atts: list,
+    company_id: str | None = None,
 ) -> list:
     """
     row_atts_input: {row_id: {filename, original}}  — form'dan gelen
@@ -118,8 +140,7 @@ def _process_row_attachments(
         if os.path.exists(tmp_path):
             _, ext = os.path.splitext(att_info["filename"])
             new_fn = f"{uuid.uuid4().hex}{ext}"
-            # RBAC v2: company-scoped key (eski path'lerle uyumlu — sadece yeni yüklenenler)
-            company_prefix = f"companies/{current_user.company_id}/" if current_user.company_id else ""
+            company_prefix = f"companies/{company_id}/" if company_id else ""
             r2_key = f"{company_prefix}uploads/hbf/{hbf_id}/{new_fn}"
             with open(tmp_path, "rb") as f:
                 storage_helper.upload_file(f.read(), r2_key)
@@ -127,7 +148,7 @@ def _process_row_attachments(
             # Önceki dosyayı sil (satır değiştirildi)
             if row_id in existing_map:
                 old_fn = existing_map[row_id]["filename"]
-                storage_helper.delete_file(f"uploads/hbf/{hbf_id}/{old_fn}")
+                _delete_hbf_file(hbf_id, old_fn, company_id)
             new_atts.append({
                 "row_id": row_id,
                 "filename": new_fn,
@@ -291,7 +312,7 @@ async def hbf_new_post(
     except Exception:
         row_atts = {}
     if row_atts and form_token:
-        new_atts = _process_row_attachments(hbf.id, form_token, row_atts, [])
+        new_atts = _process_row_attachments(hbf.id, form_token, row_atts, [], company_id=current_user.company_id)
         if new_atts:
             hbf.attachments_json = json.dumps(new_atts, ensure_ascii=False)
 
@@ -445,7 +466,7 @@ async def hbf_edit_post(
             existing_atts = json.loads(hbf.attachments_json or "[]")
         except Exception:
             existing_atts = []
-        new_atts = _process_row_attachments(hbf_id, form_token, row_atts, existing_atts)
+        new_atts = _process_row_attachments(hbf_id, form_token, row_atts, existing_atts, company_id=current_user.company_id)
         hbf.attachments_json = json.dumps(new_atts, ensure_ascii=False) if new_atts else hbf.attachments_json
 
     db.commit()
@@ -498,20 +519,29 @@ async def hbf_approve(
 
     if hbf.status == "beklemede":
         if is_gm:
-            # GM/Admin: has_manager yoksa doğrudan onayla, varsa da GM atlayarak onaylayabilir
+            if has_manager:
+                # Müdürü olan çalışanın HBF'si önce müdürden geçmeli
+                raise HTTPException(
+                    status_code=403,
+                    detail="Bu HBF için önce müdür onayı gerekiyor. Müdür onayladıktan sonra GM olarak onaylayabilirsiniz.",
+                )
+            # Müdürü olmayan çalışanın HBF'sini GM doğrudan onaylar
             hbf.status = "onaylandi"
             hbf.approved_by = current_user.id
             hbf.approved_at = datetime.utcnow()
-            hbf.approval_note = approval_note.strip() or None
+            if approval_note.strip():
+                hbf.approval_note = f"[GM – {current_user.name}] {approval_note.strip()}"
         elif is_mudur:
-            # Müdür: sadece kendi ekibini onaylayabilir (creator.manager_id == current_user.id)
+            # Müdür: sadece kendi ekibini onaylayabilir, kendi HBF'sini onaylayamaz
             if not creator or creator.manager_id != current_user.id:
                 raise HTTPException(status_code=403, detail="Bu HBF sizin ekibinize ait değil.")
+            if creator.id == current_user.id:
+                raise HTTPException(status_code=403, detail="Kendi harcama bildiriminizi onaylayamazsınız.")
             hbf.status = "mudur_onayladi"
             hbf.manager_approved_by = current_user.id
             hbf.manager_approved_at = datetime.utcnow()
             if approval_note.strip():
-                hbf.approval_note = approval_note.strip()
+                hbf.approval_note = f"[Müdür – {current_user.name}] {approval_note.strip()}"
         else:
             raise HTTPException(status_code=403)
 
@@ -521,7 +551,11 @@ async def hbf_approve(
         hbf.status = "onaylandi"
         hbf.approved_by = current_user.id
         hbf.approved_at = datetime.utcnow()
-        hbf.approval_note = approval_note.strip() or None
+        # GM notunu müdür notuna ekle (ezme)
+        if approval_note.strip():
+            gm_note = f"[GM – {current_user.name}] {approval_note.strip()}"
+            prev = (hbf.approval_note or "").strip()
+            hbf.approval_note = f"{prev}\n{gm_note}".strip() if prev else gm_note
     else:
         raise HTTPException(status_code=400, detail="Bu HBF onaylanamaz.")
 
@@ -572,6 +606,9 @@ async def hbf_reject(
     if not hbf or hbf.status not in ("beklemede", "mudur_onayladi"):
         raise HTTPException(status_code=404)
 
+    if not approval_note.strip():
+        raise HTTPException(status_code=400, detail="Reddetme gerekçesi zorunludur.")
+
     creator = db.query(User).get(hbf.created_by)
     is_gm = current_user.has_role_min("genel_mudur")
     is_mudur = current_user.has_role_min("mudur")
@@ -584,10 +621,11 @@ async def hbf_reject(
     else:
         raise HTTPException(status_code=403)
 
+    role_label = "GM" if is_gm else "Müdür"
     hbf.status = "reddedildi"
     hbf.approved_by = current_user.id
     hbf.approved_at = datetime.utcnow()
-    hbf.approval_note = approval_note.strip() or None
+    hbf.approval_note = f"[{role_label} – {current_user.name}] {approval_note.strip()}"
     notify(db, hbf.created_by,
            title=f"HBF reddedildi: {hbf.hbf_no}",
            message=f"{current_user.name} harcama bildiriminizi reddetti." + (f" Not: {approval_note.strip()}" if approval_note.strip() else ""),
@@ -622,7 +660,7 @@ async def hbf_pay(
     db: Session = Depends(get_db),
 ):
     # miceapp suite: HBF kapatma/ödeme adımı MUHASEBE'ye ait (admin de yapabilir)
-    if not current_user.is_admin and current_user.role not in ("muhasebe", "muhasebe_muduru"):
+    if not current_user.is_admin and current_user.role.lower() not in ("muhasebe", "muhasebe_muduru"):
         raise HTTPException(status_code=403, detail="Bu adım muhasebe tarafından yapılır.")
     cid = current_user.company_id
     hbf = db.query(HBF).filter(HBF.id == hbf_id, HBF.company_id == cid).first()
@@ -792,7 +830,7 @@ async def hbf_upload(
         new_att["row_id"] = row_id
         # Aynı satıra ait önceki dosyayı sil (replace semantics)
         for old in [a for a in attachments if a.get("row_id") == row_id]:
-            storage_helper.delete_file(f"uploads/hbf/{hbf_id}/{old['filename']}")
+            _delete_hbf_file(hbf_id, old["filename"], current_user.company_id)
         attachments = [a for a in attachments if a.get("row_id") != row_id]
 
     attachments.append(new_att)
@@ -823,5 +861,5 @@ async def hbf_attachment_delete(
     hbf.attachments_json = json.dumps(attachments, ensure_ascii=False)
     db.commit()
 
-    storage_helper.delete_file(f"uploads/hbf/{hbf_id}/{filename}")
+    _delete_hbf_file(hbf_id, filename, current_user.company_id)
     return RedirectResponse(url=f"/hbf/{hbf_id}", status_code=status.HTTP_302_FOUND)
