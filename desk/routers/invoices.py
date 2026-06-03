@@ -507,8 +507,14 @@ def _parse_items(items_json: str):
     except Exception:
         items = []
     net_total = sum(float(i.get("net", 0)) for i in items)
-    vat_total = sum(float(i.get("vat_amt", 0)) for i in items)
-    return net_total, vat_total
+    # vat_amt = net * vat_pct / 100 (form tarafından hesaplanır)
+    # vat_pct yanlışlıkla yüzde değil ondalık girildiyse (örn. 0.10) oranı düzelt
+    raw_vat = sum(float(i.get("vat_amt", 0)) for i in items)
+    if net_total > 0:
+        implied_rate = raw_vat / net_total  # bu ondalık (0.10 = %10) olmalı
+        if implied_rate > 1.5:              # > %150 anlamsız → vat_pct yüzde girilmiş ama /100 yapılmamış
+            raw_vat = raw_vat / 100.0
+    return net_total, raw_vat
 
 
 @router.get("/{invoice_id}/edit", response_class=HTMLResponse, name="invoice_edit_get")
