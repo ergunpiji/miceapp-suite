@@ -759,6 +759,67 @@ function updateAccomNightsLabel() {
     document.getElementById('accomCheckOut')?.addEventListener('change', updateAccomNightsLabel);
     updateAccomNightsLabel();
   }
+
+  // Etkinlik tarihi değişince tüm kalemlerin tarihlerini güncelle
+  function propagateDates() {
+    const evIn  = document.getElementById('checkIn')?.value  || '';
+    const evOut = document.getElementById('checkOut')?.value || evIn;
+    const acIn  = document.getElementById('accomCheckIn')?.value  || evIn;
+    const acOut = document.getElementById('accomCheckOut')?.value || evOut;
+    if (!evIn) return;
+    let changed = false;
+    Object.keys(items).forEach(section => {
+      (items[section] || []).forEach((row, i) => {
+        const isAccom = section === 'accommodation';
+        const from = isAccom ? acIn  : evIn;
+        const to   = isAccom ? acOut : evOut;
+        if (row.date_from !== from || row.date_to !== to) {
+          items[section][i].date_from = from;
+          items[section][i].date_to   = to;
+          // Toplantı satırları için günlük katılımcı listesini yeniden oluştur
+          if (section === 'meeting' && from) {
+            const defQty = parseInt(document.getElementById('attendeeCount')?.value) || 1;
+            items[section][i].daily_attendees = buildDailyAttendees(from, to, row.daily_attendees || [], defQty);
+          }
+          changed = true;
+        }
+      });
+    });
+    if (changed) {
+      Object.keys(items).forEach(s => renderItems(s));
+      saveItemsJson();
+    }
+  }
+
+  // Kişi sayısı değişince tüm kalemlerin miktarlarını güncelle
+  function propagateQty() {
+    const qty = parseInt(document.getElementById('attendeeCount')?.value) || 1;
+    let changed = false;
+    Object.keys(items).forEach(section => {
+      (items[section] || []).forEach((row, i) => {
+        if (section === 'accommodation') return; // konaklama qty'si ayrı
+        if (items[section][i].qty !== qty) {
+          items[section][i].qty = qty;
+          if (section === 'meeting' && row.date_from) {
+            items[section][i].daily_attendees = buildDailyAttendees(
+              row.date_from, row.date_to || row.date_from, row.daily_attendees || [], qty
+            );
+          }
+          changed = true;
+        }
+      });
+    });
+    if (changed) {
+      Object.keys(items).forEach(s => renderItems(s));
+      saveItemsJson();
+    }
+  }
+
+  document.getElementById('checkIn')?.addEventListener('change', propagateDates);
+  document.getElementById('checkOut')?.addEventListener('change', propagateDates);
+  document.getElementById('accomCheckIn')?.addEventListener('change', propagateDates);
+  document.getElementById('accomCheckOut')?.addEventListener('change', propagateDates);
+  document.getElementById('attendeeCount')?.addEventListener('change', propagateQty);
 })();
 
 // ─── Hizmet kalemleri ───
