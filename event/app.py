@@ -236,7 +236,12 @@ def _get_error_user(request: Request):
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     if exc.status_code == 401:
-        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+        # Bozuk / eski cookie'yi temizle — sonraki login temiz başlasın
+        from auth import COOKIE_NAME, COOKIE_DOMAIN
+        resp = RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+        resp.delete_cookie(key=COOKIE_NAME, path="/", domain=COOKIE_DOMAIN)
+        resp.delete_cookie(key=COOKIE_NAME, path="/", domain=None)  # host-only fallback
+        return resp
     _user = _get_error_user(request)
     if exc.status_code == 403:
         return templates.TemplateResponse(
