@@ -281,6 +281,10 @@ def _migrate(engine) -> None:
         "ALTER TABLE invoices ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()",
         "ALTER TABLE invoices ADD COLUMN IF NOT EXISTS due_date DATE",
         "ALTER TABLE invoices ADD COLUMN IF NOT EXISTS items_json TEXT",
+        # Gelen fatura duplicate koruması (vendor + no + tarih benzersizliği)
+        """CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_vendor_no_date
+           ON invoices (vendor_id, invoice_no, invoice_date)
+           WHERE vendor_id IS NOT NULL AND invoice_no IS NOT NULL AND invoice_no <> ''""",
         # miceapp paylaşımlı kolon: total_amount + payment_status
         "ALTER TABLE invoices ADD COLUMN IF NOT EXISTS total_amount FLOAT DEFAULT 0.0",
         "ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'unpaid'",

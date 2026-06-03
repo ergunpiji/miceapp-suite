@@ -140,6 +140,12 @@ def approve_step(db: Session, invoice, approver_user, note: str = "") -> tuple[b
     if invoice.current_approver_id != approver_user.id and not approver_user.is_admin:
         return (False, "Bu faturanın onayı sizden beklenmiyor.")
 
+    # Çıkar çatışması: kendi müşterisine/tedarikçisine ait faturayı onaylayamaz
+    if invoice.customer and getattr(invoice.customer, "owner_id", None) == approver_user.id:
+        return (False, "Bu faturanın müşterisi size atanmış — çıkar çatışması nedeniyle onaylayamazsınız.")
+    if invoice.vendor and getattr(invoice.vendor, "created_by", None) == approver_user.id:
+        return (False, "Bu faturanın tedarikçisini siz oluşturdunuz — çıkar çatışması nedeniyle onaylayamazsınız.")
+
     amount = invoice.total_with_vat or 0
     limit = get_approval_limit(db, approver_user.role)
     # admin/super_admin: sınırsız onay

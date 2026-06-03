@@ -115,7 +115,11 @@ def apply_invoice_payment(
     db.flush()
 
     total = inv.total_with_vat
-    new_paid = sum(p.amount for p in inv.payments)
+    # Race condition önlemi: ilişki cache'ini atla, DB'den taze oku
+    from sqlalchemy import func as _func
+    new_paid = db.query(_func.sum(InvoicePayment.amount)).filter(
+        InvoicePayment.invoice_id == inv.id
+    ).scalar() or 0.0
     if new_paid >= total - 0.01:
         inv.status = "paid"
         inv.payment_status = "paid"

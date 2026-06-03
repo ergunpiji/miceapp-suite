@@ -149,6 +149,7 @@ async def invoice_new_post(
     notes: str = Form(""),
     items_json: str = Form("[]"),
     send_to_gib: str = Form(""),
+    source_invoice_id: str = Form(""),
     attachment_file: UploadFile = File(None),
     current_user: User = Depends(require_module("invoices", edit=True)),
     db: Session = Depends(get_db),
@@ -159,10 +160,33 @@ async def invoice_new_post(
         raise HTTPException(403, "Gelen ve iade fatura kaydı yalnızca muhasebe tarafından yapılabilir.")
 
     net_total, vat_total = _parse_items(items_json)
+    if net_total < 0:
+        raise HTTPException(400, "Fatura tutarı negatif olamaz.")
     amount = net_total
-    vat_rate = (vat_total / net_total) if net_total else 0.0
+    vat_rate = round((vat_total / net_total) if net_total else 0.0, 4)
+    vat_rate_check = round(vat_rate, 2)
+    if net_total > 0 and vat_rate_check not in _VALID_VAT_RATES:
+        raise HTTPException(400, f"Geçersiz KDV oranı: %{vat_rate_check*100:.0f}. Geçerli oranlar: %{', %'.join(str(int(r*100)) for r in sorted(_VALID_VAT_RATES))}.")
     _is_kesilen = invoice_type in ("kesilen", "iade_gelen")
     inv_date = date.fromisoformat(invoice_date)
+
+    # Aynı tedarikçi/tarih/no kombinasyonunda duplicate kontrolü (gelen faturalar için)
+    if invoice_type in ("gelen", "iade_gelen") and vendor_id and invoice_no.strip():
+        dup = db.query(Invoice).filter(
+            Invoice.vendor_id == vendor_id,
+            Invoice.invoice_no == invoice_no.strip(),
+            Invoice.invoice_date == inv_date,
+            Invoice.company_id == cid,
+        ).first()
+        if dup:
+            raise HTTPException(400, f"Bu tedarikçiye ait '{invoice_no.strip()}' numaralı fatura bu tarihte zaten kayıtlı.")
+
+    # İade faturası: orijinal fatura bağlantısı ve tutar kontrolü
+    src_inv_id = source_invoice_id.strip() or None
+    if invoice_type in ("iade_gelen", "iade_kesilen") and src_inv_id:
+        orig = db.query(Invoice).filter(Invoice.id == src_inv_id, Invoice.company_id == cid).first()
+        if orig and amount > orig.total_with_vat + 0.01:
+            raise HTTPException(400, f"İade tutarı ({amount:,.2f}) orijinal fatura tutarını ({orig.total_with_vat:,.2f}) aşamaz.")
     coll_date = None
     if _is_kesilen and customer_id:
         c = db.get(Customer, customer_id)
@@ -185,6 +209,7 @@ async def invoice_new_post(
         status="approved",
         notes=notes.strip(),
         items_json=items_json if items_json != "[]" else None,
+        source_invoice_id=src_inv_id,
         created_by=current_user.id,
         company_id=cid,
     )
@@ -499,22 +524,37 @@ def _compute_collection_date(invoice_date, payment_term: int, payment_dow):
     return due + timedelta(days=days_ahead)
 
 
+_VALID_VAT_RATES = {0.0, 0.01, 0.08, 0.10, 0.18, 0.20}
+
+
 def _parse_items(items_json: str):
-    """Returns (net_total, vat_total) from items JSON string."""
+    """Returns (net_total, vat_total) from items JSON string.
+    Backend'de KDV vat_pct'den yeniden hesaplanır; vat_amt güvenilmez.
+    """
     import json as _json
     try:
         items = _json.loads(items_json or "[]")
     except Exception:
         items = []
-    net_total = sum(float(i.get("net", 0)) for i in items)
-    # vat_amt = net * vat_pct / 100 (form tarafından hesaplanır)
-    # vat_pct yanlışlıkla yüzde değil ondalık girildiyse (örn. 0.10) oranı düzelt
-    raw_vat = sum(float(i.get("vat_amt", 0)) for i in items)
-    if net_total > 0:
-        implied_rate = raw_vat / net_total  # bu ondalık (0.10 = %10) olmalı
-        if implied_rate > 1.5:              # > %150 anlamsız → vat_pct yüzde girilmiş ama /100 yapılmamış
-            raw_vat = raw_vat / 100.0
-    return net_total, raw_vat
+    net_total = 0.0
+    vat_total = 0.0
+    for item in items:
+        net = float(item.get("net") or 0)
+        if net < 0:
+            raise HTTPException(400, f"Fatura kalemi tutarı negatif olamaz ({net}).")
+        # vat_pct varsa backend'de yeniden hesapla, yoksa frontend vat_amt'a dön
+        vat_pct = item.get("vat_pct")
+        if vat_pct is not None:
+            vat_amt = round(net * float(vat_pct) / 100, 2)
+        else:
+            raw = float(item.get("vat_amt") or 0)
+            # %150 üstü anlamsız → yüzde girilmiş ama /100 yapılmamış
+            if net > 0 and raw / net > 1.5:
+                raw = raw / 100.0
+            vat_amt = raw
+        net_total += net
+        vat_total += vat_amt
+    return round(net_total, 2), round(vat_total, 2)
 
 
 @router.get("/{invoice_id}/edit", response_class=HTMLResponse, name="invoice_edit_get")
@@ -679,31 +719,34 @@ async def invoice_payment_delete(
         raise HTTPException(status_code=404)
 
     # İlgili kasa/banka hareketlerini de sil
-    # instruction_id FK varsa bunu önceliklendir; yoksa tutar yakınlığıyla eşleştir
+    # Öncelik sırası: instruction_id → payment_date + tutar yakınlığı
+    def _matches_pmt(entry):
+        if pmt.instruction_id and entry.instruction_id == pmt.instruction_id:
+            return True
+        if not pmt.instruction_id:
+            date_match = getattr(entry, "entry_date", None) == pmt.payment_date or \
+                         getattr(entry, "movement_date", None) == pmt.payment_date
+            return date_match and abs(entry.amount - pmt.amount) < 0.01
+        return False
+
     for ce in list(inv.cash_entries):
-        if ce.invoice_id == invoice_id:
-            if (pmt.instruction_id and ce.instruction_id == pmt.instruction_id) or (
-                not pmt.instruction_id and abs(ce.amount - pmt.amount) < 0.01
-            ):
-                db.delete(ce)
-                break
+        if ce.invoice_id == invoice_id and _matches_pmt(ce):
+            db.delete(ce)
+            break
     for bm in list(inv.bank_movements):
-        if bm.invoice_id == invoice_id:
-            if (pmt.instruction_id and bm.instruction_id == pmt.instruction_id) or (
-                not pmt.instruction_id and abs(bm.amount - pmt.amount) < 0.01
-            ):
-                db.delete(bm)
-                break
+        if bm.invoice_id == invoice_id and _matches_pmt(bm):
+            db.delete(bm)
+            break
 
     db.delete(pmt)
     db.flush()
 
-    # Status güncelle
+    # Status güncelle — flush sonrası taze sorgu (cache'i atla)
+    from sqlalchemy import func as _func
     total = inv.total_with_vat
-    remaining_payments = db.query(InvoicePayment).filter(
+    paid = db.query(_func.sum(InvoicePayment.amount)).filter(
         InvoicePayment.invoice_id == invoice_id
-    ).all()
-    paid = sum(p.amount for p in remaining_payments)
+    ).scalar() or 0.0
     if paid <= 0.01:
         inv.status = "approved"
         inv.paid_at = None
