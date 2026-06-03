@@ -36,6 +36,13 @@
 
 {% block content %}
 
+{% if request.query_params.get('gsk') == 'ok' %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+  GSK teklifi oluşturuldu ve işleme alındı. Hazır dosya birkaç dakika içinde e-posta ile gelecek.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
 <div class="mb-3">
   <a href="{{ back_url }}" class="text-muted text-decoration-none" style="font-size:13px;">
     <i class="bi bi-arrow-left me-1"></i> {{ back_label }}
@@ -97,11 +104,49 @@
             </li>
           </ul>
         </div>
+        <button type="button" class="btn btn-primary btn-sm"
+                data-bs-toggle="modal" data-bs-target="#gskModal">
+          <i class="bi bi-file-earmark-spreadsheet me-1"></i> GSK Teklifi Oluştur &amp; Mail At
+        </button>
         {% endif %}
       </div>
     </div>
   </div>
 </div>
+
+{% if budget.budget_status == 'approved' and current_user.role in ('admin', 'mudur', 'yonetici') %}
+<div class="modal fade" id="gskModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form method="post" action="/budgets/{{ budget.id }}/gsk-gonder" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">GSK Teklifi Oluştur</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">
+          Hesap Dökümü OneDrive'a yazılacak; GSK formatlı teklif birkaç dakika içinde e-posta ile gelecek.
+        </p>
+        <div class="mb-3">
+          <label class="form-label">Hekim sayısı</label>
+          <input type="number" name="hekim" class="form-control" min="0" required value="0">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Staff sayısı</label>
+          <input type="number" name="staff" class="form-control" min="0" required value="0">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">GSK Yetkili Kişi</label>
+          <input type="text" name="yetkili" class="form-control" placeholder="Örn. Buse Altun">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+        <button type="submit" class="btn btn-primary">Oluştur &amp; Gönder</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
 
 {% if budget.revision_notes and current_user.role in ('admin', 'satinalma') %}
 <div class="alert alert-danger mb-3">
