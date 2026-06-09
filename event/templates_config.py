@@ -76,8 +76,36 @@ def format_datetime_tr(value: Any) -> str:
         return str(value)[:16]
 
 
+_company_name_cache: dict[str, str] = {}
+
+
+def company_name(company_id: Any) -> str:
+    """company_id → şirket adı (paylaşılan companies tablosundan, cache'li).
+    Event'te Company modeli yok; raw SQL ile okunur."""
+    if not company_id:
+        return ""
+    cid = str(company_id)
+    if cid in _company_name_cache:
+        return _company_name_cache[cid]
+    name = ""
+    try:
+        from database import SessionLocal
+        from sqlalchemy import text
+        db = SessionLocal()
+        try:
+            row = db.execute(text("SELECT name FROM companies WHERE id = :id"), {"id": cid}).fetchone()
+            name = (row[0] if row else "") or ""
+        finally:
+            db.close()
+    except Exception:
+        name = ""
+    _company_name_cache[cid] = name
+    return name
+
+
 templates.env.filters["date_tr"]      = format_date_tr
 templates.env.filters["datetime_tr"]  = format_datetime_tr
 templates.env.filters["money"]        = format_money
 templates.env.filters["role_label"]   = role_label
 templates.env.filters["fromjson"]     = fromjson_filter
+templates.env.globals["company_name"] = company_name
