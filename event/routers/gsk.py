@@ -16,6 +16,7 @@ from auth import get_current_user
 from database import get_db
 from models import Request as ReqModel, User
 from templates_config import templates
+from tenant import scope   # tenant izolasyonu
 
 router = APIRouter(tags=["gsk"])
 
@@ -106,7 +107,7 @@ async def gsk_export_form(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    req = db.query(ReqModel).filter(ReqModel.id == req_id).first()
+    req = scope(db.query(ReqModel), ReqModel, current_user).filter(ReqModel.id == req_id).first()
     if not req:
         raise HTTPException(404)
 
@@ -141,7 +142,7 @@ async def gsk_export_download(
 ):
     from gsk_export import fill_gsk_template, GSKOverflowError
 
-    req = db.query(ReqModel).filter(ReqModel.id == req_id).first()
+    req = scope(db.query(ReqModel), ReqModel, current_user).filter(ReqModel.id == req_id).first()
     if not req:
         raise HTTPException(404)
 

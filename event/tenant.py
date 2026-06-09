@@ -29,6 +29,18 @@ def effective_company_id(user: Any) -> Optional[str]:
     return EVENT_COMPANY_ID
 
 
+def assert_tenant(user, obj_company_id) -> None:
+    """ID ile erişilen detayda sahiplik guard'ı: nesne kullanıcının şirketinde
+    değilse 404. super_admin (cid None) her şeye erişir. obj_company_id None ise
+    (eski/atanmamış veri) engellenmez — backfill bunları kanonik şirkete bağlar."""
+    cid = effective_company_id(user)
+    if cid is None or obj_company_id is None:
+        return
+    if str(obj_company_id) != str(cid):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Kayıt bulunamadı.")
+
+
 def scope(query, model, user):
     """query'yi kullanıcının şirketine göre filtreler.
     super_admin → dokunma; model'de company_id yoksa → dokunma."""

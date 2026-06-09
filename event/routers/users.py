@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from auth import hash_password, require_admin
 from database import get_db
 from models import OrgTitle, Team, User, USER_ROLES, _uuid, _now
+from tenant import scope   # tenant izolasyonu
 
 router = APIRouter(prefix="/users", tags=["users"])
 from templates_config import templates
@@ -210,7 +211,7 @@ async def users_edit(
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    user = db.query(User).filter(User.id == user_id).first()
+    user = scope(db.query(User), User, current_user).filter(User.id == user_id).first()
     if not user:
         return RedirectResponse(url="/users", status_code=status.HTTP_302_FOUND)
     return templates.TemplateResponse(
@@ -247,7 +248,7 @@ async def users_update(
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    user = db.query(User).filter(User.id == user_id).first()
+    user = scope(db.query(User), User, current_user).filter(User.id == user_id).first()
     if not user:
         return RedirectResponse(url="/users", status_code=status.HTTP_302_FOUND)
 
@@ -428,7 +429,7 @@ async def users_delete(
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    user = db.query(User).filter(User.id == user_id).first()
+    user = scope(db.query(User), User, current_user).filter(User.id == user_id).first()
     if user and user.id != current_user.id:
         user.active = False
         db.commit()

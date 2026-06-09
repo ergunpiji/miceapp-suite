@@ -37,6 +37,7 @@ from models import (
     Budget, Customer, Request as ReqModel, Service, SERVICE_CATEGORIES, User, _uuid, _now,
 )
 from routers.library import log_activity, save_document
+from tenant import scope   # tenant izolasyonu
 
 router = APIRouter(prefix="/budgets", tags=["budgets"])
 from templates_config import templates
@@ -320,7 +321,7 @@ async def budgets_detail(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    budget = scope(db.query(Budget), Budget, current_user).filter(Budget.id == budget_id).first()
     if not budget:
         return RedirectResponse(url="/budgets", status_code=status.HTTP_302_FOUND)
     req = db.query(ReqModel).filter(ReqModel.id == budget.request_id).first()
@@ -406,7 +407,7 @@ async def budgets_edit(
 ):
     if not _can_create_budget(current_user):
         raise HTTPException(403)
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    budget = scope(db.query(Budget), Budget, current_user).filter(Budget.id == budget_id).first()
     if not budget:
         return RedirectResponse(url="/budgets", status_code=status.HTTP_302_FOUND)
     if not _can_satinalma_edit(budget) and current_user.role not in ("admin", "asistan"):
@@ -466,7 +467,7 @@ async def budgets_update(
 ):
     if not _can_create_budget(current_user):
         raise HTTPException(403)
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    budget = scope(db.query(Budget), Budget, current_user).filter(Budget.id == budget_id).first()
     if not budget:
         return RedirectResponse(url="/budgets", status_code=status.HTTP_302_FOUND)
 
@@ -515,7 +516,7 @@ async def budgets_send_to_manager(
 ):
     if current_user.role not in ("admin", "satinalma", "asistan"):
         raise HTTPException(403)
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    budget = scope(db.query(Budget), Budget, current_user).filter(Budget.id == budget_id).first()
     if budget and budget.budget_status in ("draft_satinalma", "revision_requested"):
         budget.budget_status = "pending_manager"
         budget.updated_at    = _now()
@@ -565,7 +566,7 @@ async def budgets_json(
 ):
     """Bütçe verisini JSON olarak döner (AJAX sekme geçişi için)"""
     from fastapi.responses import JSONResponse
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    budget = scope(db.query(Budget), Budget, current_user).filter(Budget.id == budget_id).first()
     if not budget:
         return JSONResponse({"error": "not found"}, status_code=404)
     return JSONResponse({
@@ -589,7 +590,7 @@ async def budgets_price(
 ):
     if current_user.role not in ("admin", "mudur", "yonetici"):
         raise HTTPException(403)
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    budget = scope(db.query(Budget), Budget, current_user).filter(Budget.id == budget_id).first()
     if not budget:
         return RedirectResponse(url="/budgets", status_code=status.HTTP_302_FOUND)
     req = db.query(ReqModel).filter(ReqModel.id == budget.request_id).first()
@@ -661,7 +662,7 @@ async def budgets_price_save(
 ):
     if current_user.role not in ("admin", "mudur", "yonetici"):
         raise HTTPException(403)
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    budget = scope(db.query(Budget), Budget, current_user).filter(Budget.id == budget_id).first()
     if not budget:
         return RedirectResponse(url="/budgets", status_code=status.HTTP_302_FOUND)
 
@@ -722,7 +723,7 @@ async def budgets_approve(
 ):
     if current_user.role not in ("admin", "mudur", "yonetici"):
         raise HTTPException(403)
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    budget = scope(db.query(Budget), Budget, current_user).filter(Budget.id == budget_id).first()
     if not budget:
         raise HTTPException(404)
 
@@ -785,7 +786,7 @@ async def budgets_mark_offer_sent(
     """Excel müşteriye gönderildi → talebin durumunu offer_sent yap."""
     if current_user.role not in ("admin", "mudur", "yonetici"):
         raise HTTPException(403)
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    budget = scope(db.query(Budget), Budget, current_user).filter(Budget.id == budget_id).first()
     if not budget:
         from fastapi.responses import JSONResponse
         return JSONResponse({"ok": False, "error": "Bütçe bulunamadı"}, status_code=404)
@@ -807,7 +808,7 @@ async def budgets_request_revision(
 ):
     if current_user.role not in ("admin", "mudur", "yonetici"):
         raise HTTPException(403)
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    budget = scope(db.query(Budget), Budget, current_user).filter(Budget.id == budget_id).first()
     if budget:
         budget.budget_status  = "revision_requested"
         budget.revision_notes = revision_notes.strip()
@@ -842,7 +843,7 @@ async def budgets_cancel(
 ):
     if current_user.role not in ("admin", "mudur", "yonetici"):
         raise HTTPException(403)
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    budget = scope(db.query(Budget), Budget, current_user).filter(Budget.id == budget_id).first()
     if budget:
         budget.budget_status = "cancelled"
         budget.updated_at    = _now()
@@ -874,7 +875,7 @@ async def budgets_export(
     if current_user.role not in ("admin", "mudur", "yonetici"):
         raise HTTPException(403)
 
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    budget = scope(db.query(Budget), Budget, current_user).filter(Budget.id == budget_id).first()
     if not budget:
         return RedirectResponse(url="/budgets", status_code=status.HTTP_302_FOUND)
 
@@ -1008,7 +1009,7 @@ async def budgets_gsk_gonder(
     if current_user.role not in ("admin", "mudur", "yonetici"):
         raise HTTPException(403)
 
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    budget = scope(db.query(Budget), Budget, current_user).filter(Budget.id == budget_id).first()
     if not budget:
         raise HTTPException(404)
 
@@ -1090,7 +1091,7 @@ async def budgets_delete(
 ):
     if current_user.role not in ("admin", "satinalma"):
         raise HTTPException(403)
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    budget = scope(db.query(Budget), Budget, current_user).filter(Budget.id == budget_id).first()
     if budget and (budget.budget_status == "draft_satinalma" or current_user.role == "admin"):
         db.delete(budget)
         db.commit()
@@ -1107,7 +1108,7 @@ async def budgets_copy_satinalma(
     """Satın Alma maliyet kopyası oluşturur → /edit'e yönlendirir"""
     if current_user.role not in ("admin", "satinalma"):
         raise HTTPException(403)
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    budget = scope(db.query(Budget), Budget, current_user).filter(Budget.id == budget_id).first()
     if not budget:
         raise HTTPException(404)
     src_rows = rows_json.strip() or budget.rows_json
@@ -1140,7 +1141,7 @@ async def budgets_copy_rows(
     """Kaynak bütçenin satırlarını bu bütçeye kopyalar (üzerine yazar)"""
     if current_user.role not in ("admin", "satinalma"):
         raise HTTPException(403)
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    budget = scope(db.query(Budget), Budget, current_user).filter(Budget.id == budget_id).first()
     if not budget:
         raise HTTPException(404)
     if rows_json.strip():
@@ -1159,7 +1160,7 @@ async def budgets_copy(
 ):
     if current_user.role not in ("admin", "mudur", "yonetici"):
         raise HTTPException(403)
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    budget = scope(db.query(Budget), Budget, current_user).filter(Budget.id == budget_id).first()
     if not budget:
         raise HTTPException(404)
 
@@ -1198,7 +1199,7 @@ async def budgets_revise_price(
     """Konfirme bütçenin fiyatlarını revize et (manager veya satinalma)"""
     if current_user.role not in ("admin", "mudur", "yonetici", "satinalma"):
         raise HTTPException(403)
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    budget = scope(db.query(Budget), Budget, current_user).filter(Budget.id == budget_id).first()
     if not budget:
         return RedirectResponse(url="/budgets", status_code=status.HTTP_302_FOUND)
     if budget.budget_status != "confirmed":
@@ -1249,7 +1250,7 @@ async def budgets_revise_price_save(
 ):
     if current_user.role not in ("admin", "mudur", "yonetici", "satinalma"):
         raise HTTPException(403)
-    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    budget = scope(db.query(Budget), Budget, current_user).filter(Budget.id == budget_id).first()
     if not budget or budget.budget_status != "confirmed":
         return RedirectResponse(url="/budgets", status_code=status.HTTP_302_FOUND)
 

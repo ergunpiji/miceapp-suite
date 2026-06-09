@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from auth import require_admin
 from database import get_db
 from models import Team, User, _uuid
+from tenant import scope   # tenant izolasyonu
 
 router = APIRouter(prefix="/teams", tags=["teams"])
 from templates_config import templates
@@ -112,7 +113,7 @@ async def teams_detail(
     db: Session = Depends(get_db),
     saved: str = "",
 ):
-    team = db.query(Team).filter(Team.id == team_id).first()
+    team = scope(db.query(Team), Team, current_user).filter(Team.id == team_id).first()
     if not team:
         return RedirectResponse("/teams", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -151,7 +152,7 @@ async def teams_edit(
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    team = db.query(Team).filter(Team.id == team_id).first()
+    team = scope(db.query(Team), Team, current_user).filter(Team.id == team_id).first()
     if team:
         team.name            = name.strip()
         team.code            = code.strip().upper()[:10]
@@ -168,7 +169,7 @@ async def teams_delete(
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    team = db.query(Team).filter(Team.id == team_id).first()
+    team = scope(db.query(Team), Team, current_user).filter(Team.id == team_id).first()
     if team:
         team.active = False
         db.commit()
