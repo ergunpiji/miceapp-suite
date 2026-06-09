@@ -243,6 +243,7 @@ class OrgTitle(Base):
     budget_limit       = Column(Float, nullable=True)                  # None = limitsiz
     sort_order         = Column(Integer, default=0)
     pm_permission_level = Column(String(16), nullable=True)            # 'mudur' | 'yonetici' | 'asistan' | None
+    company_id          = Column(String(36), nullable=True, index=True)   # tenant izolasyonu
 
     parent   = relationship("OrgTitle", remote_side="OrgTitle.id", back_populates="children",
                             foreign_keys="OrgTitle.parent_id")

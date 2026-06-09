@@ -18,6 +18,8 @@ from typing import Any, Optional
 def effective_company_id(user: Any) -> Optional[str]:
     """Kullanıcının görebileceği TEK company_id. super_admin → None (tüm şirketler).
     Diğerleri için user.company_id, yoksa kanonik EVENT_COMPANY_ID fallback."""
+    if user is None:
+        return None   # kullanıcı yoksa filtre uygulama (çağıran sorumlu)
     if getattr(user, "role", None) == "super_admin":
         return None
     cid = getattr(user, "company_id", None)

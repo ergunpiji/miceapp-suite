@@ -585,6 +585,7 @@ def migrate_db():
         _safe_add_column(conn, "request_templates", "description", "TEXT DEFAULT ''")
         _safe_add_column(conn, "request_templates", "company_id",  "VARCHAR(36)")
         _safe_add_column(conn, "teams", "company_id", "VARCHAR(36)")   # tenant izolasyonu
+        _safe_add_column(conn, "org_titles", "company_id", "VARCHAR(36)")   # tenant izolasyonu
         _safe_add_column(conn, "prepayment_requests", "needed_date", "VARCHAR(10)")
         _safe_add_column(conn, "prepayment_requests", "document_path", "VARCHAR(500)")
         _safe_add_column(conn, "prepayment_requests", "document_name", "VARCHAR(255)")
@@ -1556,7 +1557,7 @@ def _seed_event_company() -> None:
                 })
                 print(f"  [seed] Event şirketi oluşturuldu (id={EVENT_COMPANY_ID})")
             # Mevcut verileri event şirketine ata (company_id NULL olanları)
-            for tbl in ("requests", "invoices", "budgets", "vendor_prepayments", "teams"):
+            for tbl in ("requests", "invoices", "budgets", "vendor_prepayments", "teams", "org_titles"):
                 result = conn.execute(_text(
                     f"UPDATE {tbl} SET company_id = :cid WHERE company_id IS NULL"
                 ), {"cid": EVENT_COMPANY_ID})
@@ -1577,6 +1578,45 @@ def _seed_event_company() -> None:
 # idi; kazara çoklu-şirket parçalanmasını önlemek için STOK Mice'a sabitlendi.
 # desk/database.py EVENT_COMPANY_ID ile AYNI olmalı.
 EVENT_COMPANY_ID = "78c37983-7c75-4489-a1ec-c6c1d33f0daf"
+
+
+def _seed_org_titles_per_company() -> None:
+    """Her şirket için org_titles seti olmasını sağlar — kanonik (STOK) şirketinkini
+    klonlar. Tenant izolasyonu: her şirket yalnızca kendi org_titles'ını görür;
+    company_id'si olmayan yeni şirketler (örn. Demo) kendi unvan setini alır."""
+    from sqlalchemy import text as _text
+    db = SessionLocal()
+    try:
+        src = (db.query(OrgTitle)
+                 .filter(OrgTitle.company_id == EVENT_COMPANY_ID)
+                 .order_by(OrgTitle.grade).all())
+        if not src:
+            return
+        try:
+            company_ids = [r[0] for r in db.execute(_text("SELECT id FROM companies")).fetchall()]
+        except Exception:
+            db.rollback()
+            return
+        for cid in company_ids:
+            if cid == EVENT_COMPANY_ID:
+                continue
+            if db.query(OrgTitle).filter(OrgTitle.company_id == cid).first():
+                continue  # zaten var
+            id_map = {t.id: _uuid() for t in src}
+            for t in src:
+                db.add(OrgTitle(
+                    id=id_map[t.id], name=t.name, grade=t.grade,
+                    parent_id=(id_map.get(t.parent_id) if t.parent_id else None),
+                    budget_limit=t.budget_limit, sort_order=t.sort_order,
+                    pm_permission_level=t.pm_permission_level, company_id=cid,
+                ))
+            db.commit()
+            print(f"[seed] org_titles {len(src)} unvan → {cid} klonlandı.")
+    except Exception as exc:
+        db.rollback()
+        print(f"[seed] org_titles per-company HATA: {exc}")
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":

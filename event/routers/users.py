@@ -12,7 +12,7 @@ POST   /users/org-titles/{id}    → Unvan bütçe limiti güncelle
 
 import io
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -24,17 +24,20 @@ router = APIRouter(prefix="/users", tags=["users"])
 from templates_config import templates
 
 
-def _get_org_titles(db: Session) -> list:
-    return db.query(OrgTitle).order_by(OrgTitle.sort_order).all()
+def _get_org_titles(db: Session, user=None) -> list:
+    from tenant import scope
+    return scope(db.query(OrgTitle), OrgTitle, user).order_by(OrgTitle.sort_order).all()
 
 
-def _get_teams(db: Session) -> list:
-    return db.query(Team).filter(Team.active == True).order_by(Team.name).all()
+def _get_teams(db: Session, user=None) -> list:
+    from tenant import scope
+    return scope(db.query(Team), Team, user).filter(Team.active == True).order_by(Team.name).all()
 
 
-def _get_pm_users(db: Session, exclude_id: str | None = None) -> list:
+def _get_pm_users(db: Session, exclude_id: str | None = None, user=None) -> list:
     """Yönetici olabilecek tüm aktif kullanıcılar (admin + PM tarafı + muhasebe müdürü)."""
-    q = db.query(User).filter(
+    from tenant import scope
+    q = scope(db.query(User), User, user).filter(
         User.active == True,
         User.role.in_(["admin", "mudur", "yonetici", "asistan", "muhasebe_muduru"]),
     )
@@ -50,7 +53,8 @@ async def users_list(
     db: Session = Depends(get_db),
     welcome_for: str = "",
 ):
-    users = db.query(User).order_by(User.created_at.desc()).all()
+    from tenant import scope
+    users = scope(db.query(User), User, current_user).order_by(User.created_at.desc()).all()  # tenant izolasyonu
     welcome_user = db.query(User).filter(User.id == welcome_for).first() if welcome_for else None
     return templates.TemplateResponse(
         "users/list.html",
@@ -72,10 +76,11 @@ async def org_titles_page(
     db: Session = Depends(get_db),
     saved: str = "",
 ):
-    titles = _get_org_titles(db)
-    # Tüm kullanıcı sayısını unvan başına hesapla
+    from tenant import scope
+    titles = _get_org_titles(db, current_user)
+    # Tüm kullanıcı sayısını unvan başına hesapla (kendi şirketi)
     user_counts = {}
-    for u in db.query(User).filter(User.active == True).all():
+    for u in scope(db.query(User), User, current_user).filter(User.active == True).all():
         if u.org_title_id:
             user_counts[u.org_title_id] = user_counts.get(u.org_title_id, 0) + 1
 
@@ -101,6 +106,11 @@ async def org_title_update(
     db: Session = Depends(get_db),
 ):
     title = db.query(OrgTitle).filter(OrgTitle.id == title_id).first()
+    # Tenant izolasyonu: başka şirketin unvanı güncellenemez
+    from tenant import effective_company_id
+    _cid = effective_company_id(current_user)
+    if title and _cid is not None and title.company_id != _cid:
+        raise HTTPException(403)
     if title:
         val = budget_limit.strip().replace(".", "").replace(",", "")
         title.budget_limit = float(val) if val else None
@@ -124,9 +134,9 @@ async def users_new(
             "user":         None,
             "page_title":   "Yeni Kullanıcı",
             "user_roles":   USER_ROLES,
-            "org_titles":   _get_org_titles(db),
-            "teams":        _get_teams(db),
-            "pm_users":     _get_pm_users(db),
+            "org_titles":   _get_org_titles(db, current_user),
+            "teams":        _get_teams(db, current_user),
+            "pm_users":     _get_pm_users(db, user=current_user),
             "error":        None,
         },
     )
@@ -158,9 +168,9 @@ async def users_create(
                 "user":         None,
                 "page_title":   "Yeni Kullanıcı",
                 "user_roles":   USER_ROLES,
-                "org_titles":   _get_org_titles(db),
-                "teams":        _get_teams(db),
-                "pm_users":     _get_pm_users(db),
+                "org_titles":   _get_org_titles(db, current_user),
+                "teams":        _get_teams(db, current_user),
+                "pm_users":     _get_pm_users(db, user=current_user),
                 "error":        "Bu e-posta adresi zaten kayıtlı.",
                 "form_data":    {"email": email, "role": role, "name": name, "surname": surname,
                                  "title": title, "phone": phone, "org_title_id": org_title_id},
@@ -181,6 +191,7 @@ async def users_create(
         org_title_id=org_title_id.strip() or None,
         team_id=tid,
         manager_id=manager_id.strip() or None,
+        company_id=current_user.company_id,   # tenant: yeni kullanıcı, oluşturanın şirketine ait
         active=True,
         created_at=_now(),
     )
@@ -210,9 +221,9 @@ async def users_edit(
             "user":         user,
             "page_title":   f"{user.full_name} — Düzenle",
             "user_roles":   USER_ROLES,
-            "org_titles":   _get_org_titles(db),
-            "teams":        _get_teams(db),
-            "pm_users":     _get_pm_users(db, exclude_id=user_id),
+            "org_titles":   _get_org_titles(db, current_user),
+            "teams":        _get_teams(db, current_user),
+            "pm_users":     _get_pm_users(db, exclude_id=user_id, user=current_user),
             "error":        None,
         },
     )
@@ -253,9 +264,9 @@ async def users_update(
                 "user":         user,
                 "page_title":   f"{user.full_name} — Düzenle",
                 "user_roles":   USER_ROLES,
-                "org_titles":   _get_org_titles(db),
-                "teams":        _get_teams(db),
-                "pm_users":     _get_pm_users(db, exclude_id=user_id),
+                "org_titles":   _get_org_titles(db, current_user),
+                "teams":        _get_teams(db, current_user),
+                "pm_users":     _get_pm_users(db, exclude_id=user_id, user=current_user),
                 "error":        "Bu e-posta adresi başka bir kullanıcıya ait.",
             },
             status_code=400,

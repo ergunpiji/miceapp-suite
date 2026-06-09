@@ -20,7 +20,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from database import Base, engine, seed_data, migrate_db, _seed_event_company
+from database import Base, engine, seed_data, migrate_db, _seed_event_company, _seed_org_titles_per_company
 from templates_config import templates
 
 # ---------------------------------------------------------------------------
@@ -53,6 +53,7 @@ else:
     migrate_db()
     seed_data()
     _seed_event_company()
+    _seed_org_titles_per_company()   # her şirkete kendi org_titles seti (tenant izolasyonu)
 
 # ---------------------------------------------------------------------------
 # FastAPI uygulaması
