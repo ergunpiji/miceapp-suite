@@ -66,14 +66,35 @@ def _get_form_context(db, current_user, user=None, error=None, page_title="Kulla
             if ud.is_head:
                 head_dept_ids.add(ud.department_id)
 
+    # Organizasyon unvanları: event ile ortak global tablo (company_id yok) — herkese aynı.
     org_titles = db.query(OrgTitle).order_by(OrgTitle.sort_order).all()
-    teams      = db.query(Team).filter(Team.active == True).order_by(Team.name).all()
-    pm_users   = db.query(User).filter(
-        User.active == True,
+
+    # Yöneticiler (Doğrudan Yönetici dropdown'ı): hedef şirkete göre filtrelenir
+    # (tenant izolasyonu — başka şirketin kullanıcısı yönetici olarak gösterilmez).
+    pm_q = db.query(User).filter(
+        User.active == True,  # noqa: E712
         User.role.in_(["admin", "mudur", "yonetici", "genel_mudur", "super_admin"]),
-    ).order_by(User.name).all()
+    )
+    if cid:
+        pm_q = pm_q.filter(User.company_id == cid)
+    pm_users = pm_q.order_by(User.name).all()
     if user:
         pm_users = [u for u in pm_users if u.id != user.id]
+
+    # Takımlar: Team tablosunda company_id yok (event ile ortak global tablo) →
+    # hedef şirkete ait kullanıcıların team_id'leri üzerinden türetilmiş kapsam.
+    if cid:
+        _team_ids = {
+            t for (t,) in db.query(User.team_id)
+            .filter(User.company_id == cid, User.team_id.isnot(None)).distinct().all()
+        }
+        teams = (
+            db.query(Team).filter(Team.active == True, Team.id.in_(_team_ids))  # noqa: E712
+            .order_by(Team.name).all()
+            if _team_ids else []
+        )
+    else:
+        teams = db.query(Team).filter(Team.active == True).order_by(Team.name).all()  # noqa: E712
 
     return {
         "current_user": current_user,
