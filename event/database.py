@@ -1534,7 +1534,7 @@ def _seed_event_company() -> None:
     """Event app için varsayılan şirket kaydı oluşturur ve mevcut verileri atar.
     Idempotent: companies tablosunda 'event' slug'ı varsa tekrar yazmaz."""
     from sqlalchemy import text as _text
-    EVENT_COMPANY_ID = "00000000-0000-0000-0000-000000000001"
+    EVENT_COMPANY_ID = "78c37983-7c75-4489-a1ec-c6c1d33f0daf"  # kanonik: STOK Mice
     with engine.begin() as conn:
         # companies tablosu yoksa oluşturma — desk zaten oluşturmuştur
         try:
@@ -1571,7 +1571,11 @@ def _seed_event_company() -> None:
             print(f"  [seed] Event şirketi seed hatası (atlandı): {e}")
 
 
-EVENT_COMPANY_ID = "00000000-0000-0000-0000-000000000001"
+# Kanonik tek-tenant şirketi: STOK Mice (operasyonel şirket; 14 kullanıcı +
+# faturalar + firma profili burada). Eskiden 00000000-...-0001 ("miceapp Event")
+# idi; kazara çoklu-şirket parçalanmasını önlemek için STOK Mice'a sabitlendi.
+# desk/database.py EVENT_COMPANY_ID ile AYNI olmalı.
+EVENT_COMPANY_ID = "78c37983-7c75-4489-a1ec-c6c1d33f0daf"
 
 
 if __name__ == "__main__":

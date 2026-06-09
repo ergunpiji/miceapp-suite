@@ -794,10 +794,10 @@ def _seed_public_holidays_2026() -> None:
         db.close()
 
 
-# Kanonik tenant id — event/database.py EVENT_COMPANY_ID ile AYNI olmalı.
-# Event referansları bu id ile damgalanıyor; desk de aynı id'yi kullanmalı ki
-# paylaşılan DB'de tenant uyuşmazlığı (referanslar görünmemesi) yaşanmasın.
-EVENT_COMPANY_ID = "00000000-0000-0000-0000-000000000001"
+# Kanonik tek-tenant şirketi: STOK Mice (operasyonel şirket; 14 kullanıcı +
+# faturalar + firma profili burada). event/database.py EVENT_COMPANY_ID ile AYNI
+# olmalı — paylaşılan DB'de tenant uyuşmazlığını (referanslar görünmemesi) önler.
+EVENT_COMPANY_ID = "78c37983-7c75-4489-a1ec-c6c1d33f0daf"
 
 
 def _seed_default_company() -> None:
@@ -852,6 +852,69 @@ def _seed_default_company() -> None:
     except Exception as exc:
         db.rollback()
         print(f"[seed] Kanonik şirket HATA: {exc}")
+    finally:
+        db.close()
+
+
+def _consolidate_tenant_once() -> None:
+    """TEK SEFERLİK: kazara oluşan çoklu şirketleri tek kanonik tenant'a (STOK
+    Mice = EVENT_COMPANY_ID) toplar. Bir SystemSetting bayrağıyla yalnızca bir
+    kez çalışır. Tek-organizasyon dağıtımı içindir; referans/müşteri/fatura vb.
+    farklı company_id'lere dağılmıştı → finans kullanıcıları (Sibel) göremiyordu.
+    """
+    from sqlalchemy import text
+    FLAG = "tenant_consolidated_v1"
+    db = SessionLocal()
+    try:
+        done = db.execute(
+            text("SELECT value FROM system_settings WHERE key = :k"), {"k": FLAG}
+        ).fetchone()
+        if done and str(done[0]) == "1":
+            return  # zaten yapıldı
+
+        cid = EVENT_COMPANY_ID  # kanonik şirket (STOK Mice)
+        # company_id kolonu olan TÜM public tabloları bul (PostgreSQL).
+        try:
+            cols = db.execute(text(
+                "SELECT table_name FROM information_schema.columns "
+                "WHERE column_name = 'company_id' AND table_schema = 'public'"
+            )).fetchall()
+        except Exception:
+            db.rollback()
+            return  # SQLite/local — information_schema yok, atla
+
+        moved = 0
+        for (tbl,) in cols:
+            try:
+                res = db.execute(
+                    text(f'UPDATE "{tbl}" SET company_id = :cid '
+                         f'WHERE company_id IS DISTINCT FROM :cid'),
+                    {"cid": cid},
+                )
+                db.commit()
+                moved += (res.rowcount or 0)
+            except Exception:
+                db.rollback()
+
+        # Bayrağı set et — bir daha çalışmasın.
+        try:
+            row = db.execute(
+                text("SELECT key FROM system_settings WHERE key = :k"), {"k": FLAG}
+            ).fetchone()
+            if row:
+                db.execute(text("UPDATE system_settings SET value = '1' WHERE key = :k"), {"k": FLAG})
+            else:
+                db.execute(
+                    text("INSERT INTO system_settings (key, value) VALUES (:k, '1')"),
+                    {"k": FLAG},
+                )
+            db.commit()
+        except Exception:
+            db.rollback()
+        print(f"[consolidate] Tenant birleştirme tamam — {moved} satır → {cid}")
+    except Exception as exc:
+        db.rollback()
+        print(f"[consolidate] HATA: {exc}")
     finally:
         db.close()
 
@@ -1397,6 +1460,7 @@ def init_db() -> None:
     _seed_payroll_settings()
     _seed_vendor_types()
     _seed_default_company()
+    _consolidate_tenant_once()   # tek seferlik: çoklu şirketi STOK Mice'a topla
     _seed_demo_company()
     _seed_departments_and_access()
     _seed_approval_limits()
