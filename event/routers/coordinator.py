@@ -46,7 +46,9 @@ async def coordinator_invoice_list(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_pm),
 ):
-    query = db.query(Invoice).filter(Invoice.coordinator_status.isnot(None))
+    from tenant import scope
+    _iq = lambda: scope(db.query(Invoice), Invoice, current_user)   # tenant izolasyonu
+    query = _iq().filter(Invoice.coordinator_status.isnot(None))
     if filter == "beklemede":
         query = query.filter(Invoice.coordinator_status == "beklemede")
     elif filter == "onaylandi":
@@ -59,9 +61,9 @@ async def coordinator_invoice_list(
     cm = _customer_map(db, rm)
 
     counts = {
-        "beklemede":  db.query(Invoice).filter(Invoice.coordinator_status == "beklemede").count(),
-        "onaylandi":  db.query(Invoice).filter(Invoice.coordinator_status == "onaylandi").count(),
-        "reddedildi": db.query(Invoice).filter(Invoice.coordinator_status == "reddedildi").count(),
+        "beklemede":  _iq().filter(Invoice.coordinator_status == "beklemede").count(),
+        "onaylandi":  _iq().filter(Invoice.coordinator_status == "onaylandi").count(),
+        "reddedildi": _iq().filter(Invoice.coordinator_status == "reddedildi").count(),
     }
 
     return templates.TemplateResponse("coordinator/invoices.html", {

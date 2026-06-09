@@ -109,7 +109,8 @@ async def reports_financial(
     # Fatura bazlı sorgulama: taleplerin etkinlik başlangıç tarihi (check_in) aralığa göre filtrele.
     # Gruplama ile tutarlı olması için fatura tarihi değil iş tarihi esas alınır.
     # Fon havuzu referansları (customer + vendor) tamamen hariç — sahte ref görünmesinler.
-    req_date_q = db.query(ReqModel.id).filter(
+    from tenant import scope
+    req_date_q = scope(db.query(ReqModel.id), ReqModel, current_user).filter(  # tenant izolasyonu
         ReqModel.check_in >= d_from.isoformat(),
         ReqModel.check_in <= d_to.isoformat(),
         ReqModel.is_fund_pool == False,                           # noqa: E712

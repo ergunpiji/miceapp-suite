@@ -121,7 +121,8 @@ async def budgets_list(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Budget)
+    from tenant import scope
+    query = scope(db.query(Budget), Budget, current_user)   # tenant izolasyonu
     if current_user.role == "satinalma":
         query = query.filter(Budget.created_by == current_user.id)
     # mudur (Etkinlik Süreç Müdürü) ve GM tüm bütçeleri görür — takım engeli yok

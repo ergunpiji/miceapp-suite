@@ -147,7 +147,16 @@ async def closure_list(
     if current_user.role not in ("admin", "mudur", "muhasebe_muduru"):
         raise HTTPException(403)
 
+    # Tenant izolasyonu: ClosureRequest'te company_id yok → şirketin referansları üzerinden
+    from tenant import effective_company_id
+    _cid = effective_company_id(current_user)
+    _co_rids = None
+    if _cid is not None:
+        _co_rids = [r.id for r in db.query(ReqModel.id).filter(ReqModel.company_id == _cid).all()]
+
     query = db.query(ClosureRequest)
+    if _co_rids is not None:
+        query = query.filter(ClosureRequest.request_id.in_(_co_rids))
     # Takım bazlı filtreleme
     if not current_user.is_gm and current_user.role == "mudur" and current_user.team_id:
         _mudur_team = db.query(Team).filter(Team.id == current_user.team_id).first()
@@ -171,6 +180,8 @@ async def closure_list(
     pend_q = db.query(ClosureRequest).filter(
         ClosureRequest.status.in_(["pending_manager", "pending_gm", "pending_finance"])
     )
+    if _co_rids is not None:
+        pend_q = pend_q.filter(ClosureRequest.request_id.in_(_co_rids))
     pending_count = pend_q.count()
 
     return templates.TemplateResponse("closure/list.html", {

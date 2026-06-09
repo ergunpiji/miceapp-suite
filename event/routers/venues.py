@@ -36,7 +36,8 @@ async def venues_list(
     stype: str = "",
     q: str = "",
 ):
-    query = db.query(Vendor).filter(Vendor.active == True)
+    from tenant import scope
+    query = scope(db.query(Vendor), Vendor, current_user).filter(Vendor.active == True)  # tenant izolasyonu
 
     if q:
         query = query.filter(Vendor.name.ilike(f"%{q}%"))

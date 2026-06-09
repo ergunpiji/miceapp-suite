@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from auth import get_current_user
 from database import get_db
 from models import Budget, Customer, Invoice, Request as ReqModel, Service, Team, User, Vendor, ClosureRequest
+from tenant import scope, effective_company_id
 
 router = APIRouter()
 from templates_config import templates
@@ -31,7 +32,7 @@ def _last_n_months(n: int = 6) -> list[str]:
     return months
 
 
-def _build_financial_stats(db: Session, req_id_filter=None, d_from=None, d_to=None, customer_id=None, ref_status=None):
+def _build_financial_stats(db: Session, req_id_filter=None, d_from=None, d_to=None, customer_id=None, ref_status=None, company_id=None):
     """Onaylı faturalardan ciro/kar/aylık veri hesapla — sadece gerçek rakamlar.
 
     Fon havuzu ana referanslarının `kesilen` faturaları ciro'ya dahil EDİLMEZ
@@ -69,6 +70,8 @@ def _build_financial_stats(db: Session, req_id_filter=None, d_from=None, d_to=No
     inv_query = db.query(Invoice).filter(
         Invoice.status.in_(["approved", "gm_approved", "active"]),
     )
+    if company_id is not None:
+        inv_query = inv_query.filter(Invoice.company_id == company_id)
     if req_id_filter is not None:
         inv_query = inv_query.filter(Invoice.request_id.in_(req_id_filter))
     if _fund_inv_ids:
@@ -139,6 +142,9 @@ def _build_financial_stats(db: Session, req_id_filter=None, d_from=None, d_to=No
     # out = alt ref'e giren (gelir), in = alt ref'ten fona dönen (iade)
     from models import FundTransfer as _FT, Request as _Req
     ft_query = db.query(_FT)
+    if company_id is not None:
+        # FundTransfer'da company_id yok → ilişkili referansın şirketine göre kapsamla
+        ft_query = ft_query.join(_Req, _FT.related_request_id == _Req.id).filter(_Req.company_id == company_id)
     if req_id_filter is not None:
         ft_query = ft_query.filter(_FT.related_request_id.in_(req_id_filter))
     for t in ft_query.all():
@@ -170,6 +176,8 @@ def _build_financial_stats(db: Session, req_id_filter=None, d_from=None, d_to=No
     # KDV hariç tutarıyla maliyete eklenir (requests/detail.html ile aynı mantık).
     from models import ExpenseReport as _ER
     hbf_q = db.query(_ER).filter(_ER.status.in_(["onaylandi", "kapandi", "approved"]))
+    if company_id is not None:
+        hbf_q = hbf_q.filter(_ER.company_id == company_id)
     if req_id_filter is not None:
         hbf_q = hbf_q.filter(_ER.request_id.in_(req_id_filter))
     hbf_gider = 0.0
@@ -220,7 +228,7 @@ def _build_financial_stats(db: Session, req_id_filter=None, d_from=None, d_to=No
     }
 
 
-def _build_ytd_team_stats(db: Session) -> list[dict]:
+def _build_ytd_team_stats(db: Session, company_id=None) -> list[dict]:
     """Yılbaşından bugüne takım bazlı ciro/kar (tüm takımlar — GM/admin için).
 
     Fon havuzu referansları (customer + vendor) tamamen hariç tutulur —
@@ -230,10 +238,12 @@ def _build_ytd_team_stats(db: Session) -> list[dict]:
     from models import FundTransfer as _FT
     year_start = date(date.today().year, 1, 1).isoformat()
 
-    reqs = (db.query(ReqModel)
+    _rq = (db.query(ReqModel)
               .filter(ReqModel.check_in >= year_start,
-                      ReqModel.is_fund_pool == False)            # noqa: E712
-              .all())
+                      ReqModel.is_fund_pool == False))           # noqa: E712
+    if company_id is not None:
+        _rq = _rq.filter(ReqModel.company_id == company_id)
+    reqs = _rq.all()
     if not reqs:
         return []
     req_team_map = {r.id: r.team_id for r in reqs}
@@ -284,7 +294,7 @@ def _build_ytd_team_stats(db: Session) -> list[dict]:
     return rows
 
 
-def _build_ytd_customer_stats(db: Session, req_id_filter=None, limit: int = 10) -> list[dict]:
+def _build_ytd_customer_stats(db: Session, req_id_filter=None, limit: int = 10, company_id=None) -> list[dict]:
     """Yılbaşından bugüne müşteri bazlı ciro/kar.
 
     req_id_filter verilirse sadece o referans ID'leri kapsanır (rol scope).
@@ -296,6 +306,8 @@ def _build_ytd_customer_stats(db: Session, req_id_filter=None, limit: int = 10) 
     req_q = (db.query(ReqModel)
                .filter(ReqModel.check_in >= year_start,
                        ReqModel.is_fund_pool == False))           # noqa: E712
+    if company_id is not None:
+        req_q = req_q.filter(ReqModel.company_id == company_id)
     if req_id_filter is not None:
         req_q = req_q.filter(ReqModel.id.in_(req_id_filter))
     reqs = req_q.all()
@@ -399,6 +411,7 @@ def _build_pending_tasks(db: Session, current_user) -> list[dict]:
     """
     tasks = []
     role = current_user.role
+    company_id = effective_company_id(current_user)  # super_admin → None (hepsi)
 
     # ── Müdür / Admin / Muhasebe Müdürü: onay bekleyen fatura ──────────────
     if role in ("mudur", "admin", "muhasebe_muduru"):
@@ -412,6 +425,8 @@ def _build_pending_tasks(db: Session, current_user) -> list[dict]:
         for inv in invs:
             req = inv.request
             if not req:
+                continue
+            if company_id and req.company_id != company_id:
                 continue
             ctx_bits = [req.request_no, req.event_name]
             if inv.vendor_name:
@@ -440,6 +455,8 @@ def _build_pending_tasks(db: Session, current_user) -> list[dict]:
             req = cl.request
             if not req:
                 continue
+            if company_id and req.company_id != company_id:
+                continue
             tasks.append({
                 "icon":    "bi-folder-check",
                 "color":   "primary",
@@ -462,6 +479,8 @@ def _build_pending_tasks(db: Session, current_user) -> list[dict]:
             req = cl.request
             if not req:
                 continue
+            if company_id and req.company_id != company_id:
+                continue
             tasks.append({
                 "icon":    "bi-folder-check",
                 "color":   "warning",
@@ -483,6 +502,8 @@ def _build_pending_tasks(db: Session, current_user) -> list[dict]:
         for inv in invs_gm:
             req = inv.request
             if not req:
+                continue
+            if company_id and req.company_id != company_id:
                 continue
             ctx_bits = [req.request_no, req.event_name]
             if inv.vendor_name:
@@ -511,6 +532,8 @@ def _build_pending_tasks(db: Session, current_user) -> list[dict]:
             req = cl.request
             if not req:
                 continue
+            if company_id and req.company_id != company_id:
+                continue
             tasks.append({
                 "icon":    "bi-folder-check",
                 "color":   "info",
@@ -523,7 +546,7 @@ def _build_pending_tasks(db: Session, current_user) -> list[dict]:
     # ── Satın Alma: atanmamış talepler ──────────────────────────────────────────
     if role == "satinalma":
         pending_reqs = (
-            db.query(ReqModel)
+            scope(db.query(ReqModel), ReqModel, current_user)
             .filter(ReqModel.status == "pending")
             .order_by(ReqModel.created_at.asc())
             .limit(15)
@@ -559,6 +582,8 @@ def _build_pending_tasks(db: Session, current_user) -> list[dict]:
             .all()
         )
         for req in budget_ready:
+            if company_id and req.company_id != company_id:
+                continue
             if req.status == "budget_ready":
                 title = "Bütçe hazırlandı — incelemenizi bekliyor"
             else:
@@ -610,24 +635,25 @@ async def dashboard(
     stats = {}
     financial = {}
     recent_requests = []
+    _cid = effective_company_id(current_user)  # tenant kapsamı (super_admin → None)
 
     if current_user.is_gm or current_user.role in ("admin", "muhasebe_muduru"):
-        # GM, admin, muhasebe_muduru: tüm şirket verileri
+        # GM, admin, muhasebe_muduru: KENDİ ŞİRKETİNİN tüm verileri (super_admin: hepsi)
         req_id_filter = None
-        base_q = db.query(ReqModel)
+        base_q = scope(db.query(ReqModel), ReqModel, current_user)
 
         stats = {
-            "total_venues":    db.query(Vendor).filter(Vendor.active == True).count(),
+            "total_venues":    scope(db.query(Vendor), Vendor, current_user).filter(Vendor.active == True).count(),
             "total_requests":  base_q.count(),
-            "total_users":     db.query(User).filter(User.active == True).count(),
-            "total_customers": db.query(Customer).count(),
-            "total_budgets":   db.query(Budget).count(),
+            "total_users":     scope(db.query(User), User, current_user).filter(User.active == True).count(),
+            "total_customers": scope(db.query(Customer), Customer, current_user).count(),
+            "total_budgets":   scope(db.query(Budget), Budget, current_user).count(),
             "open_requests":   base_q.filter(
                 ReqModel.status.in_(["pending", "in_progress", "venues_contacted",
                                      "budget_ready", "offer_sent", "revision"])
             ).count(),
         }
-        financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to, customer_id=cust_id, ref_status=ref_status_set)
+        financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to, customer_id=cust_id, ref_status=ref_status_set, company_id=_cid)
         recent_requests = (
             base_q.order_by(ReqModel.created_at.desc()).limit(8).all()
         )
@@ -647,7 +673,7 @@ async def dashboard(
                 "my_confirmed":   base_q.filter(ReqModel.status == "confirmed").count(),
                 "total_budgets":  db.query(Budget).filter(Budget.request_id.in_(req_id_filter)).count(),
             }
-            financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to, customer_id=cust_id, ref_status=ref_status_set)
+            financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to, customer_id=cust_id, ref_status=ref_status_set, company_id=_cid)
             recent_requests = base_q.order_by(ReqModel.created_at.desc()).limit(8).all()
         else:
             # Normal birim müdürü: sadece kendi takımının istatistikleri
@@ -664,7 +690,7 @@ async def dashboard(
                 ).count() if current_user.team_id else 0,
                 "total_budgets":   db.query(Budget).filter(Budget.request_id.in_(req_id_filter)).count(),
             }
-            financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to, customer_id=cust_id, ref_status=ref_status_set)
+            financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to, customer_id=cust_id, ref_status=ref_status_set, company_id=_cid)
             recent_requests = base_q.order_by(ReqModel.created_at.desc()).limit(8).all()
 
     elif current_user.role == "yonetici":
@@ -689,7 +715,7 @@ async def dashboard(
                                      "budget_ready", "offer_sent", "revision"])
             ).count(),
         }
-        financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to, customer_id=cust_id, ref_status=ref_status_set)
+        financial = _build_financial_stats(db, req_id_filter=req_id_filter, d_from=d_from, d_to=d_to, customer_id=cust_id, ref_status=ref_status_set, company_id=_cid)
         recent_requests = (
             base_q.order_by(ReqModel.created_at.desc()).limit(8).all()
         )
@@ -719,19 +745,20 @@ async def dashboard(
         )
 
     else:  # satinalma, muhasebe — sadece iş yükü, finansal bilgi yok
+        _rq = lambda: scope(db.query(ReqModel), ReqModel, current_user)
         stats = {
-            "pending":          db.query(ReqModel).filter(ReqModel.status == "pending").count(),
-            "in_progress":      db.query(ReqModel).filter(ReqModel.status == "in_progress").count(),
-            "venues_contacted": db.query(ReqModel).filter(ReqModel.status == "venues_contacted").count(),
-            "budget_ready":     db.query(ReqModel).filter(ReqModel.status == "budget_ready").count(),
+            "pending":          _rq().filter(ReqModel.status == "pending").count(),
+            "in_progress":      _rq().filter(ReqModel.status == "in_progress").count(),
+            "venues_contacted": _rq().filter(ReqModel.status == "venues_contacted").count(),
+            "budget_ready":     _rq().filter(ReqModel.status == "budget_ready").count(),
             "my_budgets":       db.query(Budget).filter(Budget.created_by == current_user.id).count(),
-            "open_requests":    db.query(ReqModel).filter(
+            "open_requests":    _rq().filter(
                 ReqModel.status.in_(["pending", "in_progress", "venues_contacted", "budget_ready"])
             ).count(),
         }
         financial = {}
         recent_requests = (
-            db.query(ReqModel)
+            _rq()
             .filter(ReqModel.status.in_(["pending", "in_progress", "venues_contacted"]))
             .order_by(ReqModel.created_at.desc())
             .limit(8)
@@ -744,13 +771,13 @@ async def dashboard(
     team_ytd = []
     show_team_ytd = current_user.is_gm or current_user.role == "admin"
     if show_team_ytd:
-        team_ytd = _build_ytd_team_stats(db)
+        team_ytd = _build_ytd_team_stats(db, company_id=_cid)
 
     # Müşteri YTD grafiği — finansal görüntülemesi olan roller (asistan/satinalma hariç)
     customer_ytd = []
     show_customer_ytd = current_user.is_gm or current_user.role in ("admin", "mudur", "muhasebe_muduru", "yonetici")
     if show_customer_ytd:
-        customer_ytd = _build_ytd_customer_stats(db, req_id_filter=req_id_filter)
+        customer_ytd = _build_ytd_customer_stats(db, req_id_filter=req_id_filter, company_id=_cid)
 
     return templates.TemplateResponse(
         "dashboard.html",
@@ -764,7 +791,7 @@ async def dashboard(
             "page_title":      "Dashboard",
             "d_from":          d_from.isoformat(),
             "d_to":            d_to.isoformat(),
-            "customers":       db.query(Customer).order_by(Customer.name).all(),
+            "customers":       scope(db.query(Customer), Customer, current_user).order_by(Customer.name).all(),
             "selected_customer_id": cust_id,
             "ref_status_options": [
                 ("", "Tüm İşler"),
