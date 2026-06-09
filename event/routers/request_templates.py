@@ -26,7 +26,8 @@ router = APIRouter(prefix="/request-templates", tags=["request_templates"])
 def _visible_templates(db: Session, user: User):
     """Kullanıcının görebileceği şablonlar: kendi takımı + kendi oluşturduğu."""
     from sqlalchemy import or_
-    q = db.query(RequestTemplate).filter(RequestTemplate.active == True)
+    from tenant import scope
+    q = scope(db.query(RequestTemplate), RequestTemplate, user).filter(RequestTemplate.active == True)  # tenant izolasyonu
     if user.is_gm or user.role in ("admin", "super_admin"):
         return q.order_by(RequestTemplate.name).all()
     if user.team_id:

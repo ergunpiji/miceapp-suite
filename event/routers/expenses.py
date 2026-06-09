@@ -241,7 +241,8 @@ def _all_requests_for_user(db: Session, user):
     İptal ve kapanmış referanslar hariç — herkes tüm referanslara harcama yapabilir.
     """
     from models import Request as ReqModel
-    q = db.query(ReqModel).filter(ReqModel.status.notin_(["cancelled", "closed"]))
+    from tenant import scope
+    q = scope(db.query(ReqModel), ReqModel, user).filter(ReqModel.status.notin_(["cancelled", "closed"]))  # tenant izolasyonu
     return q.order_by(ReqModel.created_at.desc()).all()
 
 
@@ -752,7 +753,8 @@ async def undocumented_list(
     # Ekleme formu için aktif referanslar (iptal ve kapalı hariç)
     all_requests = []
     if can_manage:
-        all_requests = db.query(ReqModel).filter(
+        from tenant import scope
+        all_requests = scope(db.query(ReqModel), ReqModel, current_user).filter(
             ReqModel.status.notin_(["cancelled", "closed"])
         ).order_by(ReqModel.created_at.desc()).all()
 

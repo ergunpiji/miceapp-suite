@@ -403,7 +403,8 @@ async def invoices_new_form(
         req = db.query(ReqModel).filter(ReqModel.id == request_id).first()
         if not req:
             raise HTTPException(status_code=404, detail="Referans bulunamadı.")
-    _req_q = db.query(ReqModel).filter(
+    from tenant import scope
+    _req_q = scope(db.query(ReqModel), ReqModel, current_user).filter(  # tenant izolasyonu
         ReqModel.status.notin_(["cancelled", "closing", "closed"])
     )
     if current_user.role in ("yonetici", "asistan"):
@@ -860,7 +861,8 @@ async def invoices_edit_form(
 ):
     _require_finance(current_user)
     inv = _get_invoice_or_404(db, invoice_id)
-    all_requests = db.query(ReqModel).filter(
+    from tenant import scope
+    all_requests = scope(db.query(ReqModel), ReqModel, current_user).filter(  # tenant izolasyonu
         ReqModel.status.notin_(["cancelled", "closing", "closed"])
     ).order_by(ReqModel.created_at.desc()).all()
     undoc_entries = inv.request.undocumented_entries if inv.request else []
@@ -1208,7 +1210,8 @@ async def invoices_unlinked(
         .order_by(Invoice.created_at.desc())
         .all()
     )
-    req_q = db.query(ReqModel).filter(
+    from tenant import scope
+    req_q = scope(db.query(ReqModel), ReqModel, current_user).filter(  # tenant izolasyonu
         ReqModel.status.notin_(["cancelled", "closing", "closed"])
     )
     # mudur (Etkinlik Süreç Müdürü), GM, admin, muhasebe: tüm referansları görür
@@ -1239,7 +1242,8 @@ async def invoices_active_requests_api(
     from utils.funds import can_split_invoice
     if not can_split_invoice(current_user):
         raise HTTPException(403)
-    q = db.query(ReqModel).filter(
+    from tenant import scope
+    q = scope(db.query(ReqModel), ReqModel, current_user).filter(  # tenant izolasyonu
         ReqModel.status.notin_(["draft", "cancelled", "closed"]),
         ReqModel.is_fund_pool == False,                     # noqa: E712
     )
