@@ -50,11 +50,16 @@ def _ensure_reference(db: Session, req, current_user: User) -> None:
         return
     if db.query(DeskReference).filter(DeskReference.ref_no == req.request_no).first():
         return  # zaten var
-    company_id = None
-    if req.customer_id:
+    from database import EVENT_COMPANY_ID
+    # Tenant tutarlılığı: bridge references.company_id ASLA NULL kalmamalı —
+    # desk _company_scope referansları company_id ile filtreliyor; NULL ise
+    # finans kullanıcıları (muhasebe vb.) referansı göremez.
+    company_id = getattr(req, "company_id", None)
+    if not company_id and req.customer_id:
         _rc = db.query(Customer).filter(Customer.id == req.customer_id).first()
         if _rc:
             company_id = _rc.company_id
+    company_id = company_id or current_user.company_id or EVENT_COMPANY_ID
 
     def _d(s):
         try:

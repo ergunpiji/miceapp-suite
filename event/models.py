@@ -15,6 +15,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship, declarative_base
 
+from roles import CANONICAL_ROLES  # kanonik rol kaynağı (event + desk ortak)
+
 Base = declarative_base()
 
 
@@ -135,15 +137,9 @@ EVENT_TYPE_CODES = {
 }
 
 
-USER_ROLES = [
-    {"value": "admin",           "label": "Sistem Yöneticisi"},
-    {"value": "mudur",           "label": "Müdür"},
-    {"value": "yonetici",        "label": "Proje Yöneticisi"},
-    {"value": "asistan",         "label": "Proje Asistanı"},
-    {"value": "satinalma",           "label": "Satın Alma (Satın Alma)"},
-    {"value": "muhasebe_muduru", "label": "Muhasebe Müdürü"},
-    {"value": "muhasebe",        "label": "Muhasebe Yetkilisi"},
-]
+# Kanonik rol listesi (event + desk ortak). genel_mudur/super_admin/kullanici
+# dahil — artık admin panelinden atanabilir (eski GM yamaları bu yüzden gerekiyordu).
+USER_ROLES = list(CANONICAL_ROLES)
 
 # Proje tarafı rollerin yetki seviyeleri (yüksek = daha fazla yetki)
 PM_ROLE_LEVELS = {"mudur": 3, "yonetici": 2, "asistan": 1}
@@ -321,8 +317,10 @@ class User(Base):
 
     @property
     def is_gm(self) -> bool:
-        """Genel Müdür mü? Desk ile tutarlı: yalnızca rol bazlı kontrol."""
-        return self.role in ("admin", "super_admin", "genel_mudur")
+        """Genel Müdür ve üstü mü? Kanonik ROLE_RANK ile (genel_mudur/admin/
+        super_admin) — desk ile tek kaynaktan tutarlı."""
+        from roles import has_role_min
+        return has_role_min(self.role, "genel_mudur")
 
     @property
     def is_pm_side(self) -> bool:

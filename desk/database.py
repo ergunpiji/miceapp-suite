@@ -794,25 +794,40 @@ def _seed_public_holidays_2026() -> None:
         db.close()
 
 
+# Kanonik tenant id — event/database.py EVENT_COMPANY_ID ile AYNI olmalı.
+# Event referansları bu id ile damgalanıyor; desk de aynı id'yi kullanmalı ki
+# paylaşılan DB'de tenant uyuşmazlığı (referanslar görünmemesi) yaşanmasın.
+EVENT_COMPANY_ID = "00000000-0000-0000-0000-000000000001"
+
+
 def _seed_default_company() -> None:
-    """Multi-tenancy: varsayılan şirketi oluştur ve mevcut kayıtları ona bağla.
+    """Multi-tenancy: kanonik şirketi oluştur ve mevcut kayıtları ona bağla.
     Backfill (NULL → cid) her başlatmada çalışır — idempotent."""
     from sqlalchemy import text
     db = SessionLocal()
     try:
-        existing = db.query(Company).first()
-        if existing is None:
-            company = Company(name="Prizmatik Teknik Dekor", active=True)
-            db.add(company)
-            db.flush()
-            cid = company.id
-            db.commit()
-            print(f"[seed] Default şirket oluşturuldu: id={cid}")
+        # Önce kanonik EVENT_COMPANY_ID'li şirketi ara.
+        canonical = db.query(Company).filter(Company.id == EVENT_COMPANY_ID).first()
+        if canonical is not None:
+            cid = canonical.id
         else:
-            cid = existing.id
+            existing = db.query(Company).first()
+            if existing is not None:
+                # Legacy desk kurulumu — mevcut şirketi koru (veriyi öksüz bırakma).
+                cid = existing.id
+            else:
+                # Temiz kurulum: kanonik id ile oluştur (event ile hizalı).
+                company = Company(id=EVENT_COMPANY_ID, name="Prizmatik Teknik Dekor", active=True)
+                db.add(company)
+                db.flush()
+                cid = company.id
+                db.commit()
+                print(f"[seed] Kanonik şirket oluşturuldu: id={cid}")
 
-        # NULL olan tüm satırları default şirkete bağla (idempotent — her başlatmada).
+        # NULL olan tüm satırları kanonik şirkete bağla (idempotent — her başlatmada).
         # Migration başarısız olmuş tablolar burada telafi edilir.
+        # NOT: cid PARAMETRELİ geçilir — eski sürümde tırnaksız interpolasyon
+        # PostgreSQL'de syntax error verip sessizce rollback ediyordu (backfill no-op).
         BACKFILL_TABLES = [
             "users", "customers", "vendors", "cash_books", "cash_day_closes",
             "cash_entries", "bank_accounts", "bank_movements", "credit_cards",
@@ -827,13 +842,16 @@ def _seed_default_company() -> None:
         ]
         for tbl in BACKFILL_TABLES:
             try:
-                db.execute(text(f"UPDATE {tbl} SET company_id = {cid} WHERE company_id IS NULL"))
+                db.execute(
+                    text(f"UPDATE {tbl} SET company_id = :cid WHERE company_id IS NULL"),
+                    {"cid": cid},
+                )
+                db.commit()
             except Exception:
                 db.rollback()
-        db.commit()
     except Exception as exc:
         db.rollback()
-        print(f"[seed] Default şirket HATA: {exc}")
+        print(f"[seed] Kanonik şirket HATA: {exc}")
     finally:
         db.close()
 

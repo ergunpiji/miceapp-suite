@@ -66,16 +66,23 @@ MODULES = {
 # TEK fark: "Yönetim" bölümünü (kullanıcı/rol/departman/modül/şirket profili) GÖREMEZ
 # ve giremez — o alan ayrıca is_admin (template) + require_admin (route) ile korunur.
 # GM'e özel onay yetkileri (payment_list_approve vb.) check_permission ile ayrı; açılmaz.
+# Geriye-dönük referans: bu roller artık kanonik roles.py'de
+# CAP_FINANCE_VIEW_ALL yeteneğiyle temsil edilir.
 FULL_ACCESS_ROLES = {"muhasebe", "muhasebe_muduru", "ik", "insan_kaynaklari"}
 
 
 def _bypass(user: "User") -> bool:
-    """GM / admin / super_admin + muhasebe/İK her şeyi (Yönetim hariç) görür."""
+    """GM / admin / super_admin + finance.view_all yeteneği her şeyi (Yönetim
+    hariç) görür. Yetenekler kanonik roles.py'den gelir."""
     if not ENFORCE:
         return True
-    return bool(user and (
-        user.is_approver or user.is_admin or (user.role in FULL_ACCESS_ROLES)
-    ))
+    if not user:
+        return False
+    from roles import has_capability, CAP_FINANCE_VIEW_ALL
+    return bool(
+        user.is_approver or user.is_admin
+        or has_capability(user.role, CAP_FINANCE_VIEW_ALL)
+    )
 
 
 # Kişisel modüller: her user kendi adına erişebilir, içerik row-level filter ile

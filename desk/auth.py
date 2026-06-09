@@ -227,10 +227,10 @@ def check_permission(user: User, permission: str, db: Session) -> bool:
     if row is not None:
         return row.enabled
     min_role = DEFAULT_PERMISSIONS.get(permission, "super_admin")
-    try:
-        return ROLE_ORDER.index(user.role) >= ROLE_ORDER.index(min_role)
-    except ValueError:
-        return False
+    # Kanonik ROLE_RANK: event rolleri (muhasebe_muduru, yonetici, ...) dahil;
+    # ROLE_ORDER.index'in ValueError → sessizce False sorununu önler.
+    from roles import has_role_min
+    return has_role_min(user.role, min_role)
 
 
 def require_permission(permission: str):

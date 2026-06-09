@@ -121,11 +121,10 @@ class User(Base):
             self.role = "kullanici"
 
     def has_role_min(self, min_role: str) -> bool:
-        """Kullanıcının rolü min_role veya daha yüksek mi?"""
-        try:
-            return ROLE_ORDER.index(self.role) >= ROLE_ORDER.index(min_role)
-        except ValueError:
-            return False
+        """Kullanıcının rolü min_role veya daha yüksek mi?
+        Kanonik ROLE_RANK kullanır (event rolleri dahil; ValueError atmaz)."""
+        from roles import has_role_min as _has_role_min
+        return _has_role_min(self.role, min_role)
 
     # ---- Departman üyelikleri (RBAC v2) ----
     departments = relationship(
@@ -137,10 +136,19 @@ class User(Base):
 
     @property
     def department_keys(self) -> set[str]:
+        """Kullanıcıya AÇIKÇA atanmış (aktif) departman key'leri."""
         return {d.key for d in (self.departments or []) if d.active}
 
+    @property
+    def effective_department_keys(self) -> set[str]:
+        """Açık departmanlar ∪ rolden gelen varsayılan departmanlar.
+        Event'te yönetilen (departmansız) kullanıcıların desk görünürlüğü için."""
+        from roles import effective_department_keys as _eff
+        return _eff(self)
+
     def has_department_key(self, key: str) -> bool:
-        return key in self.department_keys
+        """Etkili departman kontrolü (açık atama veya rol-varsayılanı)."""
+        return key in self.effective_department_keys
 
     @property
     def is_super_admin(self) -> bool:
