@@ -25,6 +25,7 @@ from models import (
     _uuid, _now, REQUEST_STATUS_LABELS, DeskReference, RequestTemplate,
 )
 from routers.library import log_activity
+from tenant import scope   # tenant izolasyonu (company_id)
 
 router = APIRouter(prefix="/requests", tags=["requests"])
 from templates_config import templates
@@ -254,7 +255,7 @@ async def fund_pool_new(
     db: Session = Depends(get_db),
 ):
     _check_fund_admin(current_user)
-    customers = db.query(Customer).order_by(Customer.name).all()
+    customers = scope(db.query(Customer), Customer, current_user).order_by(Customer.name).all()
     return templates.TemplateResponse(
         "requests/fund_pool_form.html",
         {
@@ -562,8 +563,8 @@ async def requests_new(
     db: Session = Depends(get_db),
 ):
     _check_pm_or_admin(current_user, db)
-    customers   = db.query(Customer).order_by(Customer.name).all()
-    venues      = db.query(Vendor).filter(Vendor.active == True).order_by(Vendor.name).all()
+    customers   = scope(db.query(Customer), Customer, current_user).order_by(Customer.name).all()
+    venues      = scope(db.query(Vendor), Vendor, current_user).filter(Vendor.active == True).order_by(Vendor.name).all()
     event_types = db.query(EventType).filter(EventType.active == True).order_by(EventType.sort_order).all()
     services    = db.query(Service).filter(Service.active == True).order_by(Service.category, Service.sort_order, Service.name).all()
     # Group services by category
@@ -576,11 +577,11 @@ async def requests_new(
         custom_cats = db.query(CustomCategory).all()
     except Exception:
         pass
-    teams = db.query(Team).filter(Team.active == True).order_by(Team.name).all() if current_user.is_gm else []
+    teams = scope(db.query(Team), Team, current_user).filter(Team.active == True).order_by(Team.name).all() if current_user.is_gm else []
 
     # RFQ şablonları — kullanıcının takımına veya kendisine ait
     from sqlalchemy import or_ as _or_tmpl
-    _tmpl_q = db.query(RequestTemplate).filter(RequestTemplate.active == True)
+    _tmpl_q = scope(db.query(RequestTemplate), RequestTemplate, current_user).filter(RequestTemplate.active == True)  # tenant izolasyonu
     if not (current_user.is_gm or current_user.role in ("admin", "super_admin")):
         if current_user.team_id:
             _tmpl_q = _tmpl_q.filter(
@@ -843,7 +844,7 @@ async def requests_detail(
             },
         )
 
-    venues      = db.query(Vendor).filter(Vendor.active == True).all()
+    venues      = scope(db.query(Vendor), Vendor, current_user).filter(Vendor.active == True).all()
     event_types = db.query(EventType).order_by(EventType.sort_order).all()
     et_map      = {et.code: et.label for et in event_types}
     can_edit_status = current_user.role in ("admin", "satinalma")
@@ -1302,7 +1303,7 @@ async def requests_detail(
             "oa_module":  _get_oa_module(req.id, db),
             "oa_active":  _get_oa_module(req.id, db) is not None,
             # Şablon kaydetme modalı için takım listesi
-            "teams": db.query(Team).filter(Team.active == True).order_by(Team.name).all(),
+            "teams": scope(db.query(Team), Team, current_user).filter(Team.active == True).order_by(Team.name).all(),
         },
     )
 
@@ -1327,14 +1328,14 @@ async def requests_edit(
     if current_user.role not in ("admin", "mudur") and req.created_by != current_user.id:
         return RedirectResponse(url=f"/requests/{req_id}", status_code=status.HTTP_302_FOUND)
 
-    customers   = db.query(Customer).order_by(Customer.name).all()
-    venues      = db.query(Vendor).filter(Vendor.active == True).order_by(Vendor.name).all()
+    customers   = scope(db.query(Customer), Customer, current_user).order_by(Customer.name).all()
+    venues      = scope(db.query(Vendor), Vendor, current_user).filter(Vendor.active == True).order_by(Vendor.name).all()
     event_types = db.query(EventType).filter(EventType.active == True).order_by(EventType.sort_order).all()
     services    = db.query(Service).filter(Service.active == True).order_by(Service.category, Service.sort_order, Service.name).all()
     services_by_cat: dict = {}
     for svc in services:
         services_by_cat.setdefault(svc.category, []).append(svc.to_dict())
-    teams = db.query(Team).filter(Team.active == True).order_by(Team.name).all() if current_user.is_gm else []
+    teams = scope(db.query(Team), Team, current_user).filter(Team.active == True).order_by(Team.name).all() if current_user.is_gm else []
 
     return templates.TemplateResponse(
         "requests/form.html",

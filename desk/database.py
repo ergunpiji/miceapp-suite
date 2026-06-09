@@ -247,6 +247,7 @@ def _migrate(engine) -> None:
         # notif_type genişlet (uzun ön ödeme bildirim tipleri için)
         "ALTER TABLE notifications ALTER COLUMN notif_type TYPE VARCHAR(50)",
         # --- miceapp suite: companies = tenant (SaaS alanları) ---
+        "ALTER TABLE teams ADD COLUMN IF NOT EXISTS company_id VARCHAR(36)",  # tenant izolasyonu
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS slug VARCHAR(100)",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS plan VARCHAR(20) DEFAULT 'starter'",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMP",
@@ -829,6 +830,7 @@ def _seed_default_company() -> None:
         # NOT: cid PARAMETRELİ geçilir — eski sürümde tırnaksız interpolasyon
         # PostgreSQL'de syntax error verip sessizce rollback ediyordu (backfill no-op).
         BACKFILL_TABLES = [
+            "teams",
             "users", "customers", "vendors", "cash_books", "cash_day_closes",
             "cash_entries", "bank_accounts", "bank_movements", "credit_cards",
             "credit_card_statements", "credit_card_txns", "cheques", '"references"',

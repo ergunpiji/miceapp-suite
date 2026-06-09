@@ -215,6 +215,11 @@ async def templates_json(
     ).first()
     if not tmpl:
         raise HTTPException(404)
+    # Tenant izolasyonu: başka şirketin şablonu çekilemez
+    from tenant import effective_company_id
+    _cid = effective_company_id(current_user)
+    if _cid is not None and tmpl.company_id != _cid:
+        raise HTTPException(404)
     # Erişim kontrolü
     if not (current_user.is_gm or current_user.role in ("admin", "super_admin")):
         if tmpl.team_id and tmpl.team_id != current_user.team_id:

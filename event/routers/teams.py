@@ -49,7 +49,8 @@ async def teams_list(
     db: Session = Depends(get_db),
     saved: str = "",
 ):
-    teams = db.query(Team).order_by(Team.name).all()
+    from tenant import scope
+    teams = scope(db.query(Team), Team, current_user).order_by(Team.name).all()  # tenant izolasyonu
     counts = {
         t.id: db.query(User).filter(User.team_id == t.id, User.active == True).count()
         for t in teams
@@ -95,7 +96,7 @@ async def teams_create(
             "team": None,
             "error": "Takım adı boş olamaz.",
         })
-    team = Team(id=_uuid(), name=name, code=code)
+    team = Team(id=_uuid(), name=name, code=code, company_id=current_user.company_id)
     db.add(team)
     db.commit()
     return RedirectResponse(f"/teams/{team.id}", status_code=status.HTTP_303_SEE_OTHER)

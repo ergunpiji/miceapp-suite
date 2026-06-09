@@ -214,6 +214,7 @@ class Team(Base):
     description         = Column(Text, default="")
     active              = Column(Boolean, default=True, nullable=False)
     is_support_team     = Column(Boolean, default=False, nullable=False)
+    company_id          = Column(String(36), nullable=True, index=True)   # tenant izolasyonu
     created_at          = Column(DateTime, default=_now, nullable=False)
 
     members = relationship("User", back_populates="team", foreign_keys="User.team_id")

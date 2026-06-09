@@ -584,6 +584,7 @@ def migrate_db():
         # ── RFQ Şablon tablosu (create_all yeterli, ama eksik sütun koruması) ──
         _safe_add_column(conn, "request_templates", "description", "TEXT DEFAULT ''")
         _safe_add_column(conn, "request_templates", "company_id",  "VARCHAR(36)")
+        _safe_add_column(conn, "teams", "company_id", "VARCHAR(36)")   # tenant izolasyonu
         _safe_add_column(conn, "prepayment_requests", "needed_date", "VARCHAR(10)")
         _safe_add_column(conn, "prepayment_requests", "document_path", "VARCHAR(500)")
         _safe_add_column(conn, "prepayment_requests", "document_name", "VARCHAR(255)")
@@ -1555,7 +1556,7 @@ def _seed_event_company() -> None:
                 })
                 print(f"  [seed] Event şirketi oluşturuldu (id={EVENT_COMPANY_ID})")
             # Mevcut verileri event şirketine ata (company_id NULL olanları)
-            for tbl in ("requests", "invoices", "budgets", "vendor_prepayments"):
+            for tbl in ("requests", "invoices", "budgets", "vendor_prepayments", "teams"):
                 result = conn.execute(_text(
                     f"UPDATE {tbl} SET company_id = :cid WHERE company_id IS NULL"
                 ), {"cid": EVENT_COMPANY_ID})
