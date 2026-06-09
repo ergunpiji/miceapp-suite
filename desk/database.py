@@ -965,7 +965,7 @@ DEFAULT_DEPARTMENTS = [
 def _seed_departments_and_access() -> None:
     """Her şirket için 4 default departman + modül erişim matrisi.
     Idempotent: var olan key'leri tekrar yaratmaz."""
-    from models import Department, ModuleAccess
+    from models import Department, ModuleAccess, _uuid
     from sqlalchemy import text
     db = SessionLocal()
     try:
@@ -998,12 +998,13 @@ def _seed_departments_and_access() -> None:
                 for module_key, (can_view, can_edit) in dept_def["modules"].items():
                     if module_key in existing_modules:
                         continue
-                    # Raw SQL kullan: id sütunu dahil edilmez → DB otomatik üretir.
-                    # Migrasyon sonrası department_id VARCHAR(36) olduğundan UUID ve int değerleri kabul eder.
+                    # id'yi EXPLICIT ver — module_access.id'nin server default'u yok;
+                    # eskiden id'siz INSERT NotNullViolation veriyordu (departman seed patlıyordu).
+                    # department_id VARCHAR(36) olduğundan UUID ve int değerleri kabul eder.
                     db.execute(
-                        text("INSERT INTO module_access (department_id, module_key, can_view, can_edit)"
-                             " VALUES (:did, :mk, :cv, :ce)"),
-                        {"did": str(dept.id), "mk": module_key, "cv": can_view, "ce": can_edit},
+                        text("INSERT INTO module_access (id, department_id, module_key, can_view, can_edit)"
+                             " VALUES (:id, :did, :mk, :cv, :ce)"),
+                        {"id": _uuid(), "did": str(dept.id), "mk": module_key, "cv": can_view, "ce": can_edit},
                     )
             db.commit()
         print("[seed] Departman ve modül erişim matrisi hazır.")

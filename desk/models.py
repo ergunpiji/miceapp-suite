@@ -84,6 +84,10 @@ class User(Base):
     company_id = Column(String(36), ForeignKey("companies.id"), nullable=True, index=True)
     manager_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     team_id    = Column(String(36), nullable=True)
+    # org_title_id: paylaşılan 'users' tablosunda event app zaten bu kolonu ekledi;
+    # desk kullanıcı formu (d71ce9e) event'le eşitlenince User()'a geçiliyordu ama
+    # model'de map'li değildi → "invalid keyword argument" / 500. Burada map'lenir.
+    org_title_id = Column(String(36), ForeignKey("org_titles.id"), nullable=True)
     active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
