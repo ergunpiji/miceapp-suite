@@ -1348,6 +1348,64 @@ def _promote_admin_to_super_admin() -> None:
         db.close()
 
 
+def _purge_orphan_companies_once() -> None:
+    """TEK SEFERLİK: kazara oluşmuş, kullanıcısı olmayan (orphan) şirketleri siler.
+    Bir SystemSetting bayrağıyla yalnızca bir kez çalışır.
+
+    GÜVENLİK: yalnızca (a) kanonik OLMAYAN, (b) is_demo OLMAYAN, (c) hiç kullanıcısı
+    OLMAYAN şirketleri siler. Böylece STOK Mice, Demo A.Ş. ve sonradan elle açılan
+    YENİ şirketler (bayrak bir daha çalışmasını engeller) korunur.
+    Çocuk kayıtlar: company_id verisi konsolidasyonla zaten STOK'a taşındı; geriye
+    yalnızca seed'in ürettiği departman/erişim kayıtları kalır — önce onlar silinir.
+    """
+    from models import Department, UserDepartment, ModuleAccess
+    from sqlalchemy import text
+    FLAG = "orphan_companies_purged_v1"
+    db = SessionLocal()
+    try:
+        done = db.execute(
+            text("SELECT value FROM system_settings WHERE key = :k"), {"k": FLAG}
+        ).fetchone()
+        if done and str(done[0]) == "1":
+            return
+
+        cid = EVENT_COMPANY_ID
+        deleted = []
+        for company in db.query(Company).filter(Company.id != cid).all():
+            if getattr(company, "is_demo", False):
+                continue  # Demo A.Ş. korunur
+            if db.query(User).filter(User.company_id == company.id).count() > 0:
+                continue  # kullanıcısı olan şirkete dokunma (yeni açılan dahil)
+            try:
+                dept_ids = [d.id for d in db.query(Department).filter_by(company_id=company.id).all()]
+                if dept_ids:
+                    db.query(UserDepartment).filter(UserDepartment.department_id.in_(dept_ids)).delete(synchronize_session=False)
+                    db.query(ModuleAccess).filter(ModuleAccess.department_id.in_(dept_ids)).delete(synchronize_session=False)
+                    db.query(Department).filter(Department.company_id == company.id).delete(synchronize_session=False)
+                db.delete(company)
+                db.commit()
+                deleted.append(f"{company.name}({company.id})")
+            except Exception as exc:
+                db.rollback()
+                print(f"[purge] {company.id} silinemedi (atlandı): {exc}")
+
+        try:
+            row = db.execute(text("SELECT key FROM system_settings WHERE key = :k"), {"k": FLAG}).fetchone()
+            if row:
+                db.execute(text("UPDATE system_settings SET value = '1' WHERE key = :k"), {"k": FLAG})
+            else:
+                db.execute(text("INSERT INTO system_settings (key, value) VALUES (:k, '1')"), {"k": FLAG})
+            db.commit()
+        except Exception:
+            db.rollback()
+        print(f"[purge] Orphan şirket temizliği tamam — silinen: {deleted or '(yok)'}")
+    except Exception as exc:
+        db.rollback()
+        print(f"[purge] HATA: {exc}")
+    finally:
+        db.close()
+
+
 def _seed_payroll_settings() -> None:
     """2026 bordro sabitlerini oluştur — zaten varsa dokunma."""
     with SessionLocal() as db:
@@ -1466,6 +1524,7 @@ def init_db() -> None:
     _seed_approval_limits()
     _seed_rbac_test_users()
     _promote_admin_to_super_admin()
+    _purge_orphan_companies_once()   # tek seferlik: kullanıcısız orphan şirketleri sil
     _fix_stale_logo_paths()
 
 
