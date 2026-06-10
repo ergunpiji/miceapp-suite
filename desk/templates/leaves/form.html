@@ -35,7 +35,7 @@
                 <label class="type-card w-100" id="card_{{ lt.id }}">
                   <input type="radio" name="leave_type_id" value="{{ lt.id }}"
                     data-remaining="{{ balances[lt.id].remaining_days if balances is defined and lt.id in balances else 'null' }}"
-                    onchange="onTypeChange({{ lt.id }}, {{ lt.default_days or 'null' }}, {{ 'true' if lt.requires_report else 'false' }}, {{ 'true' if lt.requires_balance else 'false' }}, this.dataset.remaining)">
+                    onchange="onTypeChange('{{ lt.id }}', {{ lt.default_days or 'null' }}, {{ 'true' if lt.requires_report else 'false' }}, {{ 'true' if lt.requires_balance else 'false' }}, this.dataset.remaining)">
                   <div class="d-flex align-items-center gap-2">
                     <span style="width:12px;height:12px;border-radius:50%;background:{{ lt.color }};flex-shrink:0;display:inline-block"></span>
                     <span class="fw-semibold" style="font-size:13px">{{ lt.name }}</span>
