@@ -72,8 +72,18 @@ DESK_URL = (os.environ.get("DESK_URL") or "https://desk.miceapp.net").rstrip("/"
 
 
 def redirect_app_url_for(user) -> Optional[str]:
-    """Kullanıcının ana app'i desk ise desk dashboard URL'ini, değilse None döndürür."""
-    if user and getattr(user, "role", None) in DESK_HOME_ROLES:
+    """Departman-merkezli erişim: kullanıcı event'e giremiyorsa, girebildiği desk'e
+    yönlendirir; event'e girebiliyorsa None (burada kalır)."""
+    if not user:
+        return None
+    try:
+        from roles import user_app_access
+        apps = user_app_access(user)
+    except Exception:
+        apps = {"event"}
+    if "event" in apps:
+        return None
+    if "desk" in apps:
         return DESK_URL + "/dashboard"
     return None
 

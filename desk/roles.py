@@ -163,3 +163,56 @@ def effective_department_keys(user: Any) -> set[str]:
         except TypeError:
             explicit = set()
     return explicit | default_department_keys(getattr(user, "role", None))
+
+
+# ---------------------------------------------------------------------------
+# Departman → app erişimi (departman-merkezli model)
+# ---------------------------------------------------------------------------
+# Hangi departman hangi app'e girer. Departman objesinde access_event/access_desk
+# yoksa (eski kayıt) key'e göre bu varsayılan kullanılır.
+DEPARTMENT_DEFAULT_APPS: dict[str, set[str]] = {
+    "sales":      {"event"},
+    "operations": {"event", "desk"},
+    "accounting": {"desk"},
+    "hr":         {"desk"},
+}
+
+
+def _dept_apps(dept) -> set:
+    """Bir departman objesinden app erişim kümesi."""
+    ev = getattr(dept, "access_event", None)
+    dk = getattr(dept, "access_desk", None)
+    if ev is None and dk is None:
+        return set(DEPARTMENT_DEFAULT_APPS.get(getattr(dept, "key", ""), set()))
+    apps = set()
+    if ev:
+        apps.add("event")
+    if dk:
+        apps.add("desk")
+    return apps
+
+
+def user_app_access(user) -> set:
+    """Kullanıcının girebileceği app'ler: {"event","desk"} alt kümesi.
+
+    Sıra: 1) yönetim rolleri (super_admin/admin/genel_mudur) → ikisi; 2) açık
+    departmanların app erişimi; 3) departmansız → rol-varsayılan departman köprüsü;
+    4) son çare ROLE_CAPABILITIES; yine boşsa {"event"} (kimse kilitlenmesin)."""
+    role = normalize_role(getattr(user, "role", None))
+    if role in ("super_admin", "admin", "genel_mudur"):
+        return {"event", "desk"}
+    apps = set()
+    for d in (getattr(user, "departments", None) or []):
+        if getattr(d, "active", True):
+            apps |= _dept_apps(d)
+    if apps:
+        return apps
+    for k in default_department_keys(role):
+        apps |= DEPARTMENT_DEFAULT_APPS.get(k, set())
+    if apps:
+        return apps
+    if has_capability(role, CAP_APP_EVENT):
+        apps.add("event")
+    if has_capability(role, CAP_APP_DESK):
+        apps.add("desk")
+    return apps or {"event"}

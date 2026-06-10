@@ -191,6 +191,9 @@ class Department(Base):
     color      = Column(String(7),  default="#1A3A5C", nullable=False)
     icon       = Column(String(40), default="bi-people", nullable=False)
     active     = Column(Boolean, default=True, nullable=False)
+    # Departman-merkezli erişim: bu departman hangi app'lere girer
+    access_event = Column(Boolean, default=False, nullable=False)
+    access_desk  = Column(Boolean, default=True,  nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     __table_args__ = (UniqueConstraint("company_id", "key", name="uq_department_company_key"),)

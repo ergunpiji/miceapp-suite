@@ -43,6 +43,50 @@ class Company(Base):
     active     = Column(Boolean, default=True, nullable=False)
 
 
+class Department(Base):
+    """Departman — desk ile ortak 'departments' tablosu (paylaşılan DB).
+    Departman-merkezli erişim: access_event/access_desk hangi app'e girileceğini belirler."""
+    __tablename__ = "departments"
+
+    id         = Column(String(36), primary_key=True, default=_uuid)
+    company_id = Column(String(36), nullable=False, index=True)
+    key        = Column(String(40), nullable=False)
+    name       = Column(String(80), nullable=False)
+    color      = Column(String(7),  default="#1A3A5C", nullable=False)
+    icon       = Column(String(40), default="bi-people", nullable=False)
+    active     = Column(Boolean, default=True, nullable=False)
+    access_event = Column(Boolean, default=False, nullable=False)
+    access_desk  = Column(Boolean, default=True,  nullable=False)
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+    module_access = relationship("ModuleAccess", back_populates="department",
+                                 cascade="all, delete-orphan")
+    users = relationship("User", secondary="user_departments", back_populates="departments")
+
+
+class UserDepartment(Base):
+    """Kullanıcı ↔ departman (paylaşılan 'user_departments' tablosu)."""
+    __tablename__ = "user_departments"
+
+    user_id       = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    department_id = Column(String(36), ForeignKey("departments.id", ondelete="CASCADE"), primary_key=True)
+    is_head       = Column(Boolean, default=False, nullable=False)
+    assigned_at   = Column(DateTime, default=_now, nullable=False)
+
+
+class ModuleAccess(Base):
+    """Departman → modül erişimi (paylaşılan 'module_access' tablosu)."""
+    __tablename__ = "module_access"
+
+    id            = Column(String(36), primary_key=True, default=_uuid)
+    department_id = Column(String(36), ForeignKey("departments.id", ondelete="CASCADE"), nullable=False, index=True)
+    module_key    = Column(String(40), nullable=False)
+    can_view      = Column(Boolean, default=True, nullable=False)
+    can_edit      = Column(Boolean, default=False, nullable=False)
+
+    department = relationship("Department", back_populates="module_access")
+
+
 # ---------------------------------------------------------------------------
 # Sabitler
 # ---------------------------------------------------------------------------
@@ -316,6 +360,17 @@ class User(Base):
     manager          = relationship("User", remote_side="User.id", back_populates="reports",
                                     foreign_keys="User.manager_id")
     reports          = relationship("User", back_populates="manager", foreign_keys="User.manager_id")
+    departments      = relationship("Department", secondary="user_departments",
+                                    back_populates="users", lazy="selectin")
+
+    @property
+    def department_keys(self) -> set:
+        """Kullanıcıya AÇIKÇA atanmış (aktif) departman key'leri."""
+        return {d.key for d in (self.departments or []) if d.active}
+
+    def has_department_key(self, key: str) -> bool:
+        from roles import effective_department_keys as _eff
+        return key in _eff(self)
 
     @property
     def full_name(self) -> str:

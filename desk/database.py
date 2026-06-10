@@ -249,6 +249,8 @@ def _migrate(engine) -> None:
         # --- miceapp suite: companies = tenant (SaaS alanları) ---
         "ALTER TABLE teams ADD COLUMN IF NOT EXISTS company_id VARCHAR(36)",  # tenant izolasyonu
         "ALTER TABLE org_titles ADD COLUMN IF NOT EXISTS company_id VARCHAR(36)",  # tenant izolasyonu
+        "ALTER TABLE departments ADD COLUMN IF NOT EXISTS access_event BOOLEAN DEFAULT FALSE",  # departman-merkezli erişim
+        "ALTER TABLE departments ADD COLUMN IF NOT EXISTS access_desk BOOLEAN DEFAULT TRUE",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS slug VARCHAR(100)",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS plan VARCHAR(20) DEFAULT 'starter'",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMP",
@@ -925,6 +927,7 @@ def _consolidate_tenant_once() -> None:
 DEFAULT_DEPARTMENTS = [
     {
         "key": "sales", "name": "Satış", "color": "#3b82f6", "icon": "bi-briefcase",
+        "apps": ("event",),
         "modules": {
             "customers": (True, True), "references": (True, True),
             "invoices": (True, False),    # faturaları görür ama yeni fatura giremez
@@ -933,6 +936,7 @@ DEFAULT_DEPARTMENTS = [
     },
     {
         "key": "accounting", "name": "Muhasebe", "color": "#16a34a", "icon": "bi-calculator",
+        "apps": ("desk",),
         "modules": {
             "customers": (True, True), "invoices": (True, True),
             "references": (True, False),  # görür ama yeni açamaz/düzenleyemez
@@ -949,6 +953,7 @@ DEFAULT_DEPARTMENTS = [
     },
     {
         "key": "hr", "name": "İnsan Kaynakları", "color": "#f59e0b", "icon": "bi-people",
+        "apps": ("desk",),
         "modules": {
             "employees": (True, True), "leaves": (True, True),
             "advances": (True, True), "hbf": (True, True),
@@ -957,6 +962,7 @@ DEFAULT_DEPARTMENTS = [
     },
     {
         "key": "operations", "name": "Operasyon", "color": "#8b5cf6", "icon": "bi-diagram-3",
+        "apps": ("event", "desk"),
         "modules": {
             "references": (True, True), "customers": (True, False),
             "invoices": (True, False), "vendors": (True, True),
@@ -978,6 +984,8 @@ def _seed_departments_and_access() -> None:
                 d.key: d for d in db.query(Department).filter_by(company_id=company.id).all()
             }
             for dept_def in DEFAULT_DEPARTMENTS:
+                _apps = dept_def.get("apps", ("desk",))
+                _ev, _dk = ("event" in _apps), ("desk" in _apps)
                 dept = existing_depts.get(dept_def["key"])
                 if dept is None:
                     dept = Department(
@@ -987,9 +995,16 @@ def _seed_departments_and_access() -> None:
                         color=dept_def["color"],
                         icon=dept_def["icon"],
                         active=True,
+                        access_event=_ev,
+                        access_desk=_dk,
                     )
                     db.add(dept)
                     db.flush()
+                else:
+                    # Backfill: app-erişim bayrakları varsayılana göre (idempotent)
+                    if dept.access_event != _ev or dept.access_desk != _dk:
+                        dept.access_event = _ev
+                        dept.access_desk = _dk
                 # Var olan veya yeni — eksik modül erişim kayıtlarını ekle
                 # (admin elle değiştirdiyse mevcut kayıtlara DOKUNMA)
                 existing_modules = {

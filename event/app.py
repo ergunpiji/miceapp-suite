@@ -105,6 +105,18 @@ async def nav_counts_middleware(request: Request, call_next):
                 _user_obj = db.query(_User).filter(_User.id == uid).first()
                 _is_gm = _user_obj.is_gm if _user_obj else False
 
+                # Departman-merkezli app gating: event'e giremeyen (yalnızca desk)
+                # kullanıcı desk'e yönlendirilir. Fail-open + döngüsüz.
+                if _user_obj and not path.startswith(("/login", "/logout", "/switch-company", "/profile")):
+                    try:
+                        from roles import user_app_access
+                        _apps = user_app_access(_user_obj)
+                    except Exception:
+                        _apps = {"event"}
+                    if "event" not in _apps and "desk" in _apps:
+                        from auth import DESK_URL
+                        return RedirectResponse(url=DESK_URL + "/dashboard", status_code=302)
+
                 if role in ("mudur", "admin", "muhasebe_muduru") or _is_gm:
                     # GM onayı bekleyen fatura talepleri
                     counts["inv_pending_gm"] = db.execute(

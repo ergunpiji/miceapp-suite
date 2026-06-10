@@ -65,8 +65,18 @@ EVENT_URL = (os.environ.get("EVENT_URL") or "https://event.miceapp.net").rstrip(
 
 
 def redirect_app_url_for(user) -> Optional[str]:
-    """Kullanıcının ana app'i event ise event dashboard URL'ini, değilse None döndürür."""
-    if user and getattr(user, "role", None) in EVENT_HOME_ROLES:
+    """Departman-merkezli erişim: kullanıcı desk'e giremiyorsa, girebildiği event'e
+    yönlendirir; desk'e girebiliyorsa None (burada kalır)."""
+    if not user:
+        return None
+    try:
+        from roles import user_app_access
+        apps = user_app_access(user)
+    except Exception:
+        apps = {"desk"}
+    if "desk" in apps:
+        return None
+    if "event" in apps:
         return EVENT_URL + "/dashboard"
     return None
 

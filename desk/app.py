@@ -143,6 +143,19 @@ async def nav_counts_middleware(request: Request, call_next):
                 request.state.company_id = company_id
                 request.state.current_company = current_company
 
+                # Departman-merkezli app gating: desk'e giremeyen (yalnızca event)
+                # kullanıcı event'e yönlendirilir. Fail-open + döngüsüz.
+                if current_user and not path.startswith(("/login", "/logout", "/switch-company", "/profile", "/demo")):
+                    try:
+                        from roles import user_app_access
+                        _apps = user_app_access(current_user)
+                    except Exception:
+                        _apps = {"desk"}
+                    if "desk" not in _apps and "event" in _apps:
+                        from auth import EVENT_URL
+                        db.close()
+                        return RedirectResponse(url=EVENT_URL + "/dashboard", status_code=302)
+
                 if payload.get("is_admin") and company_id:
                     counts["invoices_unpaid"] = (
                         db.query(func.count(Invoice.id))

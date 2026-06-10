@@ -586,6 +586,8 @@ def migrate_db():
         _safe_add_column(conn, "request_templates", "company_id",  "VARCHAR(36)")
         _safe_add_column(conn, "teams", "company_id", "VARCHAR(36)")   # tenant izolasyonu
         _safe_add_column(conn, "org_titles", "company_id", "VARCHAR(36)")   # tenant izolasyonu
+        _safe_add_column(conn, "departments", "access_event", "BOOLEAN", "FALSE")   # departman-merkezli erişim
+        _safe_add_column(conn, "departments", "access_desk",  "BOOLEAN", "TRUE")
         _safe_add_column(conn, "prepayment_requests", "needed_date", "VARCHAR(10)")
         _safe_add_column(conn, "prepayment_requests", "document_path", "VARCHAR(500)")
         _safe_add_column(conn, "prepayment_requests", "document_name", "VARCHAR(255)")
