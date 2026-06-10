@@ -55,6 +55,21 @@
     </div>
   </div>
 
+  <div class="mb-3">
+    <label class="form-label d-block">Uygulama Erişimi
+      <span class="text-muted small">— bu departmandaki kişiler hangi uygulamaya girer</span></label>
+    <div class="form-check form-check-inline">
+      <input type="checkbox" class="form-check-input" id="access_event" name="access_event" value="1"
+             {% if dept and dept.access_event %}checked{% endif %}>
+      <label class="form-check-label" for="access_event"><i class="bi bi-calendar-event me-1"></i>Event (miceapp)</label>
+    </div>
+    <div class="form-check form-check-inline">
+      <input type="checkbox" class="form-check-input" id="access_desk" name="access_desk" value="1"
+             {% if not dept or dept.access_desk %}checked{% endif %}>
+      <label class="form-check-label" for="access_desk"><i class="bi bi-cash-coin me-1"></i>Desk (finans/İK)</label>
+    </div>
+  </div>
+
   {% if mode == 'edit' %}
   <div class="mb-3">
     <div class="form-check">

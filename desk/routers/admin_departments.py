@@ -113,6 +113,8 @@ async def department_create(
     name: str = Form(...),
     color: str = Form("#1A3A5C"),
     icon: str = Form("bi-people"),
+    access_event: str = Form(""),
+    access_desk: str = Form(""),
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -129,6 +131,8 @@ async def department_create(
         color=color or "#1A3A5C",
         icon=icon or "bi-people",
         active=True,
+        access_event=bool(access_event),
+        access_desk=bool(access_desk),
     )
     db.add(dept)
     db.commit()
@@ -165,6 +169,8 @@ async def department_update(
     color: str = Form("#1A3A5C"),
     icon: str = Form("bi-people"),
     active: str = Form(""),
+    access_event: str = Form(""),
+    access_desk: str = Form(""),
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -177,6 +183,8 @@ async def department_update(
     dept.color = color or "#1A3A5C"
     dept.icon = icon or "bi-people"
     dept.active = bool(active)
+    dept.access_event = bool(access_event)
+    dept.access_desk = bool(access_desk)
     db.commit()
     return RedirectResponse(url="/admin/departments?saved=1", status_code=303)
 

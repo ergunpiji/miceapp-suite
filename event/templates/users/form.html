@@ -120,6 +120,28 @@
                      value="{{ user.phone if user else (form_data.phone if form_data else '') }}"
                      placeholder="+90 555 000 0000">
             </div>
+
+            {# ── Departmanlar (hangi uygulamalara gireceğini belirler) ── #}
+            <div class="col-12">
+              <label class="form-label fw-semibold" style="font-size:13px;">
+                Departmanlar <span class="text-muted fw-normal" style="font-size:12px;">— hangi uygulamalara gireceğini belirler</span>
+              </label>
+              <div class="d-flex flex-wrap gap-3 p-2 border rounded" style="background:#f8fafc;">
+                {% for d in (departments or []) %}
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="department_ids" value="{{ d.id }}"
+                         id="dept_{{ d.id }}" {% if d.id in (user_dept_ids or []) %}checked{% endif %}>
+                  <label class="form-check-label" for="dept_{{ d.id }}">
+                    {{ d.name }}
+                    <span class="badge bg-light text-secondary border" style="font-size:10px;">{% if d.access_event %}event{% endif %}{% if d.access_event and d.access_desk %} + {% endif %}{% if d.access_desk %}desk{% endif %}</span>
+                  </label>
+                </div>
+                {% else %}
+                <span class="text-muted small">Bu şirkette tanımlı departman yok.</span>
+                {% endfor %}
+              </div>
+              <div class="form-text">Departman atanmazsa rol varsayılanına göre yönlenir.</div>
+            </div>
             <div class="col-12">
               <label class="form-label fw-semibold" style="font-size:13px;">
                 Şifre

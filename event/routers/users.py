@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from auth import hash_password, require_admin
 from database import get_db
-from models import OrgTitle, Team, User, USER_ROLES, _uuid, _now
+from models import OrgTitle, Team, User, USER_ROLES, _uuid, _now, Department, UserDepartment
 from tenant import scope   # tenant izolasyonu
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -45,6 +45,30 @@ def _get_pm_users(db: Session, exclude_id: str | None = None, user=None) -> list
     if exclude_id:
         q = q.filter(User.id != exclude_id)
     return q.order_by(User.name).all()
+
+
+def _get_departments(db: Session, user=None) -> list:
+    """Şirketin aktif departmanları (tenant scope'lu) — kullanıcı formu için."""
+    return scope(db.query(Department), Department, user).filter(
+        Department.active == True
+    ).order_by(Department.name).all()
+
+
+def _user_dept_ids(db: Session, user_id: str) -> set:
+    return {ud.department_id for ud in db.query(UserDepartment).filter_by(user_id=user_id).all()}
+
+
+def _save_user_departments(db: Session, user_id: str, company_id, department_ids: list) -> None:
+    """Kullanıcının departman atamalarını günceller (eskiyi temizle, geçerli olanları yaz).
+    Yalnızca bu şirkete ait departmanlara izin verilir."""
+    if not company_id:
+        return
+    valid = {d.id for d in db.query(Department).filter(Department.company_id == company_id).all()}
+    db.query(UserDepartment).filter_by(user_id=user_id).delete()
+    for did in department_ids:
+        did = (did or "").strip()
+        if did and did in valid:
+            db.add(UserDepartment(user_id=user_id, department_id=did))
 
 
 @router.get("", response_class=HTMLResponse, name="users_list")
@@ -138,6 +162,8 @@ async def users_new(
             "org_titles":   _get_org_titles(db, current_user),
             "teams":        _get_teams(db, current_user),
             "pm_users":     _get_pm_users(db, user=current_user),
+            "departments":  _get_departments(db, current_user),
+            "user_dept_ids": set(),
             "error":        None,
         },
     )
@@ -172,6 +198,8 @@ async def users_create(
                 "org_titles":   _get_org_titles(db, current_user),
                 "teams":        _get_teams(db, current_user),
                 "pm_users":     _get_pm_users(db, user=current_user),
+                "departments":  _get_departments(db, current_user),
+                "user_dept_ids": set(),
                 "error":        "Bu e-posta adresi zaten kayıtlı.",
                 "form_data":    {"email": email, "role": role, "name": name, "surname": surname,
                                  "title": title, "phone": phone, "org_title_id": org_title_id},
@@ -197,6 +225,10 @@ async def users_create(
         created_at=_now(),
     )
     db.add(user)
+    db.commit()
+    # Departman atamaları (app erişimini belirler)
+    _form = await request.form()
+    _save_user_departments(db, user.id, user.company_id, _form.getlist("department_ids"))
     db.commit()
     return RedirectResponse(
         url=f"/users?welcome_for={user.id}",
@@ -225,6 +257,8 @@ async def users_edit(
             "org_titles":   _get_org_titles(db, current_user),
             "teams":        _get_teams(db, current_user),
             "pm_users":     _get_pm_users(db, exclude_id=user_id, user=current_user),
+            "departments":  _get_departments(db, current_user),
+            "user_dept_ids": _user_dept_ids(db, user.id),
             "error":        None,
         },
     )
@@ -268,6 +302,8 @@ async def users_update(
                 "org_titles":   _get_org_titles(db, current_user),
                 "teams":        _get_teams(db, current_user),
                 "pm_users":     _get_pm_users(db, exclude_id=user_id, user=current_user),
+                "departments":  _get_departments(db, current_user),
+                "user_dept_ids": _user_dept_ids(db, user.id),
                 "error":        "Bu e-posta adresi başka bir kullanıcıya ait.",
             },
             status_code=400,
@@ -287,6 +323,9 @@ async def users_update(
     if password.strip():
         user.password_hash = hash_password(password.strip())
 
+    # Departman atamaları (app erişimini belirler)
+    _form = await request.form()
+    _save_user_departments(db, user.id, user.company_id, _form.getlist("department_ids"))
     db.commit()
     return RedirectResponse(url="/users", status_code=status.HTTP_302_FOUND)
 
