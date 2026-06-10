@@ -3,9 +3,11 @@
 {% block page_title_block %}{{ page_title }}{% endblock %}
 
 {% block topbar_actions %}
+{% if current_user.role != 'satinalma' %}
 <a href="/requests/new" class="btn btn-primary btn-sm">
   <i class="bi bi-plus-circle me-1"></i> Yeni Referans
 </a>
+{% endif %}
 {% endblock %}
 
 {% block content %}

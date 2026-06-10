@@ -40,7 +40,13 @@ def _get_oa_module(request_id: str, db: Session):
 
 
 def _check_pm_or_admin(current_user: User, db: Session = None):
-    # miceapp suite: event'te TÜM kullanıcılar referans/talep oluşturabilir (yetki kısıtı yok).
+    # Satın alma referans OLUŞTURAMAZ/DÜZENLEYEMEZ — referansları satış/PM açar.
+    # (Satın alma referansları yalnızca GÖRÜR ve işler: üstlen/bütçe/dosya sahibine gönder.)
+    if current_user.role == "satinalma":
+        raise HTTPException(
+            status_code=403,
+            detail="Satın alma referans oluşturamaz/düzenleyemez. Referansları satış/PM açar.",
+        )
     return
 
 
@@ -150,10 +156,7 @@ async def requests_list(
     elif current_user.role == "asistan":
         query = query.filter(ReqModel.created_by == current_user.id)
     elif current_user.role == "satinalma":
-        query = query.filter(
-            ReqModel.status.in_(["pending", "in_progress", "venues_contacted", "budget_ready",
-                                  "offer_sent", "revision"])
-        )
+        pass  # satın alma: şirketin TÜM referanslarını görür (oluşturamaz ama hepsini görür/işler)
     # admin, muhasebe_muduru → filtre yok (tüm veriler)
 
     # ── ADIM 2: View / sayfa filtreleri (base scope üstüne eklenir) ──
