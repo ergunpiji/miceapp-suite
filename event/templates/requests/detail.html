@@ -10,7 +10,8 @@
   <select name="new_status" class="form-select form-select-sm"
           style="width:auto; min-width:150px; font-size:12px;">
     {% for s in statuses %}
-    {% if can_edit_status or s.value in ('in_progress','venues_contacted','budget_ready','completed','cancelled') %}
+    {# Satın alma SADECE operasyonel aşamalar; teklif sonrası durumlar dosya sahibi/PM #}
+    {% if (can_edit_status and current_user.role != 'satinalma') or s.value in ('in_progress','venues_contacted','budget_ready') or (current_user.role != 'satinalma' and s.value in ('completed','cancelled')) %}
     <option value="{{ s.value }}" {% if req.status == s.value %}selected{% endif %}>{{ s.label }}</option>
     {% endif %}
     {% endfor %}
@@ -248,8 +249,17 @@
         </a>
         {% endif %}
 
-        {# Proje Durumu — aktif statülerde göster, kapama ve sonrasında gizle #}
-        {% if current_user.role in ('admin', 'mudur', 'yonetici', 'satinalma') and req.status not in ('cancelled', 'completed', 'postponed', 'closing', 'closed', 'confirmed') %}
+        {# Satın Alma: bütçe hazır → teklifi dosya sahibine gönder (PM devralır) #}
+        {% if current_user.role == 'satinalma' and req.budgets and req.status in ('in_progress', 'venues_contacted', 'budget_ready') %}
+        <form method="post" action="/requests/{{ req.id }}/send-to-owner" style="margin:0;">
+          <button type="submit" class="btn btn-warning btn-sm w-100">
+            <i class="bi bi-send-check me-1"></i> Teklifi Dosya Sahibine Gönder
+          </button>
+        </form>
+        {% endif %}
+
+        {# Proje Durumu — dosya sahibi/PM (satın alma teklif sonrasını yürütmez) #}
+        {% if current_user.role in ('admin', 'mudur', 'yonetici') and req.status not in ('cancelled', 'completed', 'postponed', 'closing', 'closed', 'confirmed') %}
         <button type="button" class="btn btn-primary btn-sm"
                 data-bs-toggle="modal" data-bs-target="#projectStatusModal">
           <i class="bi bi-flag me-1"></i> Proje Durumu

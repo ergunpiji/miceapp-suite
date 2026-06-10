@@ -22,7 +22,7 @@ from models import (
     Budget, Customer, CustomCategory, EmailTemplate, EventType, PrepaymentRequest,
     REQUEST_STATUSES, REQUEST_TABS,
     TR_CITIES, SUPPLIER_TYPES, Service, SERVICE_CATEGORIES, Request as ReqModel, RequestModule, Team, User, Vendor,
-    _uuid, _now, REQUEST_STATUS_LABELS, DeskReference, RequestTemplate,
+    _uuid, _now, REQUEST_STATUS_LABELS, DeskReference, RequestTemplate, Notification,
 )
 from routers.library import log_activity
 from tenant import scope   # tenant izolasyonu (company_id)
@@ -1486,15 +1486,24 @@ async def requests_update_status(
     if not req:
         return RedirectResponse(url="/requests", status_code=status.HTTP_302_FOUND)
 
-    # Satın Alma/Admin: her duruma geçebilir
-    # PM direkt yönetim: sadece kendi talebi ve belirli statüler
-    is_satinalma_or_admin = current_user.role in ("admin", "satinalma")
+    # Admin: her duruma. Satın Alma: SADECE operasyonel aşamalar — teklif sonrası
+    # durumları (offer_sent/confirmed/revision/completed/closing/closed/postponed)
+    # dosya sahibi/PM yürütür (önce "Teklifi dosya sahibine gönder").
+    _SATINALMA_ALLOWED = {"pending", "in_progress", "venues_contacted", "budget_ready"}
     is_pm_direct = (
         current_user.role in ("mudur", "yonetici") and
         (req.created_by == current_user.id or current_user.role == "mudur") and
         req.status in ("in_progress", "venues_contacted", "budget_ready")
     )
-    if not is_satinalma_or_admin and not is_pm_direct:
+    if current_user.role == "admin":
+        pass
+    elif current_user.role == "satinalma":
+        if new_status not in _SATINALMA_ALLOWED:
+            raise HTTPException(
+                status_code=403,
+                detail="Satın alma teklif sonrası duruma geçemez. Önce 'Teklifi dosya sahibine gönder'.",
+            )
+    elif not is_pm_direct:
         raise HTTPException(status_code=403, detail="Yetkisiz erişim.")
 
     old_status = req.status
@@ -1507,6 +1516,42 @@ async def requests_update_status(
     )
     db.commit()
     return RedirectResponse(url=f"/requests/{req_id}", status_code=status.HTTP_302_FOUND)
+
+
+@router.post("/{req_id}/send-to-owner", name="requests_send_to_owner")
+async def requests_send_to_owner(
+    req_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Satın Alma: bütçe hazır → teklifi dosya sahibine (referansı açan PM) gönderir.
+    Durum 'budget_ready' olur ve dosya sahibine bildirim düşer; teklifi müşteriye
+    göndermeyi dosya sahibi/PM yapar."""
+    if current_user.role not in ("satinalma", "admin"):
+        raise HTTPException(status_code=403, detail="Bu işlem satın almaya özeldir.")
+    req = scope(db.query(ReqModel), ReqModel, current_user).filter(ReqModel.id == req_id).first()
+    if not req:
+        return RedirectResponse(url="/requests", status_code=status.HTTP_302_FOUND)
+    has_budget = db.query(Budget).filter(Budget.request_id == req_id).first() is not None
+    if not has_budget:
+        return RedirectResponse(url=f"/requests/{req_id}?err=no_budget", status_code=status.HTTP_302_FOUND)
+
+    if req.status in ("in_progress", "venues_contacted"):
+        req.status = "budget_ready"
+        req.updated_at = _now()
+
+    # Dosya sahibine bildirim (kendine değilse)
+    if req.created_by and req.created_by != current_user.id:
+        db.add(Notification(
+            id=_uuid(), user_id=req.created_by, notif_type="budget_ready",
+            title="Bütçe hazır — teklif sizde",
+            message=f"{req.request_no} • {req.event_name}: satın alma bütçeyi hazırladı, teklifi müşteriye gönderebilirsiniz.",
+            link=f"/requests/{req_id}", ref_id=req_id,
+        ))
+    log_activity(db, req_id, "sent_to_owner",
+                 "Bütçe dosya sahibine gönderildi (teklif hazır).", user_id=current_user.id)
+    db.commit()
+    return RedirectResponse(url=f"/requests/{req_id}?sent_owner=1", status_code=status.HTTP_302_FOUND)
 
 
 # ---------------------------------------------------------------------------
@@ -1522,6 +1567,8 @@ async def requests_offer_sent(
     """Teklif müşteriye gönderildi → status: offer_sent
     fetch() ile AJAX olarak da çağrılabilir (redirect'i görmez, 200/302 döner).
     """
+    if current_user.role not in ("admin", "mudur", "yonetici") and not current_user.is_gm:
+        raise HTTPException(status_code=403, detail="Teklifi müşteriye gönderme dosya sahibi/PM yetkisidir.")
     req = db.query(ReqModel).filter(ReqModel.id == req_id).first()
     if not req:
         return RedirectResponse(url="/requests", status_code=status.HTTP_302_FOUND)
@@ -1542,6 +1589,8 @@ async def requests_confirm(
     db: Session = Depends(get_db),
 ):
     """Müşteri onayladı → seçilen budget 'confirmed', diğerleri değişmez, request 'confirmed'"""
+    if current_user.role not in ("admin", "mudur", "yonetici") and not current_user.is_gm:
+        raise HTTPException(status_code=403, detail="Teklif sonrası işlemler dosya sahibi/PM tarafından yapılır.")
     req = db.query(ReqModel).filter(ReqModel.id == req_id).first()
     if not req:
         return RedirectResponse(url="/requests", status_code=status.HTTP_302_FOUND)
@@ -1608,6 +1657,8 @@ async def requests_cancel_job(
     db: Session = Depends(get_db),
 ):
     """İşi iptal et → request 'cancelled', onaylı/confirmed bütçeler de cancelled"""
+    if current_user.role not in ("admin", "mudur", "yonetici") and not current_user.is_gm:
+        raise HTTPException(status_code=403, detail="Teklif sonrası işlemler dosya sahibi/PM tarafından yapılır.")
     req = db.query(ReqModel).filter(ReqModel.id == req_id).first()
     if not req or req.status == "cancelled":
         return RedirectResponse(url="/requests", status_code=status.HTTP_302_FOUND)
@@ -1631,6 +1682,8 @@ async def requests_postpone(
     db: Session = Depends(get_db),
 ):
     """Ertelendi → request 'postponed', aktif bütçeler olduğu gibi kalır"""
+    if current_user.role not in ("admin", "mudur", "yonetici") and not current_user.is_gm:
+        raise HTTPException(status_code=403, detail="Teklif sonrası işlemler dosya sahibi/PM tarafından yapılır.")
     req = db.query(ReqModel).filter(ReqModel.id == req_id).first()
     if not req or req.status in ("cancelled", "completed", "postponed"):
         return RedirectResponse(url="/requests", status_code=status.HTTP_302_FOUND)
