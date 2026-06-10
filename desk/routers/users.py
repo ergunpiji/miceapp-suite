@@ -130,16 +130,13 @@ def _save_user_departments(
         db.query(Department.id).filter(Department.company_id == company_id).all()
     }
     db.query(UserDepartment).filter_by(user_id=user_id).delete()
+    head_set = {str(x).strip() for x in head_dept_ids}
     for d_id in department_ids:
-        try:
-            d_id_int = int(d_id)
-        except (TypeError, ValueError):
+        d_id = str(d_id).strip()   # Department.id UUID string — int() YOK
+        if not d_id or d_id not in valid_ids:
             continue
-        if d_id_int not in valid_ids:
-            continue
-        is_head = d_id_int in {int(x) for x in head_dept_ids if str(x).isdigit()}
         db.add(UserDepartment(
-            user_id=user_id, department_id=d_id_int, is_head=is_head,
+            user_id=user_id, department_id=d_id, is_head=(d_id in head_set),
         ))
 
 
@@ -224,7 +221,7 @@ async def user_new_post(
     db.add(u)
     db.flush()
     if employee_id:
-        emp = db.get(Employee, int(employee_id))
+        emp = db.get(Employee, employee_id)   # Employee.id UUID string — int() YOK
         if emp:
             old = db.query(Employee).filter(Employee.user_id == u.id).first()
             if old:
@@ -315,7 +312,7 @@ async def user_edit_post(
     if old_link:
         old_link.user_id = None
     if employee_id:
-        emp = db.get(Employee, int(employee_id))
+        emp = db.get(Employee, employee_id)   # Employee.id UUID string — int() YOK
         if emp:
             emp.user_id = user_id
 
