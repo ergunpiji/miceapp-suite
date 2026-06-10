@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block page_title %}İzin Talebim{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-3">
+  <h5 class="mb-0"><i class="bi bi-calendar-check me-2"></i>İzin Talebim</h5>
+  <a href="{{ desk_url() }}/leaves" target="_blank" rel="noopener"
+     class="btn btn-sm btn-outline-secondary ms-auto">
+    <i class="bi bi-box-arrow-up-right me-1"></i>Yeni sekmede aç
+  </a>
+</div>
+{# İzin modülü desk'te yaşar; event sidebar korunarak buraya gömülür (embed=1) #}
+<div style="height: calc(100vh - 170px); min-height: 520px;">
+  <iframe src="{{ desk_url() }}/leaves?embed=1"
+          style="width:100%; height:100%; border:0; border-radius:10px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.08);"
+          title="İzin Talebim"></iframe>
+</div>
+{% endblock %}

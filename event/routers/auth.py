@@ -120,6 +120,15 @@ async def switch_company(
     return response
 
 
+@router.get("/izin", response_class=HTMLResponse, name="izin_embed")
+async def izin_embed(request: Request, current_user: User = Depends(get_current_user)):
+    """İzin Talebim — desk izin modülünü event sidebar'ı korunarak gömülü (iframe) gösterir."""
+    return templates.TemplateResponse(
+        "izin_embed.html",
+        {"request": request, "current_user": current_user, "page_title": "İzin Talebim"},
+    )
+
+
 @router.post("/profile/avatar")
 async def profile_avatar(
     request: Request,

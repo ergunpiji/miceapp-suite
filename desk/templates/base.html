@@ -267,6 +267,28 @@
   {% block extra_css %}{% endblock %}
 </head>
 <body>
+{# Embed modu (?embed=1): event içine iframe ile gömülürken desk sidebar/topbar
+   gizlenir; iç linkler ve formlar embed=1'i korur (chrome geri gelmesin). #}
+{% if request.query_params.get('embed') == '1' %}
+<style>
+  .sidebar { display: none !important; }
+  .main-content { margin-left: 0 !important; }
+  .topbar { display: none !important; }
+  .page-content { padding: 16px !important; }
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('a[href^="/"]').forEach(function (a) {
+    try { var u = new URL(a.href, location.origin); u.searchParams.set('embed', '1'); a.setAttribute('href', u.pathname + u.search); } catch (e) {}
+  });
+  document.querySelectorAll('form').forEach(function (f) {
+    if (!f.querySelector('input[name="embed"]')) {
+      var i = document.createElement('input'); i.type = 'hidden'; i.name = 'embed'; i.value = '1'; f.appendChild(i);
+    }
+  });
+});
+</script>
+{% endif %}
 {% if current_user %}
 {% set _full_name = (current_user.name or '') ~ (' ' ~ current_user.surname if current_user.surname else '') %}
 {% set _first = (current_user.name or 'U')[0] %}

@@ -207,6 +207,7 @@ async def leave_new_post(
     half_day_period: str = Form(""),
     has_report: str = Form("0"),
     reason: str = Form(""),
+    embed: str = Form(""),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     cid: int = Depends(get_company_id),
@@ -280,7 +281,8 @@ async def leave_new_post(
     )
     db.add(leave)
     db.commit()
-    return RedirectResponse(url=f"/leaves/{leave.id}", status_code=status.HTTP_302_FOUND)
+    _suffix = "?embed=1" if embed else ""
+    return RedirectResponse(url=f"/leaves/{leave.id}{_suffix}", status_code=status.HTTP_302_FOUND)
 
 
 # ---------------------------------------------------------------------------

@@ -438,7 +438,7 @@
              class="sidebar-link {% if cp == '/expenses' %}active{% endif %}">
             <i class="bi bi-clipboard-check nav-icon"></i> Harcama Formları {{ nb(nc.get('pending_hbf', 0)) }}
           </a>
-          <a href="{{ desk_url() }}/leaves" class="sidebar-link" target="_blank" rel="noopener">
+          <a href="/izin" class="sidebar-link {% if cp == '/izin' %}active{% endif %}">
             <i class="bi bi-calendar-check nav-icon"></i> İzin Talebim
           </a>
           <a href="/closure"
@@ -764,7 +764,7 @@
              class="sidebar-link {% if cp == '/expenses' %}active{% endif %}">
             <i class="bi bi-clipboard-check nav-icon"></i> Harcama Formları {{ nb(nc.get('pending_hbf', 0)) }}
           </a>
-          <a href="{{ desk_url() }}/leaves" class="sidebar-link" target="_blank" rel="noopener">
+          <a href="/izin" class="sidebar-link {% if cp == '/izin' %}active{% endif %}">
             <i class="bi bi-calendar-check nav-icon"></i> İzin Talebim
           </a>
         </div>
