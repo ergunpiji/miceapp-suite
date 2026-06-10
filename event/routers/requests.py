@@ -1538,7 +1538,8 @@ async def requests_send_to_owner(
 
     if req.status in ("in_progress", "venues_contacted"):
         req.status = "budget_ready"
-        req.updated_at = _now()
+    req.offer_to_owner_at = _now()   # kalıcı işaret: teklif dosya sahibine gönderildi
+    req.updated_at = _now()
 
     # Dosya sahibine bildirim (kendine değilse)
     if req.created_by and req.created_by != current_user.id:

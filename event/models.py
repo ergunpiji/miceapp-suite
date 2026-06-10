@@ -650,6 +650,7 @@ class Request(Base):
     contact_person_json   = Column(Text, default="{}")      # selected contact info snapshot
     confirmed_at          = Column(DateTime, nullable=True)
     confirmed_budget_id   = Column(String(36), nullable=True)  # onaylanan bütçe id
+    offer_to_owner_at     = Column(DateTime, nullable=True)    # satın alma teklifi dosya sahibine gönderdi
     cancellation_reason   = Column(Text, default="")
     revision_count        = Column(Integer, default=0)
     is_funded             = Column(Boolean, default=False, nullable=False)   # fon/sponsor destekli mi

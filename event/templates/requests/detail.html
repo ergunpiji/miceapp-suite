@@ -69,6 +69,13 @@
 
 {% block content %}
 
+{% if request.query_params.get('sent_owner') == '1' %}
+<div class="alert alert-success d-flex align-items-center" role="alert">
+  <i class="bi bi-send-check me-2"></i>
+  <div>Teklif <strong>dosya sahibine gönderildi</strong> — bildirim iletildi. Sonraki adımları dosya sahibi (PM) yürütecek.</div>
+</div>
+{% endif %}
+
 <div class="mb-3">
   <a href="/requests" class="text-muted text-decoration-none" style="font-size:13px;">
     <i class="bi bi-arrow-left me-1"></i> Talep Listesine Dön
@@ -84,6 +91,12 @@
         <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
           <span class="badge bg-primary fw-bold font-monospace" style="font-size:14px; letter-spacing:.5px;">{{ req.request_no }}</span>
           <span class="badge badge-status-{{ req.status }}" style="font-size:12px;">{{ req.status_label }}</span>
+          {% if req.offer_to_owner_at %}
+          <span class="badge bg-warning text-dark" style="font-size:12px;"
+                title="{{ req.offer_to_owner_at | datetime_tr }}">
+            <i class="bi bi-send-check me-1"></i>Teklif dosya sahibine gönderildi
+          </span>
+          {% endif %}
         </div>
         <h4 class="fw-bold mb-1">{{ req.event_name }}</h4>
         <div class="text-muted" style="font-size:13px;">
@@ -252,8 +265,8 @@
         {# Satın Alma: bütçe hazır → teklifi dosya sahibine gönder (PM devralır) #}
         {% if current_user.role == 'satinalma' and req.budgets and req.status in ('in_progress', 'venues_contacted', 'budget_ready') %}
         <form method="post" action="/requests/{{ req.id }}/send-to-owner" style="margin:0;">
-          <button type="submit" class="btn btn-warning btn-sm w-100">
-            <i class="bi bi-send-check me-1"></i> Teklifi Dosya Sahibine Gönder
+          <button type="submit" class="btn btn-{% if req.offer_to_owner_at %}outline-warning{% else %}warning{% endif %} btn-sm w-100">
+            <i class="bi bi-send-check me-1"></i>{% if req.offer_to_owner_at %}Tekrar Gönder{% else %}Teklifi Dosya Sahibine Gönder{% endif %}
           </button>
         </form>
         {% endif %}
