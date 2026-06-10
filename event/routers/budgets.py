@@ -124,10 +124,9 @@ async def budgets_list(
 ):
     from tenant import scope
     query = scope(db.query(Budget), Budget, current_user)   # tenant izolasyonu
-    if current_user.role == "satinalma":
-        query = query.filter(Budget.created_by == current_user.id)
-    # mudur (Etkinlik Süreç Müdürü) ve GM tüm bütçeleri görür — takım engeli yok
-    elif current_user.role in ("yonetici", "asistan"):
+    # satinalma + mudur + GM: şirketin TÜM bütçelerini görür (paylaşımlı satın alma
+    # ekibi — bütçeyi başka bir satın alma açmış olabilir, devralan görmeli).
+    if current_user.role in ("yonetici", "asistan"):
         my_req_ids = [
             r.id for r in db.query(ReqModel)
             .filter(ReqModel.created_by == current_user.id)
@@ -291,9 +290,11 @@ async def budgets_create(
     # PM/Admin direkt yönetimde bütçe direkt approved olur
     initial_status = "approved" if is_direct_manager else "draft_satinalma"
 
+    req = db.query(ReqModel).filter(ReqModel.id == req_id).first()
     budget = Budget(
         id=_uuid(),
         request_id=req_id,
+        company_id=(req.company_id if req else None) or current_user.company_id,   # tenant
         venue_name=venue_name.strip(),
         venue_id=venue_id.strip() or None,
         rows_json=rows_json,
@@ -305,7 +306,6 @@ async def budgets_create(
         exchange_rates_json=exchange_rates_json or "{}",
     )
     db.add(budget)
-    req = db.query(ReqModel).filter(ReqModel.id == req_id).first()
     if req and req.status in ("in_progress", "venues_contacted"):
         req.status = "budget_ready"
         req.updated_at = _now()
@@ -696,6 +696,7 @@ async def budgets_price_save(
         new_budget = Budget(
             id=_uuid(),
             request_id=budget.request_id,
+            company_id=budget.company_id or current_user.company_id,   # tenant
             venue_name=(budget.venue_name or "Bütçe") + " (Kopya)",
             rows_json=rows_json,
             budget_status="pending_manager",
@@ -1115,6 +1116,7 @@ async def budgets_copy_satinalma(
     new_budget = Budget(
         id=_uuid(),
         request_id=budget.request_id,
+        company_id=budget.company_id or current_user.company_id,   # tenant
         venue_name=budget.venue_name + " (Kopya)",
         rows_json=src_rows,
         budget_status="draft_satinalma",
@@ -1169,6 +1171,7 @@ async def budgets_copy(
     new_budget = Budget(
         id=_uuid(),
         request_id=budget.request_id,
+        company_id=budget.company_id or current_user.company_id,   # tenant
         venue_name=budget.venue_name + " (Kopya)",
         rows_json=src_rows,
         budget_status="pending_manager",
