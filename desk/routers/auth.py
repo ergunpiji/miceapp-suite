@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 import auth as auth_module
-from auth import COOKIE_NAME, COOKIE_DOMAIN, ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, redirect_app_url_for
+from auth import COOKIE_NAME, COOKIE_DOMAIN, ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, redirect_app_url_for, get_current_user
 from database import get_db
 from models import User
 from templates_config import templates
@@ -79,6 +79,32 @@ async def login_post(
 async def logout(request: Request):
     response = RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     response.delete_cookie(key=COOKIE_NAME, path="/", domain=COOKIE_DOMAIN)
+    return response
+
+
+@router.post("/switch-company", name="switch_company")
+async def switch_company(
+    request: Request,
+    company_id: str = Form(""),
+    current_user: User = Depends(get_current_user),
+):
+    """super_admin aktif şirketi değiştirir (active_company cookie).
+    company_id boş → Tüm Şirketler (konsolide)."""
+    if current_user.role != "super_admin":
+        raise HTTPException(status_code=403)
+    _is_production = os.environ.get("ENVIRONMENT", "").lower() == "production"
+    _ref = request.headers.get("referer") or ""
+    back = _ref if _ref.startswith("http") else "/dashboard"
+    response = RedirectResponse(url=back, status_code=status.HTTP_302_FOUND)
+    cid = (company_id or "").strip()
+    if cid:
+        response.set_cookie(
+            key="active_company", value=cid, httponly=True, path="/",
+            max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60, samesite="lax",
+            secure=_is_production, domain=COOKIE_DOMAIN,
+        )
+    else:
+        response.delete_cookie(key="active_company", path="/", domain=COOKIE_DOMAIN)
     return response
 
 

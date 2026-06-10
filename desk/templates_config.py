@@ -228,6 +228,52 @@ def company(key: str, default: str = "", request=None) -> str:
 templates.env.globals["company"] = company
 
 
+def switch_companies() -> list:
+    """super_admin şirket seçici için (id, name) listesi."""
+    try:
+        from database import SessionLocal
+        from models import Company
+        db = SessionLocal()
+        try:
+            return [(c.id, c.name) for c in
+                    db.query(Company).filter(Company.active == True).order_by(Company.name).all()]
+        finally:
+            db.close()
+    except Exception:
+        return []
+
+
+def active_company_label(user) -> str:
+    """super_admin için aktif şirket etiketi; aktif yoksa 'Tüm Şirketler (konsolide)'.
+    Diğer kullanıcılar için kendi şirket adı."""
+    if user is None:
+        return ""
+    def _name(cid):
+        if not cid:
+            return ""
+        try:
+            from database import SessionLocal
+            from models import Company
+            db = SessionLocal()
+            try:
+                c = db.query(Company).filter(Company.id == str(cid)).first()
+                return c.name if c else ""
+            finally:
+                db.close()
+        except Exception:
+            return ""
+    if getattr(user, "role", None) == "super_admin":
+        ac = getattr(user, "_active_company_id", None)
+        if not ac:
+            return "Tüm Şirketler (konsolide)"
+        return _name(ac) or "Tüm Şirketler (konsolide)"
+    return _name(getattr(user, "company_id", None))
+
+
+templates.env.globals["switch_companies"] = switch_companies
+templates.env.globals["active_company_label"] = active_company_label
+
+
 def make_date_filter(parts):
     """[year, month, day] listesinden date nesnesi üretir — takvim şablonu için."""
     from datetime import date as _date

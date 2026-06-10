@@ -121,7 +121,14 @@ async def nav_counts_middleware(request: Request, call_next):
                 if user_id_raw:
                     current_user = db.query(UserModel).filter(UserModel.id == user_id_raw).first()
                     if current_user:
-                        company_id = str(current_user.company_id) if current_user.company_id else None
+                        # super_admin: aktif şirket seçici (active_company cookie).
+                        # Boş → None = Tüm Şirketler (konsolide); header şirket adı göstermez.
+                        if current_user.role == "super_admin":
+                            _ac = request.cookies.get("active_company") or None
+                            current_user._active_company_id = _ac
+                            company_id = _ac
+                        else:
+                            company_id = str(current_user.company_id) if current_user.company_id else None
                         # Departments + module_access'i ZORLA pre-load et — session
                         # kapanınca lazy-load detached-instance hatası vermesin.
                         for _dept in (current_user.departments or []):

@@ -108,4 +108,34 @@ templates.env.filters["datetime_tr"]  = format_datetime_tr
 templates.env.filters["money"]        = format_money
 templates.env.filters["role_label"]   = role_label
 templates.env.filters["fromjson"]     = fromjson_filter
+def switch_companies() -> list:
+    """super_admin şirket seçici için (id, name) listesi."""
+    try:
+        from database import SessionLocal
+        from models import Company
+        db = SessionLocal()
+        try:
+            return [(c.id, c.name) for c in
+                    db.query(Company).filter(Company.active == True).order_by(Company.name).all()]
+        finally:
+            db.close()
+    except Exception:
+        return []
+
+
+def active_company_label(user) -> str:
+    """super_admin için aktif şirket etiketi; aktif yoksa 'Tüm Şirketler (konsolide)'.
+    Diğer kullanıcılar için kendi şirket adı."""
+    if user is None:
+        return ""
+    if getattr(user, "role", None) == "super_admin":
+        ac = getattr(user, "_active_company_id", None)
+        if not ac:
+            return "Tüm Şirketler (konsolide)"
+        return company_name(ac) or "Tüm Şirketler (konsolide)"
+    return company_name(getattr(user, "company_id", None))
+
+
 templates.env.globals["company_name"] = company_name
+templates.env.globals["switch_companies"] = switch_companies
+templates.env.globals["active_company_label"] = active_company_label

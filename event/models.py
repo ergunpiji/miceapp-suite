@@ -32,6 +32,17 @@ def _now() -> datetime:
     return datetime.utcnow()
 
 
+class Company(Base):
+    """Şirket (tenant) — desk ile ortak 'companies' tablosu. Event'te read-only
+    kullanılır (super_admin şirket seçici + şirket adı gösterimi)."""
+    __tablename__ = "companies"
+
+    id         = Column(String(36), primary_key=True, default=_uuid)
+    name       = Column(String(200), nullable=False)
+    short_name = Column(String(50), default="")
+    active     = Column(Boolean, default=True, nullable=False)
+
+
 # ---------------------------------------------------------------------------
 # Sabitler
 # ---------------------------------------------------------------------------

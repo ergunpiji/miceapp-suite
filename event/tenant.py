@@ -21,7 +21,8 @@ def effective_company_id(user: Any) -> Optional[str]:
     if user is None:
         return None   # kullanıcı yoksa filtre uygulama (çağıran sorumlu)
     if getattr(user, "role", None) == "super_admin":
-        return None
+        # Platform sahibi: aktif şirket seçiliyse ona scope, yoksa None=tüm şirketler
+        return getattr(user, "_active_company_id", None)
     cid = getattr(user, "company_id", None)
     if cid:
         return cid

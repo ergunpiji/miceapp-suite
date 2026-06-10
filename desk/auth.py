@@ -145,6 +145,10 @@ def get_current_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Kullanıcı bulunamadı veya hesap devre dışı.")
+    # super_admin: aktif şirket seçici (active_company cookie) → scope bunu kullanır.
+    # Boş/yoksa None = Tüm Şirketler (konsolide).
+    if getattr(user, "role", None) == "super_admin":
+        user._active_company_id = request.cookies.get("active_company") or None
     return user
 
 

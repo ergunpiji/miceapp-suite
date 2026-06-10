@@ -11,7 +11,7 @@ POST /profile/update → Ad, unvan, telefon güncelle
 import base64
 import os
 
-from fastapi import APIRouter, Depends, Form, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -90,6 +90,33 @@ async def logout(request: Request):
     """Oturumu kapat — COOKIE_DOMAIN set edilmişse her iki app'ten de çıkış yapılır."""
     response = RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     response.delete_cookie(key=COOKIE_NAME, path="/", domain=COOKIE_DOMAIN)
+    return response
+
+
+@router.post("/switch-company", name="switch_company")
+async def switch_company(
+    request: Request,
+    company_id: str = Form(""),
+    current_user: User = Depends(get_current_user),
+):
+    """super_admin aktif şirketi değiştirir (active_company cookie).
+    company_id boş → Tüm Şirketler (konsolide). Cookie .miceapp.net domaininde
+    set edildiği için desk'te de geçerli olur."""
+    if current_user.role != "super_admin":
+        raise HTTPException(status_code=403)
+    _is_production = os.environ.get("ENVIRONMENT", "").lower() == "production"
+    _ref = request.headers.get("referer") or ""
+    back = _ref if _ref.startswith("http") else "/dashboard"
+    response = RedirectResponse(url=back, status_code=status.HTTP_302_FOUND)
+    cid = (company_id or "").strip()
+    if cid:
+        response.set_cookie(
+            key="active_company", value=cid, httponly=True, path="/",
+            max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60, samesite="lax",
+            secure=_is_production, domain=COOKIE_DOMAIN,
+        )
+    else:
+        response.delete_cookie(key="active_company", path="/", domain=COOKIE_DOMAIN)
     return response
 
 

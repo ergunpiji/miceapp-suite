@@ -728,6 +728,27 @@
         </ul>
       </div>
 
+      <!-- Şirket seçici (yalnızca super_admin) -->
+      {% if current_user.role == 'super_admin' %}
+      <div style="position:relative;margin-right:12px;">
+        <button type="button"
+          onclick="var m=document.getElementById('companySwitchMenu'); m.style.display=(m.style.display==='block'?'none':'block');"
+          style="display:flex;align-items:center;gap:6px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:7px 11px;font-size:12px;font-weight:600;color:#1e293b;cursor:pointer;">
+          <i class="bi bi-buildings"></i>
+          <span>{{ active_company_label(current_user) }}</span>
+          <i class="bi bi-chevron-down" style="font-size:10px;color:#94a3b8;"></i>
+        </button>
+        <div id="companySwitchMenu" style="display:none;position:absolute;right:0;top:115%;background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:230px;z-index:1200;padding:6px;">
+          <form method="post" action="/switch-company">
+            <button type="submit" name="company_id" value="" style="width:100%;text-align:left;background:none;border:none;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:13px;color:#1e293b;">🌐 Tüm Şirketler (konsolide)</button>
+            {% for cid, cname in switch_companies() %}
+            <button type="submit" name="company_id" value="{{ cid }}" style="width:100%;text-align:left;background:none;border:none;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:13px;color:#1e293b;">🏢 {{ cname }}</button>
+            {% endfor %}
+          </form>
+        </div>
+      </div>
+      {% endif %}
+
       <!-- Profil -->
       <button type="button" class="topbar-user-btn" data-bs-toggle="modal" data-bs-target="#profileModal">
         <div class="topbar-avatar">{{ _initials }}</div>
@@ -757,7 +778,7 @@
         <div class="profile-avatar-big">{{ _initials }}</div>
         <div class="profile-name">{{ _full_name }}</div>
         <div class="profile-role">{{ _role_label }}</div>
-        {% set _co_name = company('name', '', request=request) %}
+        {% set _co_name = active_company_label(current_user) %}
         {% if _co_name %}<div class="profile-role" style="margin-top:6px;font-weight:600;opacity:.95;"><i class="bi bi-building"></i> {{ _co_name }}</div>{% endif %}
       </div>
       <form method="post" action="/profile" class="p-3">

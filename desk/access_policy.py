@@ -151,6 +151,10 @@ def _company_scope(query: Query, model_cls, user: "User") -> Query:
     """company_id filtresini uygula — multi-tenant temel izolasyon.
     Super_admin tüm şirketleri görebilir, diğerleri sadece kendi şirketini."""
     if user.is_super_admin:
+        # Platform sahibi: aktif şirket seçiliyse ona scope, yoksa tüm şirketler
+        _ac = getattr(user, "_active_company_id", None)
+        if _ac and hasattr(model_cls, "company_id"):
+            return query.filter(model_cls.company_id == _ac)
         return query
     if hasattr(model_cls, "company_id"):
         return query.filter(model_cls.company_id == user.company_id)
