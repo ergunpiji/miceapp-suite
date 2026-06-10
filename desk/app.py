@@ -145,7 +145,11 @@ async def nav_counts_middleware(request: Request, call_next):
 
                 # Departman-merkezli app gating: desk'e giremeyen (yalnızca event)
                 # kullanıcı event'e yönlendirilir. Fail-open + döngüsüz.
-                if current_user and not path.startswith(("/login", "/logout", "/switch-company", "/profile", "/demo")):
+                # KİŞİSEL modüller (izin/HBF/avans) ve auth/profil app-gating'den MUAF —
+                # event kullanıcısı da kendi izin/HBF talebini desk'te oluşturabilsin.
+                _GATING_EXEMPT = ("/login", "/logout", "/switch-company", "/profile", "/demo",
+                                  "/leaves", "/hbf", "/advances")
+                if current_user and not path.startswith(_GATING_EXEMPT):
                     try:
                         from roles import user_app_access
                         _apps = user_app_access(current_user)
