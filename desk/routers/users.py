@@ -14,6 +14,12 @@ from models import (
     OrgTitle, Team,
     ROLE_ORDER, ROLE_LABELS,
 )
+from roles import CANONICAL_ROLES, ROLE_LABELS as CANON_ROLE_LABELS
+
+# Kanonik roller (event + desk ortak) — desk formunda satinalma/yonetici/asistan
+# gibi event rolleri de görünsün ve KORUNSUN (eskiden ROLE_ORDER'da olmayan rol
+# kaydederken kullanici'ye sıfırlanıyordu).
+_CANON_ROLE_VALUES = {r["value"] for r in CANONICAL_ROLES}
 from templates_config import templates
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -102,8 +108,8 @@ def _get_form_context(db, current_user, user=None, error=None, page_title="Kulla
         "employees": employees,
         "managers": managers,
         "pm_users": pm_users,
-        "roles": ROLE_ORDER,
-        "role_labels": ROLE_LABELS,
+        "roles": [r["value"] for r in CANONICAL_ROLES],
+        "role_labels": CANON_ROLE_LABELS,
         "page_title": page_title,
         "error": error,
         "linked_employee": linked_employee,
@@ -153,7 +159,7 @@ async def users_list(
     return templates.TemplateResponse(
         "users/list.html",
         {"request": request, "current_user": current_user,
-         "users": users, "role_labels": ROLE_LABELS, "page_title": "Kullanıcılar"},
+         "users": users, "role_labels": CANON_ROLE_LABELS, "page_title": "Kullanıcılar"},
     )
 
 
@@ -191,7 +197,7 @@ async def user_new_post(
     department_ids = form.getlist("department_ids")
     head_dept_ids = form.getlist("head_dept_ids")
     email = email.strip().lower()
-    if role not in ROLE_ORDER:
+    if role not in _CANON_ROLE_VALUES:
         role = "kullanici"
     if role == "super_admin" and not current_user.has_role_min("super_admin"):
         role = "admin"
@@ -281,7 +287,7 @@ async def user_edit_post(
     if current_user.role != "super_admin" and u.company_id != current_user.company_id:
         raise HTTPException(status_code=403)
     email = email.strip().lower()
-    if role not in ROLE_ORDER:
+    if role not in _CANON_ROLE_VALUES:
         role = "kullanici"
     if role == "super_admin" and not current_user.has_role_min("super_admin"):
         role = u.role
