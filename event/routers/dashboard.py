@@ -600,6 +600,30 @@ def _build_pending_tasks(db: Session, current_user) -> list[dict]:
     return tasks
 
 
+def _avg_turnaround_days(db: Session, user):
+    """Satın alma KPI'ı — ortalama dönüş günü: referans oluşturuldu → ilk bütçe
+    oluşturuldu (şirket scope'lu; bütçesi olan, draft olmayan referanslar)."""
+    from sqlalchemy import func
+    reqs = scope(db.query(ReqModel.id, ReqModel.created_at), ReqModel, user).filter(
+        ReqModel.status != "draft").all()
+    if not reqs:
+        return None
+    created = {r[0]: r[1] for r in reqs}
+    rows = (db.query(Budget.request_id, func.min(Budget.created_at))
+              .filter(Budget.request_id.in_(list(created.keys())))
+              .group_by(Budget.request_id).all())
+    diffs = []
+    for rid, first in rows:
+        rc = created.get(rid)
+        if rc and first:
+            d = (first - rc).total_seconds() / 86400.0
+            if d >= 0:
+                diffs.append(d)
+    if not diffs:
+        return None
+    return round(sum(diffs) / len(diffs), 1)
+
+
 @router.get("/dashboard", response_class=HTMLResponse, name="dashboard")
 async def dashboard(
     request: Request,
@@ -744,17 +768,22 @@ async def dashboard(
             my_q.order_by(ReqModel.created_at.desc()).limit(8).all()
         )
 
-    else:  # satinalma, muhasebe — sadece iş yükü, finansal bilgi yok
+    else:  # satinalma, muhasebe — iş yükü + (satın alma) RFQ KPI'ları
         _rq = lambda: scope(db.query(ReqModel), ReqModel, current_user)
         stats = {
-            "pending":          _rq().filter(ReqModel.status == "pending").count(),
-            "in_progress":      _rq().filter(ReqModel.status == "in_progress").count(),
+            # RFQ KPI'ları (satın alma dashboard'u)
+            "pending":          _rq().filter(ReqModel.status == "pending").count(),                       # gelen / üstlenilmemiş
+            "in_progress":      _rq().filter(ReqModel.status.in_(["in_progress", "venues_contacted"])).count(),  # işlemde
             "venues_contacted": _rq().filter(ReqModel.status == "venues_contacted").count(),
             "budget_ready":     _rq().filter(ReqModel.status == "budget_ready").count(),
+            "sonuclanan":       _rq().filter(ReqModel.status.in_(["budget_ready", "offer_sent"])).count(),  # teklif çıktı
+            "confirmed":        _rq().filter(ReqModel.status == "confirmed").count(),                     # konfirme
+            "cancelled":        _rq().filter(ReqModel.status == "cancelled").count(),                     # iptal
             "my_budgets":       db.query(Budget).filter(Budget.created_by == current_user.id).count(),
             "open_requests":    _rq().filter(
                 ReqModel.status.in_(["pending", "in_progress", "venues_contacted", "budget_ready"])
             ).count(),
+            "avg_donus_gun":    _avg_turnaround_days(db, current_user),                                   # ort. dönüş günü
         }
         financial = {}
         recent_requests = (

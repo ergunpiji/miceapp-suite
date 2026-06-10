@@ -68,34 +68,50 @@
   </div>
 </div>
 {% else %}
-{# ══ E-DEM: İş yükü özet kartları ══ #}
+{# ══ SATIN ALMA: RFQ KPI kartları ══ #}
 <div class="row g-3 mb-4">
-  <div class="col-6 col-lg-3">
+  <div class="col-6 col-lg-2">
     <div class="fin-card">
-      <div class="fin-label"><i class="bi bi-inbox text-warning me-1"></i> Bekleyen</div>
+      <div class="fin-label"><i class="bi bi-inbox text-warning me-1"></i> Gelen RFQ</div>
       <div class="fin-value text-warning">{{ stats.pending or 0 }}</div>
-      <div class="fin-sub">Üstlenilmemiş talepler</div>
+      <div class="fin-sub">Üstlenilmemiş</div>
     </div>
   </div>
-  <div class="col-6 col-lg-3">
+  <div class="col-6 col-lg-2">
     <div class="fin-card">
-      <div class="fin-label"><i class="bi bi-arrow-repeat text-primary me-1"></i> İşlemdeki</div>
+      <div class="fin-label"><i class="bi bi-arrow-repeat text-primary me-1"></i> İşlemde</div>
       <div class="fin-value text-primary">{{ stats.in_progress or 0 }}</div>
-      <div class="fin-sub">Aktif devam eden işler</div>
+      <div class="fin-sub">Devam eden</div>
     </div>
   </div>
-  <div class="col-6 col-lg-3">
+  <div class="col-6 col-lg-2">
     <div class="fin-card">
-      <div class="fin-label"><i class="bi bi-envelope text-info me-1"></i> Mekan İlet.</div>
-      <div class="fin-value text-info">{{ stats.venues_contacted or 0 }}</div>
-      <div class="fin-sub">Yanıt bekleniyor</div>
+      <div class="fin-label"><i class="bi bi-send-check text-info me-1"></i> Sonuçlanan</div>
+      <div class="fin-value text-info">{{ stats.sonuclanan or 0 }}</div>
+      <div class="fin-sub">Bütçe/teklif çıktı</div>
     </div>
   </div>
-  <div class="col-6 col-lg-3">
+  <div class="col-6 col-lg-2">
     <div class="fin-card">
-      <div class="fin-label"><i class="bi bi-calculator me-1" style="color:#7c3aed;"></i> Bütçelerim</div>
-      <div class="fin-value" style="color:#7c3aed;">{{ stats.my_budgets or 0 }}</div>
-      <div class="fin-sub">Hazırladığım bütçeler</div>
+      <div class="fin-label"><i class="bi bi-check-circle text-success me-1"></i> Konfirme</div>
+      <div class="fin-value text-success">{{ stats.confirmed or 0 }}</div>
+      <div class="fin-sub">Müşteri onayladı</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-2">
+    <div class="fin-card">
+      <div class="fin-label"><i class="bi bi-x-circle text-danger me-1"></i> İptal</div>
+      <div class="fin-value text-danger">{{ stats.cancelled or 0 }}</div>
+      <div class="fin-sub">İptal edilen</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-2">
+    <div class="fin-card">
+      <div class="fin-label"><i class="bi bi-stopwatch me-1" style="color:#7c3aed;"></i> Ort. Dönüş</div>
+      <div class="fin-value" style="color:#7c3aed;">
+        {% if stats.avg_donus_gun is not none %}{{ stats.avg_donus_gun }} <span style="font-size:14px;">gün</span>{% else %}—{% endif %}
+      </div>
+      <div class="fin-sub">Referans → ilk bütçe</div>
     </div>
   </div>
 </div>

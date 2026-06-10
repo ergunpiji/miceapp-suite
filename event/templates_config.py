@@ -136,6 +136,16 @@ def active_company_label(user) -> str:
     return company_name(getattr(user, "company_id", None))
 
 
+def desk_url() -> str:
+    """Desk (finans/İK) app URL'i — event'ten desk sayfalarına link için."""
+    try:
+        from auth import DESK_URL
+        return DESK_URL
+    except Exception:
+        return "https://desk.miceapp.net"
+
+
 templates.env.globals["company_name"] = company_name
 templates.env.globals["switch_companies"] = switch_companies
 templates.env.globals["active_company_label"] = active_company_label
+templates.env.globals["desk_url"] = desk_url
