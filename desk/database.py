@@ -291,7 +291,8 @@ def _migrate(engine) -> None:
         # Gelen fatura duplicate koruması (vendor + no + tarih benzersizliği)
         """CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_vendor_no_date
            ON invoices (vendor_id, invoice_no, invoice_date)
-           WHERE vendor_id IS NOT NULL AND invoice_no IS NOT NULL AND invoice_no <> ''""",
+           WHERE vendor_id IS NOT NULL AND invoice_no IS NOT NULL AND invoice_no <> ''
+                 AND deleted_at IS NULL""",
         # miceapp paylaşımlı kolon: total_amount + payment_status
         "ALTER TABLE invoices ADD COLUMN IF NOT EXISTS total_amount FLOAT DEFAULT 0.0",
         "ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'unpaid'",
