@@ -489,6 +489,74 @@ def generate_ref_no(db, event_type_code: str, customer_code: str, check_in_str: 
     return f"{prefix}-z"  # fallback
 
 
+def generate_vendor_code(db, name: str, company_id=None, exclude_id=None) -> str:
+    """Tedarikçi adından kısa benzersiz kod üretir (PO no için). 'Marriott Otel' → 'MAR'.
+    Aynı şirket içinde benzersiz; çakışırsa sonuna sayı (MAR2, MAR3)."""
+    import re as _re
+    from models import Vendor
+    base = (_re.sub(r"[^A-Za-z0-9]", "", (name or "").upper())[:3]) or "TED"
+    q = db.query(Vendor).filter(Vendor.code.isnot(None), Vendor.code != "")
+    if company_id:
+        q = q.filter(Vendor.company_id == company_id)
+    if exclude_id:
+        q = q.filter(Vendor.id != exclude_id)
+    used = {(v.code or "").upper() for v in q.all()}
+    cand, i = base, 1
+    while cand.upper() in used:
+        i += 1
+        cand = f"{base}{i}"
+    return cand
+
+
+def generate_po_no(db, request_no: str, vendor_code: str) -> str:
+    """Benzersiz PO no: {request_no}-{vendor_code}, çakışırsa -2/-3 eki."""
+    from models import SupplierCommitment
+    base = f"{request_no}-{(vendor_code or 'TED')}"
+    used = {
+        c.po_no for c in db.query(SupplierCommitment)
+        .filter(SupplierCommitment.po_no.like(f"{base}%")).all() if c.po_no
+    }
+    if base not in used:
+        return base
+    i = 2
+    while f"{base}-{i}" in used:
+        i += 1
+    return f"{base}-{i}"
+
+
+def backfill_vendor_codes_and_po_nos():
+    """Eksik vendor.code ve commitment.po_no değerlerini doldurur (idempotent, sadece boşlar)."""
+    from models import Vendor, SupplierCommitment, Request as _Req
+    db = SessionLocal()
+    try:
+        missing_v = db.query(Vendor).filter(
+            (Vendor.code == None) | (Vendor.code == "")  # noqa: E711
+        ).all()
+        for v in missing_v:
+            v.code = generate_vendor_code(db, v.name, v.company_id, exclude_id=v.id)
+            db.flush()
+        if missing_v:
+            db.commit()
+
+        missing_c = db.query(SupplierCommitment).filter(
+            (SupplierCommitment.po_no == None) | (SupplierCommitment.po_no == "")  # noqa: E711
+        ).all()
+        for c in missing_c:
+            req = db.query(_Req).filter(_Req.id == c.request_id).first()
+            ven = db.query(Vendor).filter(Vendor.id == c.vendor_id).first() if c.vendor_id else None
+            vcode = (ven.code if (ven and ven.code) else "TED")
+            rno = req.request_no if (req and req.request_no) else f"PO-{c.id[:8]}"
+            c.po_no = generate_po_no(db, rno, vcode)
+            db.flush()
+        if missing_c:
+            db.commit()
+    except Exception as e:
+        print(f"[backfill] vendor code/po_no atlandı: {e}", flush=True)
+        db.rollback()
+    finally:
+        db.close()
+
+
 # ---------------------------------------------------------------------------
 # Veritabanı migrasyon (mevcut tablolara yeni sütun ekler)
 # ---------------------------------------------------------------------------
@@ -588,6 +656,8 @@ def migrate_db():
         _safe_add_column(conn, "supplier_commitments", "created_by", "VARCHAR(36)")
         _safe_add_column(conn, "supplier_commitments", "created_at", "TIMESTAMP")
         _safe_add_column(conn, "supplier_commitments", "updated_at", "TIMESTAMP")
+        _safe_add_column(conn, "supplier_commitments", "po_no",      "VARCHAR(60)", "''")
+        _safe_add_column(conn, "vendors", "code", "VARCHAR(12)", "''")   # PO no için kısa kod
         # ── RFQ Şablon tablosu (create_all yeterli, ama eksik sütun koruması) ──
         _safe_add_column(conn, "request_templates", "description", "TEXT DEFAULT ''")
         _safe_add_column(conn, "request_templates", "company_id",  "VARCHAR(36)")

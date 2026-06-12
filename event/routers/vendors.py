@@ -272,11 +272,17 @@ async def vendors_create(
     phone:         str = Form(""),
     payment_term:  str = Form("30"),
     notes:         str = Form(""),
+    code:          str = Form(""),
 ):
     _require_finance(current_user)
+    from database import generate_vendor_code
+    _code = (code or "").strip().upper()[:12]
+    if not _code:
+        _code = generate_vendor_code(db, name, current_user.company_id)
     vendor = Vendor(
         id            = _uuid(),
         name          = name.strip(),
+        code          = _code,
         supplier_type = supplier_type or "diger",
         tax_no        = tax_number.strip(),
         tax_office    = tax_office.strip(),
@@ -428,11 +434,17 @@ async def vendors_update(
     phone:         str = Form(""),
     payment_term:  str = Form("30"),
     notes:         str = Form(""),
+    code:          str = Form(""),
 ):
     _require_finance(current_user)
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
         raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı.")
+    _code = (code or "").strip().upper()[:12]
+    if not _code:
+        from database import generate_vendor_code
+        _code = vendor.code or generate_vendor_code(db, name, vendor.company_id, exclude_id=vendor.id)
+    vendor.code          = _code
     vendor.name          = name.strip()
     vendor.supplier_type = supplier_type or "diger"
     vendor.tax_no        = tax_number.strip()

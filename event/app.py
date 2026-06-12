@@ -54,6 +54,8 @@ else:
     seed_data()
     _seed_event_company()
     _seed_org_titles_per_company()   # her şirkete kendi org_titles seti (tenant izolasyonu)
+    from database import backfill_vendor_codes_and_po_nos
+    backfill_vendor_codes_and_po_nos()   # eksik vendor.code + commitment.po_no (idempotent)
 
 # ---------------------------------------------------------------------------
 # FastAPI uygulaması

@@ -13,10 +13,16 @@
       <div class="card-body">
 
         <div class="row g-3 mb-3">
-          <div class="col-md-8">
+          <div class="col-md-6">
             <label class="form-label fw-semibold">Tedarikçi Adı <span class="text-danger">*</span></label>
             <input type="text" name="name" class="form-control"
                    value="{{ vendor.name if vendor else '' }}" required>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label fw-semibold">Kod</label>
+            <input type="text" name="code" class="form-control text-uppercase" maxlength="12"
+                   value="{{ vendor.code if vendor else '' }}" placeholder="oto"
+                   title="PO numaralarında kullanılır (ör. MAR). Boş bırakılırsa addan otomatik üretilir.">
           </div>
           <div class="col-md-4">
             <label class="form-label fw-semibold">Tedarikçi Türü</label>

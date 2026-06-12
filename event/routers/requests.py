@@ -1655,8 +1655,16 @@ async def requests_commit(
         ptype = payment_type if payment_type in ("cari", "banka", "kredi_karti", "cek") else "kredi_karti"
     exp = _commitment_expected_date(pdate, req.check_out or req.check_in)
 
+    # Benzersiz PO no: referans-tedarikçikodu[-N]
+    from database import generate_vendor_code, generate_po_no
+    if vendor and not (vendor.code or "").strip():
+        vendor.code = generate_vendor_code(db, vendor.name, vendor.company_id, exclude_id=vendor.id)
+        db.flush()
+    _vcode = (vendor.code if (vendor and vendor.code) else "TED")
+    _po_no = generate_po_no(db, (req.request_no or f"PO-{req.id[:8]}"), _vcode)
+
     c = SupplierCommitment(
-        id=_uuid(), company_id=req.company_id, request_id=req.id,
+        id=_uuid(), company_id=req.company_id, request_id=req.id, po_no=_po_no,
         budget_id=req.confirmed_budget_id, section=section,
         vendor_id=(vendor.id if vendor else None),
         vendor_name=(vendor.name if vendor else ""),
@@ -1719,7 +1727,7 @@ async def commitment_po(
 
     section_rows  = [r for r in (budget.rows if budget else []) if (r.get("section") or "other") == c.section]
     section_label = {x["id"]: x["label"] for x in SERVICE_CATEGORIES}.get(c.section, c.section)
-    po_no = f"{req.request_no}-{_SECTION_ABBR.get(c.section, 'PO')}" if req and req.request_no else f"PO-{c.id[:8]}"
+    po_no = c.po_no or (f"{req.request_no}-{_SECTION_ABBR.get(c.section, 'PO')}" if req and req.request_no else f"PO-{c.id[:8]}")
     try:
         contacts = json.loads(vendor.contacts_json or "[]") if vendor else []
     except Exception:

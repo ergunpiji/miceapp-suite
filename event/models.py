@@ -427,6 +427,7 @@ class Vendor(Base):
     id           = Column(String(36), primary_key=True, default=_uuid)
     company_id   = Column(String(36), nullable=True, index=True)  # miceapp'te companies tablosu yok; sadece referans
     name         = Column(String(255), nullable=False, index=True)
+    code         = Column(String(12), default="")   # kısa tedarikçi kodu (PO no için, ör. MAR)
     active       = Column(Boolean, default=True, nullable=False)
     supplier_type = Column(String(50), default="diger")
     city         = Column(String(100), default="")
@@ -1043,6 +1044,7 @@ class SupplierCommitment(Base):
     company_id   = Column(String(36), index=True)
     request_id   = Column(String(36), ForeignKey("requests.id"), index=True)
     budget_id    = Column(String(36), nullable=True)
+    po_no        = Column(String(60), default="")        # benzersiz PO no (referans-tedarikçikodu[-N])
     section      = Column(String(40))                    # accommodation/teknik/transfer...
     vendor_id    = Column(String(36), nullable=True)
     vendor_name  = Column(String(255), default="")       # snapshot
