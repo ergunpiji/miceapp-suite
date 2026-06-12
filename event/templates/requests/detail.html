@@ -1360,6 +1360,141 @@ document.addEventListener('DOMContentLoaded', function() {
 {% endif %}
 
 
+{# ─── TEDARİKÇİ ÖDEME TAAHHÜTLERİ (Faz 2) ─── #}
+{% if confirmed_budget %}
+<div class="card mb-4" id="tab-commitments">
+  <div class="card-header d-flex align-items-center justify-content-between py-2"
+       style="background:#fffbeb; border-bottom:1px solid #fde68a;">
+    <h6 class="fw-bold mb-0"><i class="bi bi-truck me-2 text-warning"></i>Tedarikçi Ödeme Taahhütleri</h6>
+    <span class="text-muted" style="font-size:11px;">Kategoriye tedarikçi konfirme et → nakit akışında tahmini gider</span>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-3" style="font-size:13px;">
+        <thead style="background:#f8fafc;"><tr>
+          <th>Kategori</th>
+          <th class="text-end">Bütçe Maliyeti</th>
+          <th class="text-end">Konfirme</th>
+          <th class="text-end">Kalan</th>
+          <th></th>
+        </tr></thead>
+        <tbody>
+        {% for cat in service_categories %}
+          {% set cost = commit_section_costs.get(cat.id, 0) %}
+          {% if cost > 0 %}
+          {% set done = committed_by_section.get(cat.id, 0) %}
+          {% set remaining = (cost - done) if (cost - done) > 0 else 0 %}
+          <tr>
+            <td>{{ cat.icon }} {{ cat.label }}</td>
+            <td class="text-end">₺{{ '{:,.0f}'.format(cost) }}</td>
+            <td class="text-end">{% if done > 0 %}<span style="color:#b45309;">₺{{ '{:,.0f}'.format(done) }}</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td class="text-end fw-semibold">₺{{ '{:,.0f}'.format(remaining) }}</td>
+            <td class="text-end">
+              {% if can_manage_commitment and remaining > 0 %}
+              <button type="button" class="btn btn-sm btn-outline-warning"
+                      onclick="openCommitModal('{{ cat.id }}','{{ cat.label }}',{{ remaining|round(2) }})">
+                <i class="bi bi-truck me-1"></i>Konfirme Et
+              </button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endif %}
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if commitments %}
+    <div style="font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px;">Açık Taahhütler</div>
+    {% set PT = {'cari':'Cari (vade)','banka':'Banka','kredi_karti':'Kredi Kartı','cek':'Çek'} %}
+    {% for c in commitments %}
+    <div class="d-flex justify-content-between align-items-center py-1" style="border-bottom:1px solid #f1f5f9; font-size:13px;">
+      <div>
+        <span class="fw-semibold">{{ c.vendor_name or '—' }}</span>
+        <span class="badge bg-light text-dark ms-1" style="font-size:10px;">{{ section_labels.get(c.section, c.section) }}</span>
+        <span class="badge ms-1" style="background:#fef3c7;color:#92400e;font-size:10px;">{{ PT.get(c.payment_type, c.payment_type) }}</span>
+        <span class="text-muted ms-1" style="font-size:11px;"><i class="bi bi-calendar-event" style="font-size:10px;"></i> Beklenen: {{ c.expected_payment_date }}</span>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <span class="fw-semibold" style="color:#dc2626;">₺{{ '{:,.0f}'.format(c.amount) }}</span>
+        {% if can_manage_commitment %}
+        <form method="post" action="/requests/commitments/{{ c.id }}/cancel" style="margin:0;"
+              onsubmit="return confirm('Bu taahhüt iptal edilsin mi?')">
+          <button class="btn btn-sm btn-link text-muted p-0" title="İptal et"><i class="bi bi-x-circle"></i></button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+  </div>
+</div>
+
+{% if can_manage_commitment %}
+<div class="modal fade" id="commitModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="/requests/{{ req.id }}/commit" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-truck me-2"></i>Tedarikçiyi Konfirme Et</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" name="section" id="commitSection">
+        <div class="mb-2">
+          <label class="form-label fw-semibold">Kategori</label>
+          <input type="text" class="form-control" id="commitSectionLabel" disabled>
+        </div>
+        <div class="mb-2">
+          <label class="form-label fw-semibold">Tedarikçi <span class="text-danger">*</span></label>
+          <select name="vendor_id" class="form-select" required>
+            <option value="">— Tedarikçi seç —</option>
+            {% for v in commit_vendors %}<option value="{{ v.id }}">{{ v.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="mb-2">
+          <label class="form-label fw-semibold">Tutar (KDV dahil ₺) <span class="text-danger">*</span></label>
+          <input type="number" step="0.01" min="0" name="amount" id="commitAmount" class="form-control" required>
+        </div>
+        <div class="mb-2">
+          <label class="form-label fw-semibold">Ödeme Tarihi <span class="text-muted" style="font-weight:400;">(boş → cari + 30 gün)</span></label>
+          <input type="date" name="payment_date" id="commitPayDate" class="form-control" onchange="toggleCommitPayType()">
+        </div>
+        <div class="mb-2" id="commitPayTypeWrap" style="display:none;">
+          <label class="form-label fw-semibold">Ödeme Türü</label>
+          <select name="payment_type" class="form-select">
+            {% for pt in commitment_payment_types %}<option value="{{ pt.value }}" {% if pt.value == 'kredi_karti' %}selected{% endif %}>{{ pt.label }}</option>{% endfor %}
+          </select>
+          <div class="text-muted" style="font-size:11px;">Kredi kartında kart seçilmez — muhasebe müsaitliğe göre atar.</div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label fw-semibold">Not</label>
+          <input type="text" name="notes" class="form-control" placeholder="İsteğe bağlı">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Vazgeç</button>
+        <button type="submit" class="btn btn-warning"><i class="bi bi-check-circle me-1"></i>Konfirme Et</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+function openCommitModal(section, label, amount) {
+  document.getElementById('commitSection').value = section;
+  document.getElementById('commitSectionLabel').value = label;
+  document.getElementById('commitAmount').value = amount;
+  document.getElementById('commitPayDate').value = '';
+  toggleCommitPayType();
+  new bootstrap.Modal(document.getElementById('commitModal')).show();
+}
+function toggleCommitPayType() {
+  var d = document.getElementById('commitPayDate').value;
+  document.getElementById('commitPayTypeWrap').style.display = d ? 'block' : 'none';
+}
+</script>
+{% endif %}
+{% endif %}
+
 {# ─── FİNANSAL SEKME ─── #}
 {% set fund_sym = {'TRY':'₺','USD':'$','EUR':'€'}.get(parent_fund.fund_currency, parent_fund.fund_currency) if parent_fund else '₺' %}
 <div class="card mb-4" id="tab-financial">

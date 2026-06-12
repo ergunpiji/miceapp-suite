@@ -90,14 +90,15 @@
   {% endif %}
 
   {# Özet stat pill'leri #}
-  {% set ns = namespace(total_in=0, total_out=0, total_fc=0, cumulative=0) %}
+  {% set ns = namespace(total_in=0, total_out=0, total_fc=0, total_fc_out=0, cumulative=0) %}
   {% for w in weeks_data %}
     {% set ns.total_in  = ns.total_in  + w.total_in %}
     {% set ns.total_out = ns.total_out + w.total_out %}
     {% set ns.total_fc  = ns.total_fc  + w.total_fc_in %}
+    {% set ns.total_fc_out = ns.total_fc_out + w.total_fc_out %}
   {% endfor %}
   {% set period_net = ns.total_in - ns.total_out %}
-  {% set period_net_proj = ns.total_in + ns.total_fc - ns.total_out %}
+  {% set period_net_proj = ns.total_in + ns.total_fc - ns.total_out - ns.total_fc_out %}
   <div class="d-flex gap-3 flex-wrap mb-4">
     <div class="stat-pill">
       <div class="val" style="color:#16a34a;">+₺{{ '{:,.0f}'.format(ns.total_in) }}</div>
@@ -118,6 +119,14 @@
       <div class="val" style="color:#b45309;">~₺{{ '{:,.0f}'.format(ns.total_fc) }}</div>
       <div class="lbl">Tahmini Gelir (Bütçe)</div>
     </div>
+    {% endif %}
+    {% if show_forecast and ns.total_fc_out > 0 %}
+    <div class="stat-pill" style="background:#fef2f2; border:1px dashed #f59e0b;">
+      <div class="val" style="color:#b91c1c;">~₺{{ '{:,.0f}'.format(ns.total_fc_out) }}</div>
+      <div class="lbl">Tahmini Gider (Taahhüt)</div>
+    </div>
+    {% endif %}
+    {% if show_forecast and (ns.total_fc > 0 or ns.total_fc_out > 0) %}
     <div class="stat-pill" style="background:#fffbeb; border:1px dashed #f59e0b;">
       <div class="val {% if period_net_proj >= 0 %}net-positive{% else %}net-negative{% endif %}">
         {% if period_net_proj > 0 %}+{% elif period_net_proj < 0 %}-{% endif %}₺{{ '{:,.0f}'.format(period_net_proj|abs) }}
@@ -167,7 +176,7 @@
           {% for w in weeks_data %}
           {% set net = w.total_in - w.total_out %}
           {% set ns2.cumulative = ns2.cumulative + net %}
-          {% set has_detail = w.incoming or w.outgoing or w.forecast_in %}
+          {% set has_detail = w.incoming or w.outgoing or w.forecast_in or w.forecast_out %}
           <tr class="week-row {% if has_detail %}has-data{% endif %}"
               {% if has_detail %}onclick="toggleWeek({{ loop.index0 }})"{% endif %}>
             <td class="ps-4 py-2">
@@ -188,7 +197,11 @@
             <td class="text-end py-2">
               {% if w.total_out > 0 %}
               <span style="color:#dc2626;">-₺{{ '{:,.0f}'.format(w.total_out) }}</span>
-              {% else %}<span class="text-muted">—</span>{% endif %}
+              {% elif not (show_forecast and w.total_fc_out > 0) %}<span class="text-muted">—</span>{% endif %}
+              {% if show_forecast and w.total_fc_out > 0 %}
+              <div style="color:#b91c1c; font-size:11px; font-style:italic;"
+                   title="Tedarikçi taahhüdünden beklenen ödeme (tahmini)">~₺{{ '{:,.0f}'.format(w.total_fc_out) }} tahmini</div>
+              {% endif %}
             </td>
             <td class="text-end py-2">
               {% if net > 0 %}
@@ -304,6 +317,26 @@
                     {% endfor %}
                   </div>
                   {% endif %}
+                  {% if show_forecast and w.forecast_out %}
+                  <div class="col-12 col-md-6">
+                    <div class="cf-section-label" style="color:#b91c1c;">
+                      <i class="bi bi-truck me-1"></i>Tahmini Ödeme (tedarikçi taahhüdü)
+                    </div>
+                    {% set PT = {'cari':'Cari','banka':'Banka','kredi_karti':'Kredi Kartı','cek':'Çek'} %}
+                    {% for f in w.forecast_out %}
+                    <div class="cf-entry d-flex justify-content-between align-items-start"
+                         style="border-left:2px dashed #f59e0b; padding-left:8px;">
+                      <div>
+                        <span class="fw-semibold" style="color:#b91c1c;">{{ f.vendor_name }}</span>
+                        <span class="badge ms-1" style="background:#fee2e2;color:#991b1b;font-size:9px;">Tahmini</span>
+                        <span class="badge ms-1" style="background:#fef3c7;color:#92400e;font-size:9px;">{{ PT.get(f.payment_type, f.payment_type) }}</span>
+                        <div class="text-muted" style="font-size:11px;">{{ f.request_no }} · Beklenen: {{ f.eff_date }}</div>
+                      </div>
+                      <span style="color:#b91c1c;font-weight:600;white-space:nowrap;font-style:italic;">~₺{{ '{:,.0f}'.format(f.amount) }}</span>
+                    </div>
+                    {% endfor %}
+                  </div>
+                  {% endif %}
                 </div>
               </div>
             </td>
@@ -316,7 +349,7 @@
   </div>
 
   {% set _has_data = namespace(v=false) %}
-  {% for w in weeks_data %}{% if w.incoming or w.outgoing or w.forecast_in %}{% set _has_data.v = true %}{% endif %}{% endfor %}
+  {% for w in weeks_data %}{% if w.incoming or w.outgoing or w.forecast_in or w.forecast_out %}{% set _has_data.v = true %}{% endif %}{% endfor %}
   {% if not _has_data.v %}
   <div class="text-center py-5 text-muted">
     <i class="bi bi-graph-up" style="font-size:3rem;opacity:.3;"></i>
@@ -349,14 +382,17 @@ function toggleWeek(idx) {
   const fcValues = [
     {% for w in weeks_data %}{{ w.total_fc_in }}{% if not loop.last %},{% endif %}{% endfor %}
   ];
+  const fcOutValues = [
+    {% for w in weeks_data %}{{ w.total_fc_out }}{% if not loop.last %},{% endif %}{% endfor %}
+  ];
   const showForecast = {{ 'true' if show_forecast else 'false' }};
 
   // Kümülatif (gerçek)
   let cum = 0;
   const cumValues = netValues.map(v => { cum += v; return cum; });
-  // Kümülatif (tahmini gelir dahil)
+  // Kümülatif (tahmini gelir−gider dahil)
   let cumP = 0;
-  const cumProjValues = netValues.map((v, i) => { cumP += v + (fcValues[i] || 0); return cumP; });
+  const cumProjValues = netValues.map((v, i) => { cumP += v + (fcValues[i] || 0) - (fcOutValues[i] || 0); return cumP; });
 
   const barColors     = netValues.map(v => v >= 0 ? 'rgba(34,197,94,.85)' : 'rgba(239,68,68,.85)');
   const barBorderColors = netValues.map(v => v >= 0 ? '#16a34a' : '#dc2626');

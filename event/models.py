@@ -1033,6 +1033,39 @@ class Budget(Base):
         }
 
 
+class SupplierCommitment(Base):
+    """Tedarikçi ödeme taahhüdü (Faz 2) — onaylı işte bir KATEGORİYE (section) tedarikçi
+    konfirme edildiğinde oluşur. Nakit akışında 'tahmini gider' olur; gelen fatura
+    geldikçe kapanır. Parçalı konfirmasyon: her kategori ayrı zamanda kilitlenebilir."""
+    __tablename__ = "supplier_commitments"
+
+    id           = Column(String(36), primary_key=True, default=_uuid)
+    company_id   = Column(String(36), index=True)
+    request_id   = Column(String(36), ForeignKey("requests.id"), index=True)
+    budget_id    = Column(String(36), nullable=True)
+    section      = Column(String(40))                    # accommodation/teknik/transfer...
+    vendor_id    = Column(String(36), nullable=True)
+    vendor_name  = Column(String(255), default="")       # snapshot
+    amount       = Column(Float, default=0.0)            # KDV dahil taahhüt (TRY)
+    currency     = Column(String(8), default="TRY")
+    payment_date = Column(String(10), nullable=True)     # spesifik ödeme tarihi (boş → cari)
+    payment_type = Column(String(20), default="cari")    # cari/banka/kredi_karti/cek
+    expected_payment_date = Column(String(10))           # hesaplanan (tarih veya etkinlik+30)
+    status       = Column(String(20), default="open")    # open/cancelled
+    notes        = Column(Text, default="")
+    created_by   = Column(String(36))
+    created_at   = Column(DateTime, default=_now)
+    updated_at   = Column(DateTime, default=_now, onupdate=_now)
+
+
+COMMITMENT_PAYMENT_TYPES = [
+    {"value": "cari",        "label": "Cari (vade)"},
+    {"value": "banka",       "label": "Banka"},
+    {"value": "kredi_karti", "label": "Kredi Kartı"},
+    {"value": "cek",         "label": "Çek"},
+]
+
+
 class Service(Base):
     """Hizmet Kataloğu"""
     __tablename__ = "services"

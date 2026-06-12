@@ -10,7 +10,7 @@ import json
 import os
 import unicodedata
 import urllib.parse
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
@@ -23,6 +23,7 @@ from models import (
     REQUEST_STATUSES, REQUEST_TABS,
     TR_CITIES, SUPPLIER_TYPES, Service, SERVICE_CATEGORIES, Request as ReqModel, RequestModule, Team, User, Vendor,
     _uuid, _now, REQUEST_STATUS_LABELS, DeskReference, RequestTemplate, Notification,
+    SupplierCommitment, COMMITMENT_PAYMENT_TYPES, SERVICE_CATEGORIES,
 )
 from routers.library import log_activity
 from tenant import scope   # tenant izolasyonu (company_id)
@@ -1112,6 +1113,25 @@ async def requests_detail(
     budget_sale_excl = confirmed_budget.grand_sale_excl_vat if confirmed_budget else 0.0
     budget_cost_excl = confirmed_budget.grand_cost_excl_vat if confirmed_budget else 0.0
 
+    # ── Faz 2: Tedarikçi ödeme taahhütleri (kategori bazlı tahmini gider) ──
+    commit_section_costs = _section_costs(confirmed_budget)   # {section: KDV dahil maliyet}
+    commitments = (
+        db.query(SupplierCommitment)
+        .filter(SupplierCommitment.request_id == req.id, SupplierCommitment.status == "open")
+        .order_by(SupplierCommitment.created_at.asc())
+        .all()
+    )
+    committed_by_section: dict = {}
+    for _c in commitments:
+        committed_by_section[_c.section] = round(committed_by_section.get(_c.section, 0.0) + (_c.amount or 0.0), 2)
+    commit_vendors = (
+        scope(db.query(Vendor), Vendor, current_user)
+        .filter(Vendor.active == True)  # noqa: E712
+        .order_by(Vendor.name.asc())
+        .all()
+    )
+    can_manage_commitment = _can_manage_commitment(current_user)
+
     can_manage_invoices  = current_user.role in ("admin", "muhasebe_muduru", "muhasebe") or current_user.is_gm
     can_manage_undoc     = current_user.role in ("admin", "muhasebe_muduru", "muhasebe") or current_user.is_gm
     # Limit tabanlı zincirleme onay: approver veya hiyerarşik üstü onaylayabilir
@@ -1269,6 +1289,16 @@ async def requests_detail(
             "invoice_kar":           round(invoice_kar, 2),
             "budget_sale_excl":  budget_sale_excl,
             "budget_cost_excl":  budget_cost_excl,
+            # Faz 2 — tedarikçi ödeme taahhütleri
+            "confirmed_budget":       confirmed_budget,
+            "commit_section_costs":   commit_section_costs,
+            "commitments":            commitments,
+            "committed_by_section":   committed_by_section,
+            "commit_vendors":         commit_vendors,
+            "can_manage_commitment":  can_manage_commitment,
+            "service_categories":     SERVICE_CATEGORIES,
+            "section_labels":         {c["id"]: c["label"] for c in SERVICE_CATEGORIES},
+            "commitment_payment_types": COMMITMENT_PAYMENT_TYPES,
             "can_manage_invoices":      can_manage_invoices,
             "can_approve_invoices":     can_approve_invoices,
             "approvable_invoice_ids":   approvable_invoice_ids,
@@ -1556,6 +1586,110 @@ async def requests_send_to_owner(
                  "Bütçe dosya sahibine gönderildi (teklif hazır).", user_id=current_user.id)
     db.commit()
     return RedirectResponse(url=f"/requests/{req_id}?sent_owner=1", status_code=status.HTTP_302_FOUND)
+
+
+# ---------------------------------------------------------------------------
+# Faz 2 — Tedarikçi Ödeme Taahhütleri (kategori bazlı konfirmasyon → tahmini gider)
+# ---------------------------------------------------------------------------
+def _section_costs(budget) -> dict:
+    """Onaylı bütçenin KATEGORİ (section) başına KDV dahil maliyetini (TRY) döndürür."""
+    out: dict = {}
+    if not budget:
+        return out
+    for row in budget.rows:
+        if row.get("is_service_fee") or row.get("is_accommodation_tax"):
+            continue
+        sec    = row.get("section", "other") or "other"
+        qty    = float(row.get("qty", 1) or 1)
+        nights = float(row.get("nights", 1) or 1)
+        cost   = float(row.get("cost_price", 0) or 0)
+        vat    = float(row.get("vat_rate", 0) or 0)
+        cur    = row.get("currency", "TRY") or "TRY"
+        sub = budget.amount_to_try(cost * qty * nights, cur) * (1 + vat / 100)
+        out[sec] = round(out.get(sec, 0.0) + sub, 2)
+    return out
+
+
+def _commitment_expected_date(payment_date: str, event_end: str) -> str:
+    """Beklenen ödeme tarihi: spesifik tarih verildiyse o; yoksa etkinlik bitiş + 30 gün (cari)."""
+    if payment_date:
+        return payment_date
+    try:
+        base = event_end or _now().date().isoformat()
+        return (date.fromisoformat(base) + timedelta(days=30)).isoformat()
+    except Exception:
+        return (date.today() + timedelta(days=30)).isoformat()
+
+
+def _can_manage_commitment(user) -> bool:
+    return user.role in ("satinalma", "admin", "mudur", "yonetici", "genel_mudur") or getattr(user, "is_gm", False)
+
+
+@router.post("/{req_id}/commit", name="requests_commit")
+async def requests_commit(
+    req_id: str,
+    section: str = Form(...),
+    vendor_id: str = Form(""),
+    amount: float = Form(0.0),
+    payment_date: str = Form(""),
+    payment_type: str = Form("cari"),
+    notes: str = Form(""),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Bir kategoriye tedarikçi konfirme et → ödeme taahhüdü (tahmini gider) oluştur."""
+    if not _can_manage_commitment(current_user):
+        raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz yok.")
+    req = scope(db.query(ReqModel), ReqModel, current_user).filter(ReqModel.id == req_id).first()
+    if not req:
+        return RedirectResponse(url="/requests", status_code=status.HTTP_302_FOUND)
+    if amount <= 0:
+        return RedirectResponse(url=f"/requests/{req_id}?err=commit_amount#tab-summary", status_code=status.HTTP_302_FOUND)
+
+    vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first() if vendor_id else None
+    pdate = (payment_date or "").strip()
+    # Spesifik tarih yoksa cari + 30 gün; varsa ödeme türü (varsayılan kredi_karti)
+    if not pdate:
+        ptype = "cari"
+    else:
+        ptype = payment_type if payment_type in ("cari", "banka", "kredi_karti", "cek") else "kredi_karti"
+    exp = _commitment_expected_date(pdate, req.check_out or req.check_in)
+
+    c = SupplierCommitment(
+        id=_uuid(), company_id=req.company_id, request_id=req.id,
+        budget_id=req.confirmed_budget_id, section=section,
+        vendor_id=(vendor.id if vendor else None),
+        vendor_name=(vendor.name if vendor else ""),
+        amount=round(float(amount), 2), currency="TRY",
+        payment_date=(pdate or None), payment_type=ptype,
+        expected_payment_date=exp, status="open", notes=notes.strip(),
+        created_by=current_user.id,
+    )
+    db.add(c)
+    log_activity(db, req.id, "supplier_commitment",
+                 f"Tedarikçi taahhüdü: {(vendor.name if vendor else '—')} · {section} · {round(float(amount),2)} TRY (beklenen {exp})",
+                 user_id=current_user.id)
+    db.commit()
+    return RedirectResponse(url=f"/requests/{req_id}?committed=1#tab-summary", status_code=status.HTTP_302_FOUND)
+
+
+@router.post("/commitments/{commit_id}/cancel", name="requests_commit_cancel")
+async def requests_commit_cancel(
+    commit_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not _can_manage_commitment(current_user):
+        raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz yok.")
+    c = scope(db.query(SupplierCommitment), SupplierCommitment, current_user).filter(
+        SupplierCommitment.id == commit_id).first()
+    if not c:
+        return RedirectResponse(url="/requests", status_code=status.HTTP_302_FOUND)
+    rid = c.request_id
+    c.status = "cancelled"
+    c.updated_at = _now()
+    db.commit()
+    return RedirectResponse(url=f"/requests/{rid}?commit_cancelled=1#tab-summary", status_code=status.HTTP_302_FOUND)
 
 
 # ---------------------------------------------------------------------------

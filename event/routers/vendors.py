@@ -788,6 +788,46 @@ async def cash_flow(
                 "request_no":    req.request_no or "",
             })
 
+    # ── Tahmini gider (outflow) — tedarikçi ödeme taahhütlerinden (Faz 2) ──
+    # Taahhüt − bağlı gelen faturalar = beklenen ödeme; tarih = taahhüdün beklenen
+    # ödeme tarihi. Gelen fatura (request+vendor) geldikçe otomatik kapanır.
+    forecast_out_items = []
+    if forecast:
+        from models import SupplierCommitment, Request as _Req
+        from collections import defaultdict as _dd
+        commits = (
+            scope(db.query(SupplierCommitment), SupplierCommitment, current_user)
+            .filter(SupplierCommitment.status == "open")
+            .all()
+        )
+        _groups = _dd(list)
+        for cm in commits:
+            _groups[(cm.request_id, cm.vendor_id)].append(cm)
+        for (rid, vid), cms in _groups.items():
+            q = db.query(Invoice).filter(Invoice.request_id == rid, Invoice.invoice_type == "gelen")
+            if vid:
+                q = q.filter(Invoice.vendor_id == vid)
+            invoiced = sum((inv.total_amount or 0.0) for inv in q.all())
+            _req = db.query(_Req).filter(_Req.id == rid).first()
+            for cm in sorted(cms, key=lambda c: c.expected_payment_date or "9999"):
+                amt = cm.amount or 0.0
+                alloc = min(amt, invoiced)
+                invoiced -= alloc
+                remaining = round(amt - alloc, 2)
+                if remaining <= 0:
+                    continue
+                eff = cm.expected_payment_date
+                if not eff or not (today_str <= eff <= end_str):
+                    continue
+                forecast_out_items.append({
+                    "amount":       remaining,
+                    "eff_date":     eff,
+                    "vendor_name":  cm.vendor_name or "—",
+                    "section":      cm.section,
+                    "payment_type": cm.payment_type,
+                    "request_no":   (_req.request_no if _req else ""),
+                })
+
     # Haftalık gruplama
     weeks_data = []
     for w in range(weeks):
@@ -799,6 +839,7 @@ async def cash_flow(
         w_items = [it for it in all_outgoing_items if ws_str <= (it["eff_date"] or "") <= we_str]
         w_in    = [i  for i  in incoming           if ws_str <= (i.due_date or "")    <= we_str]
         w_fc    = [f  for f  in forecast_items     if ws_str <= (f["eff_date"] or "")  <= we_str]
+        w_fc_out = [f for f in forecast_out_items  if ws_str <= (f["eff_date"] or "")  <= we_str]
 
         weeks_data.append({
             "label":         f"Hafta {w+1}",
@@ -807,9 +848,11 @@ async def cash_flow(
             "outgoing":      w_items,
             "incoming":      w_in,
             "forecast_in":   w_fc,
+            "forecast_out":  w_fc_out,
             "total_out":     round(sum(it["amount"] for it in w_items), 2),
             "total_in":      round(sum(max(0.0, (i.total_amount or 0) - (i.paid_amount or 0)) for i in w_in), 2),
             "total_fc_in":   round(sum(f["amount"] for f in w_fc), 2),
+            "total_fc_out":  round(sum(f["amount"] for f in w_fc_out), 2),
         })
 
     # Vadesi geçmiş (overdue)
@@ -836,4 +879,5 @@ async def cash_flow(
         "total_overdue": round(sum(max(0.0, (i.total_amount or 0) - (i.paid_amount or 0)) for i in overdue), 2),
         "show_forecast": bool(forecast),
         "total_forecast": round(sum(f["amount"] for f in forecast_items), 2),
+        "total_forecast_out": round(sum(f["amount"] for f in forecast_out_items), 2),
     })

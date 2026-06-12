@@ -1488,6 +1488,26 @@ class DeskBudget(Base):
         return round(total, 2)
 
 
+class DeskSupplierCommitment(Base):
+    """event'in supplier_commitments tablosu için read-only bridge — nakit akışında
+    tahmini GİDER (tedarikçi ödeme taahhüdü). Sadece okuma."""
+    __tablename__ = "supplier_commitments"
+    __table_args__ = {"extend_existing": True}
+
+    id           = Column(String(36), primary_key=True, default=_uuid)
+    company_id   = Column(String(36), index=True)
+    request_id   = Column(String(36))
+    section      = Column(String(40))
+    vendor_id    = Column(String(36))
+    vendor_name  = Column(String(255))
+    amount       = Column(Float)
+    currency     = Column(String(8))
+    payment_date = Column(String(10))
+    payment_type = Column(String(20))
+    expected_payment_date = Column(String(10))
+    status       = Column(String(20))
+
+
 class EventPrepaymentRequest(Base):
     """event'in prepayment_requests tablosu için bridge — muhasebe (desk) GM onaylı
     ön ödemeleri görür ve öder. event GM onayı kanonik; desk sadece öder/kapatır."""

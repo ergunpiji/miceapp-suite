@@ -304,12 +304,57 @@ async def report_cash_flow(
                 "event_name": r.event_name or "",
             })
 
+    # ── Tahmini gider (tedarikçi ödeme taahhütleri) — Faz 2 ──
+    # Taahhüt − bağlı gelen faturalar = beklenen ödeme; tarih = taahhüdün beklenen tarihi.
+    forecast_out_all = []
+    if forecast:
+        from models import DeskSupplierCommitment, DeskRequest
+        from collections import defaultdict as _dd2
+        commits = db.query(DeskSupplierCommitment).filter(
+            DeskSupplierCommitment.company_id == cid,
+            DeskSupplierCommitment.status == "open",
+        ).all()
+        _groups = _dd2(list)
+        for cm in commits:
+            _groups[(cm.request_id, cm.vendor_id)].append(cm)
+        for (rid, vid), cms in _groups.items():
+            q = db.query(Invoice).filter(
+                Invoice.company_id == cid,
+                Invoice.request_id == rid,
+                Invoice.invoice_type == "gelen",
+                Invoice.deleted_at == None,  # noqa: E711
+            )
+            if vid:
+                q = q.filter(Invoice.vendor_id == vid)
+            invoiced = sum((inv.total_with_vat or inv.amount or 0.0) for inv in q.all())
+            _req = db.query(DeskRequest).filter(DeskRequest.id == rid).first()
+            for cm in sorted(cms, key=lambda c: c.expected_payment_date or "9999"):
+                amt = cm.amount or 0.0
+                alloc = min(amt, invoiced)
+                invoiced -= alloc
+                remaining = round(amt - alloc, 2)
+                if remaining <= 0:
+                    continue
+                try:
+                    eff = date.fromisoformat(cm.expected_payment_date)
+                except Exception:
+                    continue
+                forecast_out_all.append({
+                    "date":         eff,
+                    "amount":       remaining,
+                    "vendor_name":  cm.vendor_name or "—",
+                    "section":      cm.section,
+                    "payment_type": cm.payment_type,
+                    "request_no":   (_req.request_no if _req else ""),
+                })
+
     weeks_data = []
     for i in range(weeks):
         wstart = week_start + timedelta(weeks=i)
         wend = wstart + timedelta(days=6)
         label = f"H{i + 1}" if i > 0 else "Bu Hafta"
         forecast_in = [f for f in forecast_items_all if wstart <= f["date"] <= wend]
+        forecast_out = [f for f in forecast_out_all if wstart <= f["date"] <= wend]
 
         incoming = []  # gelir: tahsilat beklenen kesilen faturalar + kasa/banka girişleri
         outgoing = []  # gider: ödeme bekleyen gelen faturalar, çekler, KK ekstreler, kasa/banka çıkışları
@@ -451,6 +496,8 @@ async def report_cash_flow(
             "outgoing": sorted(outgoing, key=lambda x: x["date"]),
             "forecast_in": sorted(forecast_in, key=lambda x: x["date"]),
             "total_fc_in": round(sum(f["amount"] for f in forecast_in), 2),
+            "forecast_out": sorted(forecast_out, key=lambda x: x["date"]),
+            "total_fc_out": round(sum(f["amount"] for f in forecast_out), 2),
         })
 
     # Vadesi geçmiş ödenmemiş faturalar (kesilen)
@@ -472,6 +519,7 @@ async def report_cash_flow(
             "overdue": overdue, "total_overdue": total_overdue,
             "show_forecast": bool(forecast),
             "total_forecast": round(sum(f["amount"] for f in forecast_items_all), 2),
+            "total_forecast_out": round(sum(f["amount"] for f in forecast_out_all), 2),
             "page_title": "Nakit Akışı",
         },
     )
