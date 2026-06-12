@@ -601,11 +601,24 @@ async def vendors_prepayment_cancel(
 # ---------------------------------------------------------------------------
 # GET /cash-flow  — Nakit Akışı tahmini
 # ---------------------------------------------------------------------------
+def _parse_payment_term_days(s, default: int = 30) -> int:
+    """Customer.payment_term serbest metin → gün sayısı.
+    'peşin'→0, '30 gün'→30, parse edilemez/boş → default (30)."""
+    import re
+    if not s:
+        return default
+    t = str(s).strip().lower()
+    if "peşin" in t or "pesin" in t or "peş" in t:
+        return 0
+    m = re.search(r"\d+", t)
+    return int(m.group()) if m else default
+
 
 @router.get("/cash-flow/view", response_class=HTMLResponse, name="cash_flow")
 async def cash_flow(
     request: Request,
     weeks: int = 8,
+    forecast: int = 1,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -720,6 +733,61 @@ async def cash_flow(
     ]
     all_outgoing_items = all_outgoing_items + cc_stmt_items
 
+    # ── Tahmini tahsilat (inflow) — onaylı bütçelerden, henüz faturalanmamış ──
+    # Sıfır veri girişi: onaylı bütçe satışı − kesilen faturalar = beklenen tahsilat.
+    # Tarih = etkinlik bitiş + müşteri vadesi. Faturalar geldikçe otomatik kapanır.
+    forecast_items = []
+    if forecast:
+        from models import Request as ReqModel, Budget, Customer
+        from tenant import scope
+        fc_reqs = (
+            scope(db.query(ReqModel), ReqModel, current_user)
+            .filter(
+                ReqModel.confirmed_budget_id.isnot(None),
+                ReqModel.status.notin_(["cancelled", "closed"]),
+            )
+            .all()
+        )
+        for req in fc_reqs:
+            bgt = db.query(Budget).filter(Budget.id == req.confirmed_budget_id).first()
+            if not bgt:
+                continue
+            expected = bgt.grand_sale or 0.0          # KDV dahil satış toplamı
+            if expected <= 0:
+                continue
+            invoiced = sum(
+                (inv.total_amount or 0.0)
+                for inv in db.query(Invoice).filter(
+                    Invoice.request_id == req.id,
+                    Invoice.invoice_type == "kesilen",
+                ).all()
+            )
+            draft = round(expected - invoiced, 2)     # faturalanmamış beklenen tahsilat
+            if draft <= 0:
+                continue
+            base = req.check_out or req.check_in
+            if not base:
+                continue
+            cust = (
+                db.query(Customer).filter(Customer.id == req.customer_id).first()
+                if req.customer_id else None
+            )
+            term = _parse_payment_term_days(cust.payment_term if cust else None)
+            try:
+                eff = (date.fromisoformat(base) + timedelta(days=term)).isoformat()
+            except Exception:
+                continue
+            if not (today_str <= eff <= end_str):
+                continue
+            forecast_items.append({
+                "request":       req,
+                "amount":        draft,
+                "eff_date":      eff,
+                "customer_name": (cust.name if cust else (req.client_name or "—")),
+                "event_name":    req.event_name or "",
+                "request_no":    req.request_no or "",
+            })
+
     # Haftalık gruplama
     weeks_data = []
     for w in range(weeks):
@@ -730,15 +798,18 @@ async def cash_flow(
 
         w_items = [it for it in all_outgoing_items if ws_str <= (it["eff_date"] or "") <= we_str]
         w_in    = [i  for i  in incoming           if ws_str <= (i.due_date or "")    <= we_str]
+        w_fc    = [f  for f  in forecast_items     if ws_str <= (f["eff_date"] or "")  <= we_str]
 
         weeks_data.append({
-            "label":       f"Hafta {w+1}",
-            "start":       week_start.strftime("%d.%m"),
-            "end":         week_end.strftime("%d.%m"),
-            "outgoing":    w_items,
-            "incoming":    w_in,
-            "total_out":   round(sum(it["amount"] for it in w_items), 2),
-            "total_in":    round(sum(max(0.0, (i.total_amount or 0) - (i.paid_amount or 0)) for i in w_in), 2),
+            "label":         f"Hafta {w+1}",
+            "start":         week_start.strftime("%d.%m"),
+            "end":           week_end.strftime("%d.%m"),
+            "outgoing":      w_items,
+            "incoming":      w_in,
+            "forecast_in":   w_fc,
+            "total_out":     round(sum(it["amount"] for it in w_items), 2),
+            "total_in":      round(sum(max(0.0, (i.total_amount or 0) - (i.paid_amount or 0)) for i in w_in), 2),
+            "total_fc_in":   round(sum(f["amount"] for f in w_fc), 2),
         })
 
     # Vadesi geçmiş (overdue)
@@ -763,4 +834,6 @@ async def cash_flow(
         "weeks":        weeks,
         "today_str":    today_str,
         "total_overdue": round(sum(max(0.0, (i.total_amount or 0) - (i.paid_amount or 0)) for i in overdue), 2),
+        "show_forecast": bool(forecast),
+        "total_forecast": round(sum(f["amount"] for f in forecast_items), 2),
     })
