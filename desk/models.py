@@ -1494,6 +1494,9 @@ class DeskSupplierCommitment(Base):
     __tablename__ = "supplier_commitments"
     __table_args__ = {"extend_existing": True}
 
+    # Sadece desk'in OKUDUĞU kolonlar (subset). budget_id/notes/created_by/created_at/
+    # updated_at deklare EDİLMEZ — aksi halde SELECT o kolonları çeker ve event tarafının
+    # tam tablosu henüz migrate olmadan desk çökerdi. Tabloyu event tarafı tamamlar.
     id           = Column(String(36), primary_key=True, default=_uuid)
     company_id   = Column(String(36), index=True)
     request_id   = Column(String(36))
