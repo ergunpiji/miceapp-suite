@@ -49,13 +49,19 @@ import os as _os
 if _os.environ.get("SKIP_INIT_DB") == "1":
     print("[db] SKIP_INIT_DB=1 — init/migration atlandı (şema zaten kurulu)", flush=True)
 else:
-    Base.metadata.create_all(bind=engine)
-    migrate_db()
-    seed_data()
-    _seed_event_company()
-    _seed_org_titles_per_company()   # her şirkete kendi org_titles seti (tenant izolasyonu)
+    # Init adımları ayrı ayrı korunur — biri (ör. eş-zamanlı deploy'da tablo kilidi)
+    # patlasa bile uygulama AYAĞA KALKAR; eksik kalan migration sonraki deploy'da tamamlanır.
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as _e:
+        print(f"[init] create_all atlandı: {_e}", flush=True)
     from database import backfill_vendor_codes_and_po_nos
-    backfill_vendor_codes_and_po_nos()   # eksik vendor.code + commitment.po_no (idempotent)
+    for _step in (migrate_db, seed_data, _seed_event_company,
+                  _seed_org_titles_per_company, backfill_vendor_codes_and_po_nos):
+        try:
+            _step()
+        except Exception as _e:
+            print(f"[init] {_step.__name__} atlandı: {_e}", flush=True)
 
 # ---------------------------------------------------------------------------
 # FastAPI uygulaması

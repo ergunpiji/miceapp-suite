@@ -656,6 +656,12 @@ def _migrate(engine) -> None:
         except Exception:
             pass  # Zaten INTEGER veya dönüşüm başarısız — geç
     with engine.begin() as conn:
+        # Kilit varsa (ör. eş-zamanlı deploy) statement sonsuza kadar ASILMASIN → hızlı hata
+        if not DATABASE_URL.startswith("sqlite"):
+            try:
+                conn.execute(text("SET LOCAL lock_timeout = '8s'"))
+            except Exception:
+                pass
         for sql in migrations:
             try:
                 import os as _os

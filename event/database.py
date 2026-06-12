@@ -610,6 +610,13 @@ def _seed_email_templates() -> None:
 def migrate_db():
     """Mevcut tablolara eksik sütunları ekler (SQLite + PostgreSQL uyumlu)."""
     with engine.connect() as conn:
+        # Kilit varsa (ör. eş-zamanlı deploy) ALTER sonsuza kadar ASILMASIN → hızlı hata
+        if not _is_sqlite:
+            try:
+                conn.execute(text("SET lock_timeout = '8s'"))
+                conn.commit()
+            except Exception:
+                pass
         _safe_add_column(conn, "customers", "contacts_json",       "TEXT", "'{}'")
         _safe_add_column(conn, "requests",  "contact_person_json", "TEXT", "'{}'")
         _safe_add_column(conn, "users",     "org_title_id",        "TEXT")
