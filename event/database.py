@@ -41,6 +41,9 @@ else:
     _engine_kwargs["pool_recycle"]    = 300   # 5 dk'da bir bağlantıyı yenile
     _engine_kwargs["pool_size"]       = 5
     _engine_kwargs["max_overflow"]    = 10
+    # Kilit beklemesi (ör. eş-zamanlı deploy) startup'ı SONSUZA kadar asmasın:
+    # her bağlantıda lock_timeout=8sn → ALTER/DDL kilit varsa hızlı hata verir.
+    _engine_kwargs["connect_args"]    = {"options": "-c lock_timeout=8000"}
 
 engine = create_engine(DATABASE_URL, **_engine_kwargs)
 
@@ -525,31 +528,59 @@ def generate_po_no(db, request_no: str, vendor_code: str) -> str:
 
 
 def backfill_vendor_codes_and_po_nos():
-    """Eksik vendor.code ve commitment.po_no değerlerini doldurur (idempotent, sadece boşlar)."""
+    """Eksik vendor.code ve commitment.po_no değerlerini doldurur (idempotent, sadece boşlar).
+    O(N): kullanılan kodlar/po_no'lar bir kez bellekte toplanır (per-satır DB sorgusu yok)."""
+    import re as _re
     from models import Vendor, SupplierCommitment, Request as _Req
     db = SessionLocal()
     try:
-        missing_v = db.query(Vendor).filter(
-            (Vendor.code == None) | (Vendor.code == "")  # noqa: E711
-        ).all()
-        for v in missing_v:
-            v.code = generate_vendor_code(db, v.name, v.company_id, exclude_id=v.id)
-            db.flush()
-        if missing_v:
+        # ── Vendor kodları (şirket içi benzersiz, bellekte) ──
+        vendors = db.query(Vendor).all()
+        used_by_company: dict = {}
+        for v in vendors:
+            if v.code:
+                used_by_company.setdefault(v.company_id, set()).add(v.code.upper())
+        changed = False
+        for v in vendors:
+            if v.code:
+                continue
+            used = used_by_company.setdefault(v.company_id, set())
+            base = (_re.sub(r"[^A-Za-z0-9]", "", (v.name or "").upper())[:3]) or "TED"
+            cand, i = base, 1
+            while cand.upper() in used:
+                i += 1
+                cand = f"{base}{i}"
+            v.code = cand
+            used.add(cand.upper())
+            changed = True
+        if changed:
             db.commit()
 
-        missing_c = db.query(SupplierCommitment).filter(
-            (SupplierCommitment.po_no == None) | (SupplierCommitment.po_no == "")  # noqa: E711
-        ).all()
-        for c in missing_c:
-            req = db.query(_Req).filter(_Req.id == c.request_id).first()
-            ven = db.query(Vendor).filter(Vendor.id == c.vendor_id).first() if c.vendor_id else None
-            vcode = (ven.code if (ven and ven.code) else "TED")
-            rno = req.request_no if (req and req.request_no) else f"PO-{c.id[:8]}"
-            c.po_no = generate_po_no(db, rno, vcode)
-            db.flush()
-        if missing_c:
-            db.commit()
+        # ── Commitment po_no'ları (global benzersiz, bellekte) ──
+        commits = db.query(SupplierCommitment).all()
+        used_po = {c.po_no for c in commits if c.po_no}
+        if any(not c.po_no for c in commits):
+            vmap = {v.id: v for v in vendors}
+            rmap = {r.id: r for r in db.query(_Req).all()}
+            changed = False
+            for c in commits:
+                if c.po_no:
+                    continue
+                ven = vmap.get(c.vendor_id)
+                req = rmap.get(c.request_id)
+                vcode = (ven.code if (ven and ven.code) else "TED")
+                rno = req.request_no if (req and req.request_no) else f"PO-{c.id[:8]}"
+                base = f"{rno}-{vcode}"
+                cand = base
+                k = 2
+                while cand in used_po:
+                    cand = f"{base}-{k}"
+                    k += 1
+                c.po_no = cand
+                used_po.add(cand)
+                changed = True
+            if changed:
+                db.commit()
     except Exception as e:
         print(f"[backfill] vendor code/po_no atlandı: {e}", flush=True)
         db.rollback()
