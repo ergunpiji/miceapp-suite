@@ -1417,16 +1417,75 @@ class DeskRequest(Base):
     __tablename__ = "requests"
     __table_args__ = {"extend_existing": True}
 
-    id           = Column(String(36), primary_key=True, default=_uuid)
-    request_no   = Column(String(50))
-    client_name  = Column(String(200))
-    event_name   = Column(String(200))
-    status       = Column(String(30))
-    is_funded    = Column(Boolean, default=False)
-    is_fund_pool = Column(Boolean, default=False)
-    created_by   = Column(String(36))
-    created_at   = Column(DateTime)
-    updated_at   = Column(DateTime)
+    id                  = Column(String(36), primary_key=True, default=_uuid)
+    request_no          = Column(String(50))
+    client_name         = Column(String(200))
+    event_name          = Column(String(200))
+    status              = Column(String(30))
+    company_id          = Column(String(36), index=True)   # tenant (event ile aynı tablo)
+    customer_id         = Column(String(36))               # event customers bağı
+    check_in            = Column(String(10))               # YYYY-MM-DD
+    check_out           = Column(String(10))
+    confirmed_budget_id = Column(String(36))               # onaylanan bütçe (nakit akışı tahmini)
+    is_funded           = Column(Boolean, default=False)
+    is_fund_pool        = Column(Boolean, default=False)
+    created_by          = Column(String(36))
+    created_at          = Column(DateTime)
+    updated_at          = Column(DateTime)
+
+
+class DeskBudget(Base):
+    """event'in budgets tablosu için read-only bridge — nakit akışı tahmini için
+    (beklenen tahsilat = onaylı bütçenin KDV dahil satış toplamı). Sadece okuma."""
+    __tablename__ = "budgets"
+    __table_args__ = {"extend_existing": True}
+
+    id                  = Column(String(36), primary_key=True, default=_uuid)
+    request_id          = Column(String(36))
+    company_id          = Column(String(36), index=True)
+    venue_name          = Column(String(255))
+    rows_json           = Column(Text)
+    offer_currency      = Column(String(8))
+    exchange_rates_json = Column(Text)
+    budget_status       = Column(String(32))
+
+    @property
+    def rows(self) -> list:
+        import json
+        try:
+            return json.loads(self.rows_json or "[]")
+        except Exception:
+            return []
+
+    @property
+    def exchange_rates(self) -> dict:
+        import json
+        try:
+            return json.loads(self.exchange_rates_json or "{}")
+        except Exception:
+            return {}
+
+    def rate_to_try(self, currency: str) -> float:
+        if not currency or currency == "TRY":
+            return 1.0
+        return float(self.exchange_rates.get(currency, 1.0) or 1.0)
+
+    def amount_to_try(self, amount: float, currency: str) -> float:
+        return amount * self.rate_to_try(currency)
+
+    @property
+    def grand_sale(self) -> float:
+        """KDV dahil toplam satış — TRY (event Budget.grand_sale ile birebir)."""
+        total = 0.0
+        for row in self.rows:
+            qty    = float(row.get("qty", 1) or 1)
+            nights = float(row.get("nights", 1) or 1)
+            sale   = float(row.get("sale_price", 0) or 0)
+            vat    = float(row.get("vat_rate", 0) or 0)
+            cur    = row.get("currency", "TRY") or "TRY"
+            subtotal = self.amount_to_try(sale * qty * nights, cur)
+            total += subtotal * (1 + vat / 100)
+        return round(total, 2)
 
 
 class EventPrepaymentRequest(Base):

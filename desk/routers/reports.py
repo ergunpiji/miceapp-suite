@@ -104,10 +104,23 @@ def _cc_due_date(card, txn_date):
     return close + _td(days=offset)
 
 
+def _parse_payment_term_days(s, default: int = 30) -> int:
+    """Customer.payment_term serbest metin → gün. 'peşin'→0, '30 gün'→30, boş→default."""
+    import re
+    if not s:
+        return default
+    t = str(s).strip().lower()
+    if "peşin" in t or "pesin" in t or "peş" in t:
+        return 0
+    m = re.search(r"\d+", t)
+    return int(m.group()) if m else default
+
+
 @router.get("/cash-flow", response_class=HTMLResponse, name="report_cash_flow")
 async def report_cash_flow(
     request: Request,
     weeks: int = 8,
+    forecast: int = 1,
     current_user: User = Depends(require_module("reports_financial")),
     db: Session = Depends(get_db),
     cid: int = Depends(get_company_id),
@@ -240,11 +253,63 @@ async def report_cash_flow(
             "amount": net,
         })
 
+    # ── Tahmini tahsilat (event onaylı bütçelerinden) — sıfır veri girişi ──
+    # Beklenen = onaylı bütçe satışı (KDV dahil) − o referansın kesilen faturaları.
+    # Tarih = etkinlik bitiş + müşteri vadesi. Kesilen fatura geldikçe otomatik kapanır.
+    forecast_items_all = []
+    if forecast:
+        from models import DeskRequest, DeskBudget
+        fc_reqs = db.query(DeskRequest).filter(
+            DeskRequest.company_id == cid,
+            DeskRequest.confirmed_budget_id.isnot(None),
+            DeskRequest.status.notin_(["cancelled", "closed"]),
+        ).all()
+        for r in fc_reqs:
+            bgt = db.query(DeskBudget).filter(DeskBudget.id == r.confirmed_budget_id).first()
+            if not bgt:
+                continue
+            expected = bgt.grand_sale or 0.0
+            if expected <= 0:
+                continue
+            invoiced = sum(
+                (inv.total_with_vat or inv.amount or 0.0)
+                for inv in db.query(Invoice).filter(
+                    Invoice.request_id == r.id,
+                    Invoice.invoice_type == "kesilen",
+                    Invoice.deleted_at == None,  # noqa: E711
+                ).all()
+            )
+            draft = round(expected - invoiced, 2)
+            if draft <= 0:
+                continue
+            base = r.check_out or r.check_in
+            if not base:
+                continue
+            cust = (
+                db.query(Customer).filter(Customer.id == r.customer_id).first()
+                if r.customer_id else None
+            )
+            term = _parse_payment_term_days(cust.payment_term if cust else None)
+            try:
+                eff = date.fromisoformat(base) + timedelta(days=term)
+            except Exception:
+                continue
+            forecast_items_all.append({
+                "type":       "forecast",
+                "date":       eff,
+                "amount":     draft,
+                "label":      (cust.name if cust else (r.client_name or "—")),
+                "sub":        f"Onaylı bütçe · {r.request_no or ''}",
+                "request_no": r.request_no or "",
+                "event_name": r.event_name or "",
+            })
+
     weeks_data = []
     for i in range(weeks):
         wstart = week_start + timedelta(weeks=i)
         wend = wstart + timedelta(days=6)
         label = f"H{i + 1}" if i > 0 else "Bu Hafta"
+        forecast_in = [f for f in forecast_items_all if wstart <= f["date"] <= wend]
 
         incoming = []  # gelir: tahsilat beklenen kesilen faturalar + kasa/banka girişleri
         outgoing = []  # gider: ödeme bekleyen gelen faturalar, çekler, KK ekstreler, kasa/banka çıkışları
@@ -384,6 +449,8 @@ async def report_cash_flow(
             "total_out": total_out,
             "incoming": sorted(incoming, key=lambda x: x["date"]),
             "outgoing": sorted(outgoing, key=lambda x: x["date"]),
+            "forecast_in": sorted(forecast_in, key=lambda x: x["date"]),
+            "total_fc_in": round(sum(f["amount"] for f in forecast_in), 2),
         })
 
     # Vadesi geçmiş ödenmemiş faturalar (kesilen)
@@ -403,6 +470,8 @@ async def report_cash_flow(
             "request": request, "current_user": current_user,
             "weeks_data": weeks_data, "weeks": weeks,
             "overdue": overdue, "total_overdue": total_overdue,
+            "show_forecast": bool(forecast),
+            "total_forecast": round(sum(f["amount"] for f in forecast_items_all), 2),
             "page_title": "Nakit Akışı",
         },
     )
