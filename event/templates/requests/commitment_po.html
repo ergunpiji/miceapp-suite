@@ -47,10 +47,22 @@
 <body>
 <div class="toolbar">
   <a href="/requests/{{ req.id if req else '' }}#tab-summary" class="btn">← Geri</a>
+  {% if is_draft %}
+  <span class="btn" style="background:#fffbeb; border-color:#f59e0b; color:#b45309; cursor:default;">
+    Önizleme — {{ draft_label }} · onaylanınca yazdırılabilir
+  </span>
+  {% else %}
   <button class="btn btn-primary" onclick="window.print()">🖨 Yazdır</button>
+  {% endif %}
 </div>
 
 <div class="sheet">
+  {% if is_draft %}
+  <div style="background:#fffbeb; border:1px dashed #f59e0b; color:#b45309; text-align:center;
+              font-weight:700; letter-spacing:1px; padding:8px; border-radius:8px; margin-bottom:18px;">
+    TASLAK — {{ draft_label }} (onaylanmadan geçerli değildir)
+  </div>
+  {% endif %}
   <div class="hdr">
     <div>
       <div class="co">{{ company_name(req.company_id) if req else 'miceapp' }}</div>

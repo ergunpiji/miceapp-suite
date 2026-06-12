@@ -1425,7 +1425,10 @@ document.addEventListener('DOMContentLoaded', function() {
           <i class="bi bi-printer"></i>
         </a>
         {% else %}
-        <i class="bi bi-printer text-muted" style="opacity:.3;" title="PO onaylandıktan sonra yazdırılabilir"></i>
+        <a href="/requests/commitments/{{ c.id }}/po" target="_blank" rel="noopener"
+           class="btn btn-sm btn-link text-warning p-0" title="PO'yu önizle (taslak) — onaylamadan önce gör">
+          <i class="bi bi-eye"></i>
+        </a>
         {% endif %}
         {% if can_manage_commitment %}
         <form method="post" action="/requests/commitments/{{ c.id }}/cancel" style="margin:0;"

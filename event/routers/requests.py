@@ -1858,14 +1858,9 @@ async def commitment_po(
         SupplierCommitment.id == commit_id).first()
     if not c:
         return RedirectResponse(url="/requests", status_code=status.HTTP_302_FOUND)
-    if c.approval_status != "approved":
-        _lbl = {"pending": "Onay bekliyor", "rejected": "Reddedildi"}.get(c.approval_status, c.approval_status)
-        return HTMLResponse(
-            f"<div style='font-family:sans-serif;padding:48px;text-align:center;color:#334155'>"
-            f"<h3 style='color:#b45309'>PO henüz onaylanmadı</h3>"
-            f"<p>Durum: <strong>{_lbl}</strong>. Satın alma siparişi ancak <strong>onaylandıktan</strong> sonra yazdırılabilir.</p>"
-            f"<p><a href='/requests/{c.request_id}#tab-summary'>← Referansa dön</a></p></div>"
-        )
+    # Yetkili kişiler PO'yu onay öncesi de ÖNİZLEYEBİLİR (taslak); yazdırma onaya bağlı.
+    is_draft = (c.approval_status != "approved")
+    draft_label = {"pending": "ONAY BEKLİYOR", "rejected": "REDDEDİLDİ"}.get(c.approval_status, "TASLAK")
     req    = db.query(ReqModel).filter(ReqModel.id == c.request_id).first()
     budget = db.query(Budget).filter(Budget.id == c.budget_id).first() if c.budget_id else None
     vendor = db.query(Vendor).filter(Vendor.id == c.vendor_id).first() if c.vendor_id else None
@@ -1887,6 +1882,7 @@ async def commitment_po(
             "c": c, "req": req, "budget": budget, "vendor": vendor, "customer": customer,
             "section_rows": section_rows, "section_label": section_label,
             "po_no": po_no, "contacts": contacts, "pt_label": pt_label,
+            "is_draft": is_draft, "draft_label": draft_label,
         },
     )
 
