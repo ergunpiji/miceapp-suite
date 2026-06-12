@@ -1296,6 +1296,7 @@ async def report_po(
                 cls = "pending"
             r = reqmap.get(rid)
             rows.append({
+                "id": c.id,
                 "po_no": c.po_no or "—", "vendor": c.vendor_name or "—",
                 "section": _PO_SECTION_LABELS.get(c.section, c.section),
                 "request_no": (r.request_no if r else ""), "event_name": (r.event_name if r else ""),

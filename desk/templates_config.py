@@ -122,6 +122,18 @@ def module_enabled(request, module_key: str) -> bool:
 templates.env.globals["module_enabled"] = module_enabled
 
 
+def event_url() -> str:
+    """event uygulamasının baz URL'i (cross-app linkler için, ör. PO belgesi)."""
+    try:
+        from auth import EVENT_URL
+        return EVENT_URL
+    except Exception:
+        return "https://event.miceapp.net"
+
+
+templates.env.globals["event_url"] = event_url
+
+
 def can_see(request, module_key: str) -> bool:
     """RBAC v2 — Bu user bu modülün sayfasını görür mü?
     Kullanım: {% if can_see(request, 'customers') %}...{% endif %}"""
