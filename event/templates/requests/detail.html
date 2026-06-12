@@ -1417,6 +1417,10 @@ document.addEventListener('DOMContentLoaded', function() {
       </div>
       <div class="d-flex align-items-center gap-2">
         <span class="fw-semibold" style="color:#dc2626;">₺{{ '{:,.0f}'.format(c.amount) }}</span>
+        <a href="/requests/commitments/{{ c.id }}/po" target="_blank" rel="noopener"
+           class="btn btn-sm btn-link text-secondary p-0" title="Satın Alma Siparişi (PO) — yazdır">
+          <i class="bi bi-printer"></i>
+        </a>
         {% if can_manage_commitment %}
         <form method="post" action="/requests/commitments/{{ c.id }}/cancel" style="margin:0;"
               onsubmit="return confirm('Bu taahhüt iptal edilsin mi?')">

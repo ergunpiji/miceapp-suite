@@ -1692,6 +1692,51 @@ async def requests_commit_cancel(
     return RedirectResponse(url=f"/requests/{rid}?commit_cancelled=1#tab-summary", status_code=status.HTTP_302_FOUND)
 
 
+_SECTION_ABBR = {
+    "accommodation": "KON", "meeting": "TOP", "fb": "FB", "teknik": "TEK",
+    "dekor": "DEK", "transfer": "TRF", "tasarim": "TAS", "other": "DGR",
+}
+
+
+@router.get("/commitments/{commit_id}/po", response_class=HTMLResponse, name="commitment_po")
+async def commitment_po(
+    request: Request,
+    commit_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Tedarikçiye verilecek yazdırılabilir Satın Alma Siparişi (PO) belgesi."""
+    if not _can_manage_commitment(current_user) and current_user.role not in ("muhasebe", "muhasebe_muduru"):
+        raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz yok.")
+    c = scope(db.query(SupplierCommitment), SupplierCommitment, current_user).filter(
+        SupplierCommitment.id == commit_id).first()
+    if not c:
+        return RedirectResponse(url="/requests", status_code=status.HTTP_302_FOUND)
+    req    = db.query(ReqModel).filter(ReqModel.id == c.request_id).first()
+    budget = db.query(Budget).filter(Budget.id == c.budget_id).first() if c.budget_id else None
+    vendor = db.query(Vendor).filter(Vendor.id == c.vendor_id).first() if c.vendor_id else None
+    customer = db.query(Customer).filter(Customer.id == req.customer_id).first() if (req and req.customer_id) else None
+
+    section_rows  = [r for r in (budget.rows if budget else []) if (r.get("section") or "other") == c.section]
+    section_label = {x["id"]: x["label"] for x in SERVICE_CATEGORIES}.get(c.section, c.section)
+    po_no = f"{req.request_no}-{_SECTION_ABBR.get(c.section, 'PO')}" if req and req.request_no else f"PO-{c.id[:8]}"
+    try:
+        contacts = json.loads(vendor.contacts_json or "[]") if vendor else []
+    except Exception:
+        contacts = []
+    pt_label = {"cari": "Cari (vade)", "banka": "Banka", "kredi_karti": "Kredi Kartı", "cek": "Çek"}.get(c.payment_type, c.payment_type)
+
+    return templates.TemplateResponse(
+        "requests/commitment_po.html",
+        {
+            "request": request, "current_user": current_user,
+            "c": c, "req": req, "budget": budget, "vendor": vendor, "customer": customer,
+            "section_rows": section_rows, "section_label": section_label,
+            "po_no": po_no, "contacts": contacts, "pt_label": pt_label,
+        },
+    )
+
+
 # ---------------------------------------------------------------------------
 # Post-Offer Workflow: Teklif Gönderildi / Onay / İptal / Revizyon / Tamamla
 # ---------------------------------------------------------------------------
