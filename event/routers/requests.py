@@ -1875,6 +1875,37 @@ async def commitment_po(
         contacts = []
     pt_label = {"cari": "Cari (vade)", "banka": "Banka", "kredi_karti": "Kredi Kartı", "cek": "Çek"}.get(c.payment_type, c.payment_type)
 
+    # Tedarikçiye PO maili (mailto) — onaylı PO'da gösterilir
+    import urllib.parse as _url
+    try:
+        from templates_config import company_name as _cn
+        _co = _cn(c.company_id) or "miceapp"
+    except Exception:
+        _co = "miceapp"
+    _emails = []
+    if vendor and (vendor.email or "").strip():
+        _emails.append(vendor.email.strip())
+    for _ct in contacts:
+        if (_ct.get("email") or "").strip():
+            _emails.append(_ct["email"].strip())
+    _to = ",".join(dict.fromkeys(_emails))
+    _subject = f"Satın Alma Siparişi {po_no} — {req.event_name if req else ''}"
+    _body_lines = [
+        f"Sayın {(vendor.name if vendor else 'Yetkili')},", "",
+        f"{(req.event_name if req else '')} ({(req.request_no if req else '')}) işi · {section_label} kategorisi için",
+        f"satın alma siparişimiz aşağıdadır:", "",
+        f"PO No        : {po_no}",
+        f"Toplam (KDV dahil): {(c.amount or 0):,.2f} TL",
+        f"Ödeme        : {pt_label}",
+        f"Beklenen ödeme tarihi: {c.expected_payment_date or '-'}",
+    ]
+    if req and (req.check_in or req.check_out):
+        _body_lines.append(f"Etkinlik tarihi: {req.check_in or ''}{(' - ' + req.check_out) if (req.check_out and req.check_out != req.check_in) else ''}")
+    _body_lines += ["", "Detaylı sipariş belgesi talep halinde iletilebilir.", "",
+                    "Saygılarımızla,", _co]
+    _body = "\r\n".join(_body_lines)
+    mailto_url = f"mailto:{_to}?subject={_url.quote(_subject)}&body={_url.quote(_body)}"
+
     return templates.TemplateResponse(
         "requests/commitment_po.html",
         {
@@ -1882,7 +1913,7 @@ async def commitment_po(
             "c": c, "req": req, "budget": budget, "vendor": vendor, "customer": customer,
             "section_rows": section_rows, "section_label": section_label,
             "po_no": po_no, "contacts": contacts, "pt_label": pt_label,
-            "is_draft": is_draft, "draft_label": draft_label,
+            "is_draft": is_draft, "draft_label": draft_label, "mailto_url": mailto_url,
         },
     )
 

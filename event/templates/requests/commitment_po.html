@@ -52,6 +52,7 @@
     Önizleme — {{ draft_label }} · onaylanınca yazdırılabilir
   </span>
   {% else %}
+  <a class="btn" href="{{ mailto_url }}" title="Tedarikçiye e-posta gönder (mail uygulamasında açılır)">✉️ Mail Gönder</a>
   <button class="btn btn-primary" onclick="window.print()">🖨 Yazdır</button>
   {% endif %}
 </div>
