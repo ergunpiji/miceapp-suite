@@ -251,6 +251,9 @@ def _migrate(engine) -> None:
         "ALTER TABLE org_titles ADD COLUMN IF NOT EXISTS company_id VARCHAR(36)",  # tenant izolasyonu
         "ALTER TABLE departments ADD COLUMN IF NOT EXISTS access_event BOOLEAN DEFAULT FALSE",  # departman-merkezli erişim
         "ALTER TABLE departments ADD COLUMN IF NOT EXISTS access_desk BOOLEAN DEFAULT TRUE",
+        # --- miceapp suite: PO (supplier_commitments) — desk PO raporları için okunan kolonlar ---
+        "ALTER TABLE supplier_commitments ADD COLUMN IF NOT EXISTS po_no VARCHAR(60) DEFAULT ''",
+        "ALTER TABLE supplier_commitments ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) DEFAULT 'approved'",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS slug VARCHAR(100)",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS plan VARCHAR(20) DEFAULT 'starter'",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMP",

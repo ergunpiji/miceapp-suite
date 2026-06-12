@@ -1236,3 +1236,95 @@ async def report_activity_fixed_delete(
         db.commit()
     redirect_year = year or date.today().year
     return RedirectResponse(url=f"/reports/activity?year={redirect_year}", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Satın Alma Siparişleri (PO) raporu — Açık / Kapanmış / Tüm
+# ---------------------------------------------------------------------------
+_PO_SECTION_LABELS = {
+    "accommodation": "Konaklama", "meeting": "Toplantı", "fb": "F&B", "teknik": "Teknik",
+    "dekor": "Dekor", "transfer": "Transfer", "tasarim": "Tasarım", "other": "Diğer",
+}
+_PO_PT_LABELS = {"cari": "Cari", "banka": "Banka", "kredi_karti": "Kredi Kartı", "cek": "Çek"}
+
+
+@router.get("/po", response_class=HTMLResponse, name="report_po")
+async def report_po(
+    request: Request,
+    filter: str = "open",
+    current_user: User = Depends(require_module("reports_financial")),
+    db: Session = Depends(get_db),
+    cid: int = Depends(get_company_id),
+):
+    """PO (tedarikçi ödeme taahhüdü) raporu. Açık = onaylı + tam faturalanmamış;
+    Kapanmış = tam faturalandı veya iptal; Tüm = hepsi (onay bekleyen dahil)."""
+    from models import DeskSupplierCommitment, DeskRequest
+    from collections import defaultdict as _dd
+
+    commits = db.query(DeskSupplierCommitment).filter(
+        DeskSupplierCommitment.company_id == cid
+    ).all()
+    groups = _dd(list)
+    for c in commits:
+        groups[(c.request_id, c.vendor_id)].append(c)
+    req_ids = {c.request_id for c in commits if c.request_id}
+    reqmap = {}
+    if req_ids:
+        reqmap = {r.id: r for r in db.query(DeskRequest).filter(DeskRequest.id.in_(req_ids)).all()}
+
+    rows = []
+    for (rid, vid), cms in groups.items():
+        q = db.query(Invoice).filter(
+            Invoice.company_id == cid, Invoice.request_id == rid,
+            Invoice.invoice_type == "gelen", Invoice.deleted_at == None,  # noqa: E711
+        )
+        if vid:
+            q = q.filter(Invoice.vendor_id == vid)
+        invoiced = sum((i.total_with_vat or i.amount or 0.0) for i in q.all())
+        for c in sorted(cms, key=lambda x: x.expected_payment_date or "9999"):
+            amt = c.amount or 0.0
+            alloc = min(amt, invoiced)
+            invoiced -= alloc
+            remaining = round(amt - alloc, 2)
+            cancelled = (c.status == "cancelled")
+            approved = (c.approval_status == "approved")
+            if cancelled or (approved and remaining <= 0):
+                cls = "closed"
+            elif approved and remaining > 0:
+                cls = "open"
+            else:
+                cls = "pending"
+            r = reqmap.get(rid)
+            rows.append({
+                "po_no": c.po_no or "—", "vendor": c.vendor_name or "—",
+                "section": _PO_SECTION_LABELS.get(c.section, c.section),
+                "request_no": (r.request_no if r else ""), "event_name": (r.event_name if r else ""),
+                "amount": amt, "invoiced": round(alloc, 2), "remaining": remaining,
+                "expected_date": c.expected_payment_date, "payment_type": _PO_PT_LABELS.get(c.payment_type, c.payment_type),
+                "approval_status": c.approval_status, "status": c.status, "cls": cls,
+            })
+
+    if filter == "open":
+        shown = [r for r in rows if r["cls"] == "open"]
+    elif filter == "closed":
+        shown = [r for r in rows if r["cls"] == "closed"]
+    else:
+        filter = "all"
+        shown = rows
+    shown.sort(key=lambda x: (x["expected_date"] or "9999"))
+
+    counts = {
+        "open": sum(1 for r in rows if r["cls"] == "open"),
+        "closed": sum(1 for r in rows if r["cls"] == "closed"),
+        "all": len(rows),
+    }
+    return templates.TemplateResponse(
+        "reports/po_list.html",
+        {
+            "request": request, "current_user": current_user,
+            "rows": shown, "filter": filter, "counts": counts,
+            "total_amount": round(sum(r["amount"] for r in shown), 2),
+            "total_remaining": round(sum(r["remaining"] for r in shown), 2),
+            "page_title": "Satın Alma Siparişleri (PO)",
+        },
+    )

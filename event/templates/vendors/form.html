@@ -19,10 +19,10 @@
                    value="{{ vendor.name if vendor else '' }}" required>
           </div>
           <div class="col-md-2">
-            <label class="form-label fw-semibold">Kod</label>
-            <input type="text" name="code" class="form-control text-uppercase" maxlength="12"
-                   value="{{ vendor.code if vendor else '' }}" placeholder="oto"
-                   title="PO numaralarında kullanılır (ör. MAR). Boş bırakılırsa addan otomatik üretilir.">
+            <label class="form-label fw-semibold">Kod <span class="text-danger">*</span></label>
+            <input type="text" name="code" class="form-control text-uppercase" maxlength="4" minlength="2"
+                   value="{{ vendor.code if vendor else '' }}" placeholder="MAR" required
+                   title="3 harfli kısa kod — PO numaralarında kullanılır (ör. MAR).">
           </div>
           <div class="col-md-4">
             <label class="form-label fw-semibold">Tedarikçi Türü</label>

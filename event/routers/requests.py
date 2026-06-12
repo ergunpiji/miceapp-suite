@@ -1122,8 +1122,15 @@ async def requests_detail(
         .all()
     )
     committed_by_section: dict = {}
+    commit_approvers: dict = {}      # commit_id → onaylaması gereken kişi adı
+    commit_can_approve: dict = {}    # commit_id → current_user onaylayabilir mi
     for _c in commitments:
-        committed_by_section[_c.section] = round(committed_by_section.get(_c.section, 0.0) + (_c.amount or 0.0), 2)
+        if _c.approval_status != "rejected":
+            committed_by_section[_c.section] = round(committed_by_section.get(_c.section, 0.0) + (_c.amount or 0.0), 2)
+        if _c.approval_status == "pending":
+            _ap = db.query(User).filter(User.id == _c.current_approver_id).first() if _c.current_approver_id else None
+            commit_approvers[_c.id] = (_ap.full_name if _ap else "—")
+            commit_can_approve[_c.id] = _po_can_approve(db, current_user, _c)
     commit_vendors = (
         scope(db.query(Vendor), Vendor, current_user)
         .filter(Vendor.active == True)  # noqa: E712
@@ -1294,6 +1301,8 @@ async def requests_detail(
             "commit_section_costs":   commit_section_costs,
             "commitments":            commitments,
             "committed_by_section":   committed_by_section,
+            "commit_approvers":       commit_approvers,
+            "commit_can_approve":     commit_can_approve,
             "commit_vendors":         commit_vendors,
             "can_manage_commitment":  can_manage_commitment,
             "service_categories":     SERVICE_CATEGORIES,
@@ -1625,6 +1634,58 @@ def _can_manage_commitment(user) -> bool:
     return user.role in ("satinalma", "admin", "mudur", "yonetici", "genel_mudur") or getattr(user, "is_gm", False)
 
 
+def _po_role_limit(db, user) -> float:
+    """PO onay limiti — fatura ile AYNI (rol bazlı system_settings). GM/admin sınırsız."""
+    if user.role in ("admin", "super_admin", "genel_mudur") or getattr(user, "is_gm", False):
+        return float("inf")
+    from sqlalchemy import text as _sql_text
+    key = "invoice_approval_limit_mudur" if user.role == "mudur" else "invoice_approval_limit_kullanici"
+    try:
+        row = db.execute(_sql_text("SELECT value FROM system_settings WHERE key = :k"), {"k": key}).fetchone()
+        return float(row[0]) if row and row[0] else 0.0
+    except Exception:
+        return 0.0
+
+
+def _find_po_approver(db, creator_id, amount):
+    """Oluşturanın yönetici zincirinde, limiti tutarı karşılayan İLK kişiyi döndürür."""
+    u = db.query(User).filter(User.id == creator_id).first()
+    visited, depth = set(), 0
+    while u and depth < 10:
+        if not u.manager_id or u.manager_id in visited:
+            break
+        visited.add(u.manager_id)
+        mgr = db.query(User).filter(User.id == u.manager_id, User.active == True).first()  # noqa: E712
+        if not mgr:
+            break
+        if _po_role_limit(db, mgr) >= amount:
+            return mgr
+        u, depth = mgr, depth + 1
+    # zincir yetmezse GM/admin
+    return db.query(User).filter(User.role.in_(["genel_mudur", "admin"]), User.active == True).first()  # noqa: E712
+
+
+def _po_can_approve(db, user, c) -> bool:
+    """user, bu taahhüdü onaylayabilir mi? admin/GM her zaman; atanan approver veya zincirde üstü."""
+    if user.role in ("admin", "genel_mudur") or getattr(user, "is_gm", False):
+        return True
+    if c.current_approver_id:
+        if user.id == c.current_approver_id:
+            return True
+        # zincirde current_approver'ın üstü mü
+        sub = db.query(User).filter(User.id == c.current_approver_id).first()
+        seen, depth = set(), 0
+        while sub and sub.manager_id and depth < 10:
+            if sub.manager_id in seen:
+                break
+            seen.add(sub.manager_id)
+            if sub.manager_id == user.id:
+                return True
+            sub = db.query(User).filter(User.id == sub.manager_id).first()
+            depth += 1
+    return False
+
+
 @router.post("/{req_id}/commit", name="requests_commit")
 async def requests_commit(
     req_id: str,
@@ -1663,19 +1724,38 @@ async def requests_commit(
     _vcode = (vendor.code if (vendor and vendor.code) else "TED")
     _po_no = generate_po_no(db, (req.request_no or f"PO-{req.id[:8]}"), _vcode)
 
+    # Onay: oluşturanın limiti yeterliyse otomatik onaylı; değilse zincirde approver bul (pending)
+    _amt = round(float(amount), 2)
+    if _po_role_limit(db, current_user) >= _amt:
+        _appr_status, _approver, _approved_by, _approved_at = "approved", None, current_user.id, _now()
+    else:
+        _approver = _find_po_approver(db, current_user.id, _amt)
+        _appr_status, _approved_by, _approved_at = "pending", None, None
+
     c = SupplierCommitment(
         id=_uuid(), company_id=req.company_id, request_id=req.id, po_no=_po_no,
         budget_id=req.confirmed_budget_id, section=section,
         vendor_id=(vendor.id if vendor else None),
         vendor_name=(vendor.name if vendor else ""),
-        amount=round(float(amount), 2), currency="TRY",
+        amount=_amt, currency="TRY",
         payment_date=(pdate or None), payment_type=ptype,
         expected_payment_date=exp, status="open", notes=notes.strip(),
+        approval_status=_appr_status,
+        current_approver_id=(_approver.id if _approver else None),
+        approved_by=_approved_by, approved_at=_approved_at,
         created_by=current_user.id,
     )
     db.add(c)
+    if _appr_status == "pending" and _approver and _approver.id != current_user.id:
+        db.add(Notification(
+            id=_uuid(), user_id=_approver.id, notif_type="po_approval",
+            title="PO onayı bekliyor",
+            message=f"{_po_no} · {(vendor.name if vendor else '—')} · {_amt:,.0f} ₺ onayınızı bekliyor.",
+            link=f"/requests/{req.id}#tab-summary", ref_id=c.id,
+        ))
     log_activity(db, req.id, "supplier_commitment",
-                 f"Tedarikçi taahhüdü: {(vendor.name if vendor else '—')} · {section} · {round(float(amount),2)} TRY (beklenen {exp})",
+                 f"Tedarikçi taahhüdü ({'onaylı' if _appr_status=='approved' else 'onay bekliyor'}): "
+                 f"{(vendor.name if vendor else '—')} · {section} · {_amt} TRY · PO {_po_no}",
                  user_id=current_user.id)
     db.commit()
     return RedirectResponse(url=f"/requests/{req_id}?committed=1#tab-summary", status_code=status.HTTP_302_FOUND)
@@ -1700,6 +1780,64 @@ async def requests_commit_cancel(
     return RedirectResponse(url=f"/requests/{rid}?commit_cancelled=1#tab-summary", status_code=status.HTTP_302_FOUND)
 
 
+@router.post("/commitments/{commit_id}/approve", name="requests_commit_approve")
+async def requests_commit_approve(
+    commit_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    c = scope(db.query(SupplierCommitment), SupplierCommitment, current_user).filter(
+        SupplierCommitment.id == commit_id).first()
+    if not c:
+        return RedirectResponse(url="/requests", status_code=status.HTTP_302_FOUND)
+    if c.approval_status != "approved" and not _po_can_approve(db, current_user, c):
+        raise HTTPException(status_code=403, detail="Bu PO'yu onaylama yetkiniz yok.")
+    c.approval_status = "approved"
+    c.approved_by = current_user.id
+    c.approved_at = _now()
+    c.current_approver_id = None
+    c.updated_at = _now()
+    if c.created_by and c.created_by != current_user.id:
+        db.add(Notification(
+            id=_uuid(), user_id=c.created_by, notif_type="po_approved",
+            title="PO onaylandı",
+            message=f"{c.po_no} onaylandı — artık yazdırılabilir.",
+            link=f"/requests/{c.request_id}#tab-summary", ref_id=c.id,
+        ))
+    log_activity(db, c.request_id, "po_approved", f"PO onaylandı: {c.po_no}", user_id=current_user.id)
+    db.commit()
+    return RedirectResponse(url=f"/requests/{c.request_id}?po_approved=1#tab-summary", status_code=status.HTTP_302_FOUND)
+
+
+@router.post("/commitments/{commit_id}/reject", name="requests_commit_reject")
+async def requests_commit_reject(
+    commit_id: str,
+    reason: str = Form(""),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    c = scope(db.query(SupplierCommitment), SupplierCommitment, current_user).filter(
+        SupplierCommitment.id == commit_id).first()
+    if not c:
+        return RedirectResponse(url="/requests", status_code=status.HTTP_302_FOUND)
+    if not _po_can_approve(db, current_user, c):
+        raise HTTPException(status_code=403, detail="Bu PO'yu reddetme yetkiniz yok.")
+    c.approval_status = "rejected"
+    c.reject_note = reason.strip()
+    c.current_approver_id = None
+    c.updated_at = _now()
+    if c.created_by and c.created_by != current_user.id:
+        db.add(Notification(
+            id=_uuid(), user_id=c.created_by, notif_type="po_rejected",
+            title="PO reddedildi",
+            message=f"{c.po_no} reddedildi" + (f": {reason.strip()}" if reason.strip() else ""),
+            link=f"/requests/{c.request_id}#tab-summary", ref_id=c.id,
+        ))
+    log_activity(db, c.request_id, "po_rejected", f"PO reddedildi: {c.po_no}", user_id=current_user.id)
+    db.commit()
+    return RedirectResponse(url=f"/requests/{c.request_id}?po_rejected=1#tab-summary", status_code=status.HTTP_302_FOUND)
+
+
 _SECTION_ABBR = {
     "accommodation": "KON", "meeting": "TOP", "fb": "FB", "teknik": "TEK",
     "dekor": "DEK", "transfer": "TRF", "tasarim": "TAS", "other": "DGR",
@@ -1720,6 +1858,14 @@ async def commitment_po(
         SupplierCommitment.id == commit_id).first()
     if not c:
         return RedirectResponse(url="/requests", status_code=status.HTTP_302_FOUND)
+    if c.approval_status != "approved":
+        _lbl = {"pending": "Onay bekliyor", "rejected": "Reddedildi"}.get(c.approval_status, c.approval_status)
+        return HTMLResponse(
+            f"<div style='font-family:sans-serif;padding:48px;text-align:center;color:#334155'>"
+            f"<h3 style='color:#b45309'>PO henüz onaylanmadı</h3>"
+            f"<p>Durum: <strong>{_lbl}</strong>. Satın alma siparişi ancak <strong>onaylandıktan</strong> sonra yazdırılabilir.</p>"
+            f"<p><a href='/requests/{c.request_id}#tab-summary'>← Referansa dön</a></p></div>"
+        )
     req    = db.query(ReqModel).filter(ReqModel.id == c.request_id).first()
     budget = db.query(Budget).filter(Budget.id == c.budget_id).first() if c.budget_id else None
     vendor = db.query(Vendor).filter(Vendor.id == c.vendor_id).first() if c.vendor_id else None

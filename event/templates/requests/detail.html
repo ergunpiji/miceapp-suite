@@ -1411,16 +1411,35 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="d-flex justify-content-between align-items-center py-1" style="border-bottom:1px solid #f1f5f9; font-size:13px;">
       <div>
         <span class="fw-semibold">{{ c.vendor_name or '—' }}</span>
+        <span class="text-muted ms-1 font-monospace" style="font-size:10px;">{{ c.po_no }}</span>
         <span class="badge bg-light text-dark ms-1" style="font-size:10px;">{{ section_labels.get(c.section, c.section) }}</span>
+        {% if c.approval_status == 'approved' %}
+        <span class="badge bg-success ms-1" style="font-size:10px;"><i class="bi bi-check-lg"></i> Onaylı</span>
+        {% elif c.approval_status == 'rejected' %}
+        <span class="badge bg-danger ms-1" style="font-size:10px;" title="{{ c.reject_note }}">Reddedildi</span>
+        {% else %}
+        <span class="badge bg-warning text-dark ms-1" style="font-size:10px;">Onay bekliyor → {{ commit_approvers.get(c.id, '—') }}</span>
+        {% endif %}
         <span class="badge ms-1" style="background:#fef3c7;color:#92400e;font-size:10px;">{{ PT.get(c.payment_type, c.payment_type) }}</span>
         <span class="text-muted ms-1" style="font-size:11px;"><i class="bi bi-calendar-event" style="font-size:10px;"></i> Beklenen: {{ c.expected_payment_date }}</span>
       </div>
       <div class="d-flex align-items-center gap-2">
         <span class="fw-semibold" style="color:#dc2626;">₺{{ '{:,.0f}'.format(c.amount) }}</span>
+        {% if c.approval_status == 'pending' and commit_can_approve.get(c.id) %}
+        <form method="post" action="/requests/commitments/{{ c.id }}/approve" style="margin:0;">
+          <button class="btn btn-sm btn-success py-0 px-2" title="PO'yu onayla"><i class="bi bi-check-lg"></i></button>
+        </form>
+        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" title="Reddet"
+                onclick="rejectCommit('{{ c.id }}')"><i class="bi bi-x-lg"></i></button>
+        {% endif %}
+        {% if c.approval_status == 'approved' %}
         <a href="/requests/commitments/{{ c.id }}/po" target="_blank" rel="noopener"
            class="btn btn-sm btn-link text-secondary p-0" title="Satın Alma Siparişi (PO) — yazdır">
           <i class="bi bi-printer"></i>
         </a>
+        {% else %}
+        <i class="bi bi-printer text-muted" style="opacity:.3;" title="PO onaylandıktan sonra yazdırılabilir"></i>
+        {% endif %}
         {% if can_manage_commitment %}
         <form method="post" action="/requests/commitments/{{ c.id }}/cancel" style="margin:0;"
               onsubmit="return confirm('Bu taahhüt iptal edilsin mi?')">
@@ -1430,6 +1449,16 @@ document.addEventListener('DOMContentLoaded', function() {
       </div>
     </div>
     {% endfor %}
+    <script>
+    function rejectCommit(id) {
+      var r = prompt('Red nedeni (opsiyonel):', '');
+      if (r === null) return;
+      var f = document.createElement('form'); f.method = 'post';
+      f.action = '/requests/commitments/' + id + '/reject';
+      var i = document.createElement('input'); i.type = 'hidden'; i.name = 'reason'; i.value = r;
+      f.appendChild(i); document.body.appendChild(f); f.submit();
+    }
+    </script>
     {% endif %}
   </div>
 </div>

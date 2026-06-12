@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block page_title %}Satın Alma Siparişleri (PO){% endblock %}
+{% block page_title_block %}Satın Alma Siparişleri (PO){% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3" style="max-width:1200px;">
+
+  {# Filtre sekmeleri #}
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div class="btn-group" role="group">
+      <a href="/reports/po?filter=open"
+         class="btn btn-sm {% if filter == 'open' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        Açık PO'lar <span class="badge bg-light text-dark ms-1">{{ counts.open }}</span>
+      </a>
+      <a href="/reports/po?filter=closed"
+         class="btn btn-sm {% if filter == 'closed' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        Kapanmış <span class="badge bg-light text-dark ms-1">{{ counts.closed }}</span>
+      </a>
+      <a href="/reports/po?filter=all"
+         class="btn btn-sm {% if filter == 'all' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        Tüm PO'lar <span class="badge bg-light text-dark ms-1">{{ counts.all }}</span>
+      </a>
+    </div>
+    <div class="d-flex gap-3">
+      <div class="text-end">
+        <div class="fw-bold" style="font-size:16px;">{{ total_amount | money }}</div>
+        <div class="text-muted" style="font-size:11px;">Toplam Taahhüt</div>
+      </div>
+      <div class="text-end">
+        <div class="fw-bold" style="font-size:16px;color:#dc2626;">{{ total_remaining | money }}</div>
+        <div class="text-muted" style="font-size:11px;">Kalan (ödenecek)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0" style="font-size:13px;">
+        <thead style="background:#f8fafc;">
+          <tr>
+            <th class="ps-3" style="font-size:11px;color:#64748b;text-transform:uppercase;">PO No</th>
+            <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Tedarikçi</th>
+            <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Kategori</th>
+            <th style="font-size:11px;color:#64748b;text-transform:uppercase;">İş / Etkinlik</th>
+            <th class="text-end" style="font-size:11px;color:#64748b;text-transform:uppercase;">Tutar</th>
+            <th class="text-end" style="font-size:11px;color:#64748b;text-transform:uppercase;">Faturalanan</th>
+            <th class="text-end" style="font-size:11px;color:#64748b;text-transform:uppercase;">Kalan</th>
+            <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Beklenen</th>
+            <th style="font-size:11px;color:#64748b;text-transform:uppercase;">Ödeme</th>
+            <th class="pe-3" style="font-size:11px;color:#64748b;text-transform:uppercase;">Durum</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td class="ps-3 font-monospace" style="font-size:12px;">{{ r.po_no }}</td>
+            <td class="fw-semibold">{{ r.vendor }}</td>
+            <td><span class="badge bg-light text-dark">{{ r.section }}</span></td>
+            <td>
+              <span>{{ r.event_name }}</span>
+              <div class="text-muted" style="font-size:11px;">{{ r.request_no }}</div>
+            </td>
+            <td class="text-end">{{ r.amount | money }}</td>
+            <td class="text-end text-muted">{{ r.invoiced | money }}</td>
+            <td class="text-end fw-semibold" style="color:{% if r.remaining > 0 %}#dc2626{% else %}#16a34a{% endif %};">{{ r.remaining | money }}</td>
+            <td>{{ r.expected_date or '—' }}</td>
+            <td><span class="badge" style="background:#fef3c7;color:#92400e;font-size:10px;">{{ r.payment_type }}</span></td>
+            <td class="pe-3">
+              {% if r.status == 'cancelled' %}
+              <span class="badge bg-secondary">İptal</span>
+              {% elif r.cls == 'closed' %}
+              <span class="badge bg-success">Kapandı</span>
+              {% elif r.cls == 'open' %}
+              <span class="badge" style="background:#fffbeb;color:#b45309;border:1px solid #fde68a;">Açık</span>
+              {% elif r.approval_status == 'rejected' %}
+              <span class="badge bg-danger">Reddedildi</span>
+              {% else %}
+              <span class="badge bg-warning text-dark">Onay Bekliyor</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="10" class="text-center text-muted py-5">
+            <i class="bi bi-inbox" style="font-size:2rem;opacity:.3;"></i>
+            <div class="mt-2">Bu görünümde PO bulunmuyor.</div>
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

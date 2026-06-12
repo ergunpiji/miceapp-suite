@@ -1500,6 +1500,7 @@ class DeskSupplierCommitment(Base):
     id           = Column(String(36), primary_key=True, default=_uuid)
     company_id   = Column(String(36), index=True)
     request_id   = Column(String(36))
+    po_no        = Column(String(60))
     section      = Column(String(40))
     vendor_id    = Column(String(36))
     vendor_name  = Column(String(255))
@@ -1509,6 +1510,7 @@ class DeskSupplierCommitment(Base):
     payment_type = Column(String(20))
     expected_payment_date = Column(String(10))
     status       = Column(String(20))
+    approval_status = Column(String(20))
 
 
 class EventPrepaymentRequest(Base):

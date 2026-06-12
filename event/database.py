@@ -657,6 +657,12 @@ def migrate_db():
         _safe_add_column(conn, "supplier_commitments", "created_at", "TIMESTAMP")
         _safe_add_column(conn, "supplier_commitments", "updated_at", "TIMESTAMP")
         _safe_add_column(conn, "supplier_commitments", "po_no",      "VARCHAR(60)", "''")
+        # Onay silsilesi — mevcut taahhütler 'approved' (grandfather), yenileri kodda 'pending'
+        _safe_add_column(conn, "supplier_commitments", "approval_status",     "VARCHAR(20)", "'approved'")
+        _safe_add_column(conn, "supplier_commitments", "current_approver_id", "VARCHAR(36)")
+        _safe_add_column(conn, "supplier_commitments", "approved_by",         "VARCHAR(36)")
+        _safe_add_column(conn, "supplier_commitments", "approved_at",         "TIMESTAMP")
+        _safe_add_column(conn, "supplier_commitments", "reject_note",         "TEXT", "''")
         _safe_add_column(conn, "vendors", "code", "VARCHAR(12)", "''")   # PO no için kısa kod
         # ── RFQ Şablon tablosu (create_all yeterli, ama eksik sütun koruması) ──
         _safe_add_column(conn, "request_templates", "description", "TEXT DEFAULT ''")

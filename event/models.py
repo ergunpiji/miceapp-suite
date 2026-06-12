@@ -1054,6 +1054,12 @@ class SupplierCommitment(Base):
     payment_type = Column(String(20), default="cari")    # cari/banka/kredi_karti/cek
     expected_payment_date = Column(String(10))           # hesaplanan (tarih veya etkinlik+30)
     status       = Column(String(20), default="open")    # open/cancelled
+    # Onay silsilesi (fatura gibi limit-bazlı zincir) — PO ancak onaylanınca yazdırılır
+    approval_status     = Column(String(20), default="pending")  # pending/approved/rejected
+    current_approver_id = Column(String(36), ForeignKey("users.id"), nullable=True)  # şu an onaylaması gereken
+    approved_by         = Column(String(36), ForeignKey("users.id"), nullable=True)
+    approved_at         = Column(DateTime, nullable=True)
+    reject_note         = Column(Text, default="")
     notes        = Column(Text, default="")
     created_by   = Column(String(36))
     created_at   = Column(DateTime, default=_now)

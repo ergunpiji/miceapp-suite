@@ -513,6 +513,9 @@ document.addEventListener('DOMContentLoaded', function () {
     <a href="/reports/cash-flow" class="sidebar-link {% if '/reports/cash-flow' in request.url.path %}active{% endif %}">
       <i class="bi bi-arrow-left-right"></i> Nakit Akışı
     </a>
+    <a href="/reports/po" class="sidebar-link {% if '/reports/po' in request.url.path %}active{% endif %}">
+      <i class="bi bi-truck"></i> Satın Alma Siparişleri
+    </a>
     {% endif %}
     {% if can_see(request, 'reports_hr') %}
     <a href="/reports/payroll" class="sidebar-link {% if '/reports/payroll' in request.url.path %}active{% endif %}">
