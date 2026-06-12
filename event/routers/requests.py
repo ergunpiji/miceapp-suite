@@ -23,7 +23,7 @@ from models import (
     REQUEST_STATUSES, REQUEST_TABS,
     TR_CITIES, SUPPLIER_TYPES, Service, SERVICE_CATEGORIES, Request as ReqModel, RequestModule, Team, User, Vendor,
     _uuid, _now, REQUEST_STATUS_LABELS, DeskReference, RequestTemplate, Notification,
-    SupplierCommitment, COMMITMENT_PAYMENT_TYPES, SERVICE_CATEGORIES,
+    SupplierCommitment, COMMITMENT_PAYMENT_TYPES, SERVICE_CATEGORIES, Invoice,
 )
 from routers.library import log_activity
 from tenant import scope   # tenant izolasyonu (company_id)
@@ -745,6 +745,116 @@ async def requests_create(
 # ---------------------------------------------------------------------------
 # Detay
 # ---------------------------------------------------------------------------
+
+def _po_report_request_ids(db, user):
+    """Rol bazlı görünür referans id'leri: GM/admin/satınalma=hepsi(None), müdür=ekip,
+    PM(yonetici)=kendi+altı, diğer=kendi."""
+    if user.role in ("admin", "genel_mudur", "super_admin", "satinalma", "muhasebe_muduru") or getattr(user, "is_gm", False):
+        return None
+    from sqlalchemy import or_ as _or
+    rq = scope(db.query(ReqModel.id), ReqModel, user)
+    if user.role == "mudur":
+        if not user.team_id:
+            return []
+        member_ids = [u.id for u in db.query(User).filter(User.team_id == user.team_id, User.active == True).all()]  # noqa: E712
+        rq = rq.filter(_or(ReqModel.created_by.in_(member_ids), ReqModel.team_id == user.team_id))
+    elif user.role == "yonetici":
+        rq = rq.filter(ReqModel.created_by.in_([user.id] + _get_subtree_ids(user.id, db)))
+    else:
+        rq = rq.filter(ReqModel.created_by == user.id)
+    return [r[0] for r in rq.all()]
+
+
+_POR_SECTION_LABELS = {c["id"]: c["label"] for c in SERVICE_CATEGORIES}
+_POR_PT = {"cari": "Cari", "banka": "Banka", "kredi_karti": "Kredi Kartı", "cek": "Çek"}
+
+
+@router.get("/po-report", response_class=HTMLResponse, name="po_report")
+async def po_report(
+    request: Request,
+    filter: str = "open",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Event PO raporu — rol bazlı (PM kendi, müdür ekip, GM tüm şirket). Açık/Kapanmış/Tüm."""
+    if current_user.role not in ("satinalma", "admin", "mudur", "yonetici", "genel_mudur") and not current_user.is_gm:
+        raise HTTPException(status_code=403)
+    from collections import defaultdict as _dd
+    q = scope(db.query(SupplierCommitment), SupplierCommitment, current_user)
+    allowed = _po_report_request_ids(db, current_user)
+    if allowed is None:
+        commits = q.all()
+    elif allowed:
+        commits = q.filter(SupplierCommitment.request_id.in_(allowed)).all()
+    else:
+        commits = []
+
+    groups = _dd(list)
+    for c in commits:
+        groups[(c.request_id, c.vendor_id)].append(c)
+    req_ids = {c.request_id for c in commits if c.request_id}
+    reqmap = {r.id: r for r in db.query(ReqModel).filter(ReqModel.id.in_(req_ids)).all()} if req_ids else {}
+
+    rows = []
+    for (rid, vid), cms in groups.items():
+        iq = db.query(Invoice).filter(Invoice.request_id == rid, Invoice.invoice_type == "gelen")
+        if vid:
+            iq = iq.filter(Invoice.vendor_id == vid)
+        invoiced = sum((inv.total_amount or 0.0) for inv in iq.all())
+        for c in sorted(cms, key=lambda x: x.expected_payment_date or "9999"):
+            amt = c.amount or 0.0
+            alloc = min(amt, invoiced)
+            invoiced -= alloc
+            remaining = round(amt - alloc, 2)
+            cancelled = (c.status == "cancelled")
+            approved = (c.approval_status == "approved")
+            if cancelled or (approved and remaining <= 0):
+                cls = "closed"
+            elif approved and remaining > 0:
+                cls = "open"
+            else:
+                cls = "pending"
+            r = reqmap.get(rid)
+            rows.append({
+                "id": c.id, "po_no": c.po_no or "—", "vendor": c.vendor_name or "—",
+                "section": _POR_SECTION_LABELS.get(c.section, c.section),
+                "request_no": (r.request_no if r else ""), "event_name": (r.event_name if r else ""),
+                "amount": amt, "invoiced": round(alloc, 2), "remaining": remaining,
+                "expected_date": c.expected_payment_date,
+                "payment_type": _POR_PT.get(c.payment_type, c.payment_type),
+                "approval_status": c.approval_status, "status": c.status, "cls": cls,
+            })
+
+    if filter == "open":
+        shown = [r for r in rows if r["cls"] == "open"]
+    elif filter == "closed":
+        shown = [r for r in rows if r["cls"] == "closed"]
+    else:
+        filter = "all"
+        shown = rows
+    shown.sort(key=lambda x: (x["expected_date"] or "9999"))
+    counts = {
+        "open": sum(1 for r in rows if r["cls"] == "open"),
+        "closed": sum(1 for r in rows if r["cls"] == "closed"),
+        "all": len(rows),
+    }
+    if current_user.is_gm or current_user.role in ("admin", "genel_mudur", "satinalma"):
+        scope_label = "Şirket geneli"
+    elif current_user.role == "mudur":
+        scope_label = "Ekibim"
+    else:
+        scope_label = "Kendi işlerim"
+    return templates.TemplateResponse(
+        "requests/po_report.html",
+        {
+            "request": request, "current_user": current_user,
+            "rows": shown, "filter": filter, "counts": counts, "scope_label": scope_label,
+            "total_amount": round(sum(r["amount"] for r in shown), 2),
+            "total_remaining": round(sum(r["remaining"] for r in shown), 2),
+            "page_title": "Satın Alma Siparişleri (PO)",
+        },
+    )
+
 
 @router.get("/{req_id}", response_class=HTMLResponse, name="requests_detail")
 async def requests_detail(

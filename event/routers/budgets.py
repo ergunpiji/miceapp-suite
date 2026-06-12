@@ -435,6 +435,16 @@ async def budgets_edit(
             .order_by(VendorModel.name)
             .all()
         )
+    # Talep sonradan güncellendiyse (Yeni Talep Ekle): bütçede OLMAYAN talep kalemlerini
+    # editöre fiyatsız satır olarak ekle → satın alma fiyatlayıp kaydedebilsin.
+    editor_rows = list(budget.rows or [])
+    if req and req.items:
+        _existing = {(r.get("section"), (r.get("service_name") or "").strip().lower()) for r in editor_rows}
+        for _r in _items_to_budget_rows(req.items, req):
+            _key = (_r.get("section"), (_r.get("service_name") or "").strip().lower())
+            if _key not in _existing:
+                editor_rows.append(_r)
+                _existing.add(_key)
     return templates.TemplateResponse("budgets/editor.html", {
         "request":             request,
         "current_user":        current_user,
@@ -444,6 +454,7 @@ async def budgets_edit(
         "service_categories":  SERVICE_CATEGORIES,
         "grouped_services":    json.dumps(grouped_services, ensure_ascii=False),
         "initial_rows_json":   "[]",
+        "editor_rows_json":    json.dumps(editor_rows, ensure_ascii=False),
         "preferred_venues":    preferred_venues,
         "all_request_budgets": all_request_budgets,
         "status_labels":       BUDGET_STATUS_LABELS,

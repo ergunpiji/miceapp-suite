@@ -298,7 +298,7 @@
   </div>
 
   <input type="hidden" name="rows_json" id="rowsJson"
-         value="{{ budget.rows_json if budget else initial_rows_json | default('[]') }}">
+         value="{{ editor_rows_json if (editor_rows_json is defined and editor_rows_json) else (budget.rows_json if budget else initial_rows_json | default('[]')) }}">
   <input type="hidden" name="next_action" id="nextActionInput" value="">
 
   <div class="d-flex gap-2 align-items-center flex-wrap">
