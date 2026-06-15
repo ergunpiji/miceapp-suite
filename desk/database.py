@@ -1043,6 +1043,78 @@ def _seed_departments_and_access() -> None:
         db.close()
 
 
+def _dedupe_vendors_customers_once() -> None:
+    """TEK SEFERLİK: aynı (şirket + isim) tedarikçi/müşteri mükerrerlerini tek kanonik
+    kayda indirir. En ESKİ kayıt tutulur; diğerlerinin referansları (vendor_id/venue_id/
+    customer_id taşıyan TÜM public kolonlar) kanoniğe taşınır; mükerrerler silinir.
+    Bayrakla bir kez çalışır. Grup başına korumalı (FK sorununda o grubu atlar)."""
+    from sqlalchemy import text, bindparam
+    if DATABASE_URL.startswith("sqlite"):
+        return
+    FLAG = "vendor_customer_deduped_v1"
+    db = SessionLocal()
+    try:
+        done = db.execute(text("SELECT value FROM system_settings WHERE key=:k"), {"k": FLAG}).fetchone()
+        if done and str(done[0]) == "1":
+            return
+
+        def _dedupe(master: str, ref_cols: list[str]) -> int:
+            try:
+                existing = db.execute(
+                    text("SELECT table_name, column_name FROM information_schema.columns "
+                         "WHERE table_schema='public' AND column_name IN :cols")
+                    .bindparams(bindparam("cols", expanding=True)),
+                    {"cols": ref_cols},
+                ).fetchall()
+                groups = db.execute(text(
+                    f'SELECT array_agg(id ORDER BY created_at NULLS LAST, id) AS ids '
+                    f'FROM "{master}" GROUP BY company_id, lower(trim(name)) HAVING count(*) > 1'
+                )).fetchall()
+            except Exception as e:
+                db.rollback()
+                print(f"[dedupe] {master} tarama atlandı: {e}", flush=True)
+                return 0
+            deleted = 0
+            for (ids,) in groups:
+                keeper, dupes = ids[0], ids[1:]
+                if not dupes:
+                    continue
+                try:
+                    for (tbl, col) in existing:
+                        db.execute(
+                            text(f'UPDATE "{tbl}" SET "{col}" = :k WHERE "{col}" IN :ds')
+                            .bindparams(bindparam("ds", expanding=True)),
+                            {"k": keeper, "ds": dupes},
+                        )
+                    db.execute(
+                        text(f'DELETE FROM "{master}" WHERE id IN :ds')
+                        .bindparams(bindparam("ds", expanding=True)),
+                        {"ds": dupes},
+                    )
+                    db.commit()
+                    deleted += len(dupes)
+                except Exception as e:
+                    db.rollback()
+                    print(f"[dedupe] {master} grup atlandı: {e}", flush=True)
+            print(f"[dedupe] {master}: {deleted} mükerrer kayıt kanoniğe taşındı/silindi", flush=True)
+            return deleted
+
+        _dedupe("vendors", ["vendor_id", "venue_id"])
+        _dedupe("customers", ["customer_id"])
+
+        row = db.execute(text("SELECT key FROM system_settings WHERE key=:k"), {"k": FLAG}).fetchone()
+        if row:
+            db.execute(text("UPDATE system_settings SET value='1' WHERE key=:k"), {"k": FLAG})
+        else:
+            db.execute(text("INSERT INTO system_settings (key, value) VALUES (:k, '1')"), {"k": FLAG})
+        db.commit()
+    except Exception as e:
+        print(f"[dedupe] atlandı: {e}", flush=True)
+        db.rollback()
+    finally:
+        db.close()
+
+
 def _seed_demo_company() -> None:
     """Demo A.Ş. şirketini ve örnek verilerini oluşturur — idempotent."""
     from models import (
@@ -1548,12 +1620,20 @@ def init_db() -> None:
     _seed_vendor_types()
     _seed_default_company()
     _consolidate_tenant_once()   # tek seferlik: çoklu şirketi STOK Mice'a topla
-    _seed_demo_company()
+    # Demo/test seed'leri SADECE SEED_DEMO=1 ile çalışır. Prod'da kapalı: aksi halde
+    # her açılışta demo verisi (müşteri/tedarikçi) üretip konsolidasyon STOK'a taşıyor
+    # ve mükerrer kayıtlar birikiyordu (Ofis Malzeme x42 vb.).
+    import os as _seedflag
+    _DEMO_ON = _seedflag.environ.get("SEED_DEMO") == "1"
+    if _DEMO_ON:
+        _seed_demo_company()
     _seed_departments_and_access()
     _seed_approval_limits()
-    _seed_rbac_test_users()
+    if _DEMO_ON:
+        _seed_rbac_test_users()
     _promote_admin_to_super_admin()
     _purge_orphan_companies_once()   # tek seferlik: kullanıcısız orphan şirketleri sil
+    _dedupe_vendors_customers_once() # tek seferlik: aynı isimli mükerrer tedarikçi/müşteri temizliği
     _fix_stale_logo_paths()
 
 
