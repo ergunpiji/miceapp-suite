@@ -765,7 +765,7 @@ async def employee_document_download(
     if not doc or not doc.file_path:
         raise HTTPException(404)
     if storage_helper.R2_ENABLED:
-        return _Redirect(url=storage_helper.get_file_url(doc.file_path), status_code=302)
+        return _Redirect(url=storage_helper.get_file_url_secure(doc.file_path, current_user), status_code=302)
     # Yerel fallback — eski kayıtlarda tam dosya yolu, yeni kayıtlarda anahtar
     local = doc.file_path if os.path.exists(doc.file_path) else os.path.join("static", doc.file_path)
     if not os.path.exists(local):

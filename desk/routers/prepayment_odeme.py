@@ -76,7 +76,7 @@ async def prepayment_odeme_list(
             continue
         url = None
         try:
-            u = storage_helper.get_file_url(r.document_path)
+            u = storage_helper.get_file_url_secure(r.document_path, current_user)
             if u and u.startswith("http"):
                 url = u
         except Exception:

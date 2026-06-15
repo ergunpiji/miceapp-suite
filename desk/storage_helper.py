@@ -132,14 +132,11 @@ def get_file_url_secure(key: str, user, expires: int = 3600) -> str:
     if key and key.startswith("companies/"):
         parts = key.split("/", 3)  # ["companies", "{id}", "uploads", ...]
         if len(parts) >= 2:
-            try:
-                file_company_id = int(parts[1])
-            except ValueError:
-                file_company_id = None
-            if file_company_id is not None and user is not None:
-                is_super = getattr(user, "is_super_admin", False)
+            file_company_id = (parts[1] or "").strip()   # UUID string (miceapp suite)
+            if file_company_id and user is not None:
+                is_super = getattr(user, "is_super_admin", False) or getattr(user, "role", "") == "super_admin"
                 user_cid = getattr(user, "company_id", None)
-                if not is_super and file_company_id != user_cid:
+                if not is_super and str(file_company_id) != str(user_cid or ""):
                     from fastapi import HTTPException
                     raise HTTPException(
                         status_code=403,

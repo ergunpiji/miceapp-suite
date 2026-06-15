@@ -637,7 +637,7 @@ async def expenses_doc_download(
     if not item or not item.document_path:
         raise HTTPException(404)
     if storage_helper.R2_ENABLED:
-        return _Redirect(url=storage_helper.get_file_url(item.document_path), status_code=302)
+        return _Redirect(url=storage_helper.get_file_url_secure(item.document_path, current_user), status_code=302)
     # Yerel fallback: eski format "expenses/..." veya yeni "uploads/expenses/..."
     key = item.document_path
     local = os.path.join("static", key)

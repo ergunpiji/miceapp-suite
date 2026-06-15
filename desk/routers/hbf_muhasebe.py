@@ -368,7 +368,7 @@ async def hbf_muhasebe_detail(
             continue
         url = None
         try:
-            u = storage_helper.get_file_url(it.document_path)
+            u = storage_helper.get_file_url_secure(it.document_path, current_user)
             if u and u.startswith("http"):
                 url = u
         except Exception:
