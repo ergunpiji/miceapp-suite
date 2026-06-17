@@ -275,15 +275,10 @@ def _migrate(engine) -> None:
                 ALTER TABLE invoices ALTER COLUMN status TYPE VARCHAR(20) USING status::text;
             END IF;
         END $$""",
-        # invoice_type ENUM→VARCHAR(32) — event writer-of-record String kullanıyor; paylaşımlı
-        # tabloda Enum constraint çakışmasını önler. Aynı koşullu/idempotent desen (status gibi).
-        """DO $$ BEGIN
-            IF EXISTS (SELECT 1 FROM information_schema.columns
-                       WHERE table_name='invoices' AND column_name='invoice_type'
-                       AND data_type='USER-DEFINED') THEN
-                ALTER TABLE invoices ALTER COLUMN invoice_type TYPE VARCHAR(32) USING invoice_type::text;
-            END IF;
-        END $$""",
+        # NOT: invoice_type ENUM→VARCHAR dönüşümü KASITLI olarak kaldırıldı. ALTER COLUMN TYPE
+        # invoices tablosunu yeniden yazıp uzun süre ACCESS EXCLUSIVE kilidi tutuyor ve eş-zamanlı
+        # event deploy'unu starve edip crash-loop'a sokuyordu. Model String(32) olduğu için DB
+        # kolonu enum kalsa bile okuma/yazma sorunsuz (değerler zaten geçerli enum üyeleri).
         # satış bağı: event requests.id (FK yok — paylaşımlı DB)
         "ALTER TABLE invoices ADD COLUMN IF NOT EXISTS request_id VARCHAR(36)",
         "CREATE INDEX IF NOT EXISTS ix_invoices_request_id ON invoices (request_id)",
