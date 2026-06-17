@@ -670,20 +670,27 @@ def _migrate(engine) -> None:
                 _tc.execute(text(_sql))
         except Exception:
             pass  # Zaten INTEGER veya dönüşüm başarısız — geç
-    with engine.begin() as conn:
-        # Kilit varsa (ör. eş-zamanlı deploy) statement sonsuza kadar ASILMASIN → hızlı hata
-        if not DATABASE_URL.startswith("sqlite"):
-            try:
-                conn.execute(text("SET LOCAL lock_timeout = '8s'"))
-            except Exception:
-                pass
-        for sql in migrations:
-            try:
-                import os as _os
-                if _os.environ.get("MIG_DEBUG"): print(f"[mig-dbg] {sql[:55]}", flush=True)
+    # Her statement KENDİ transaction'ında çalışır. PostgreSQL'de tek transaction içinde
+    # bir statement hata alırsa (ör. eş-zamanlı deploy'da ALTER lock_timeout'a düşerse)
+    # transaction zehirlenir ve sonraki TÜM migration'lar + commit patlar → startup çöker.
+    # İzole transaction'larla bir statement'ın hatası diğerlerini etkilemez (idempotent;
+    # başarısız olan sonraki deploy'da yeniden denenir).
+    import os as _os
+    _dbg = bool(_os.environ.get("MIG_DEBUG"))
+    _is_sqlite = DATABASE_URL.startswith("sqlite")
+    for sql in migrations:
+        try:
+            if _dbg:
+                print(f"[mig-dbg] {sql[:55]}", flush=True)
+            with engine.begin() as conn:
+                if not _is_sqlite:
+                    try:
+                        conn.execute(text("SET LOCAL lock_timeout = '8s'"))
+                    except Exception:
+                        pass
                 conn.execute(text(sql))
-            except Exception as e:
-                print(f"[migrate] {sql[:60]}… → {e}")
+        except Exception as e:
+            print(f"[migrate] {sql[:60]}… → {e}", flush=True)
 
 
 def _seed_extra_categories() -> None:
