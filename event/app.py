@@ -46,11 +46,14 @@ if os.environ.get("RESET_DB") == "1":
     print("[db] Schema sıfırlandı.", flush=True)
 
 import os as _os
-if _os.environ.get("SKIP_INIT_DB") == "1":
-    print("[db] SKIP_INIT_DB=1 — init/migration atlandı (şema zaten kurulu)", flush=True)
-else:
-    # Init adımları ayrı ayrı korunur — biri (ör. eş-zamanlı deploy'da tablo kilidi)
-    # patlasa bile uygulama AYAĞA KALKAR; eksik kalan migration sonraki deploy'da tamamlanır.
+
+
+def _run_db_init():
+    """DB şema kurulumu + migration + seed. ARKA PLAN thread'inde çalışır → web process
+    portu ANINDA bind eder (healthcheck hemen geçer), migration'lar arka planda ilerler.
+    Böylece eş-zamanlı event+desk deploy'unda kilit çekişmesi olsa bile uygulama 502
+    vermez; her adım ayrı korunur, eksik kalan sonraki deploy'da tamamlanır.
+    (SKIP_INIT_DB toggle'ına gerek kalmaz — migration'lar her deploy'da otomatik uygulanır.)"""
     try:
         Base.metadata.create_all(bind=engine)
     except Exception as _e:
@@ -62,6 +65,15 @@ else:
             _step()
         except Exception as _e:
             print(f"[init] {_step.__name__} atlandı: {_e}", flush=True)
+    print("[db] init/migration tamamlandı (arka plan).", flush=True)
+
+
+if _os.environ.get("SKIP_INIT_DB") == "1":
+    print("[db] SKIP_INIT_DB=1 — init/migration atlandı (şema zaten kurulu)", flush=True)
+else:
+    import threading as _threading
+    _threading.Thread(target=_run_db_init, name="db-init", daemon=True).start()
+    print("[db] init/migration ARKA PLANDA başlatıldı — web hemen ayağa kalkıyor.", flush=True)
 
 # ---------------------------------------------------------------------------
 # FastAPI uygulaması

@@ -57,10 +57,24 @@ if _db_url.startswith("postgres"):
 elif not _db_url or _db_url.startswith("sqlite"):
     print("[DB] SQLite kullanılıyor", flush=True)
 
+def _run_db_init():
+    """init_db'yi ARKA PLAN thread'inde çalıştır → web process portu ANINDA bind eder
+    (healthcheck hemen geçer), migration'lar arka planda ilerler. Eş-zamanlı event+desk
+    deploy'unda kilit çekişmesi olsa bile uygulama 502 vermez; SKIP_INIT_DB toggle'ına
+    gerek kalmaz — migration'lar her deploy'da otomatik uygulanır."""
+    try:
+        init_db()
+        print("[DB] init/migration tamamlandı (arka plan).", flush=True)
+    except Exception as _e:
+        print(f"[DB] init_db atlandı: {_e}", flush=True)
+
+
 if os.environ.get("SKIP_INIT_DB") == "1":
     print("[DB] SKIP_INIT_DB=1 — init/migration atlandı (şema zaten kurulu)", flush=True)
 else:
-    init_db()
+    import threading as _threading
+    _threading.Thread(target=_run_db_init, name="db-init", daemon=True).start()
+    print("[DB] init/migration ARKA PLANDA başlatıldı — web hemen ayağa kalkıyor.", flush=True)
 
 # ---------------------------------------------------------------------------
 # FastAPI uygulaması
