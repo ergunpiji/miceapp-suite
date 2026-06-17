@@ -1049,6 +1049,7 @@ class SupplierCommitment(Base):
     vendor_id    = Column(String(36), nullable=True)
     vendor_name  = Column(String(255), default="")       # snapshot
     amount       = Column(Float, default=0.0)            # KDV dahil taahhüt (TRY)
+    base_amount  = Column(Float, nullable=True)          # ilk onaylandığı tutar — artış %'si bunun üzerinden
     currency     = Column(String(8), default="TRY")
     payment_date = Column(String(10), nullable=True)     # spesifik ödeme tarihi (boş → cari)
     payment_type = Column(String(20), default="cari")    # cari/banka/kredi_karti/cek

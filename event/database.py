@@ -705,6 +705,7 @@ def migrate_db():
         _safe_add_column(conn, "supplier_commitments", "invoiced_amount", "DOUBLE PRECISION", "0")
         _safe_add_column(conn, "supplier_commitments", "closed_at",       "TIMESTAMP")
         _safe_add_column(conn, "supplier_commitments", "closed_by",       "VARCHAR(36)")
+        _safe_add_column(conn, "supplier_commitments", "base_amount",     "DOUBLE PRECISION")  # PO artış %% bazı
         _safe_add_column(conn, "invoices", "commitment_id", "VARCHAR(36)")  # gelen fatura → taahhüt linki
         _safe_add_column(conn, "vendors", "code", "VARCHAR(12)", "''")   # PO no için kısa kod
         # ── RFQ Şablon tablosu (create_all yeterli, ama eksik sütun koruması) ──

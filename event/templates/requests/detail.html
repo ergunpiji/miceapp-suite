@@ -1454,6 +1454,14 @@ document.addEventListener('DOMContentLoaded', function() {
             <button class="btn btn-sm btn-link text-primary p-0" title="Yeniden aç"><i class="bi bi-arrow-counterclockwise"></i></button>
           </form>
           {% elif c.status != 'closed' %}
+          <button type="button" class="btn btn-sm btn-link text-primary p-0" title="Düzenle (tutar/tedarikçi/ödeme)"
+                  data-id="{{ c.id }}" data-label="{{ section_labels.get(c.section, c.section) }}"
+                  data-vendor="{{ c.vendor_id or '' }}" data-amount="{{ c.amount or 0 }}"
+                  data-base="{{ c.base_amount or c.amount or 0 }}" data-invoiced="{{ c.invoiced_amount or 0 }}"
+                  data-paydate="{{ c.payment_date or '' }}" data-paytype="{{ c.payment_type or 'cari' }}"
+                  data-notes="{{ c.notes or '' }}" onclick="openEditCommit(this)">
+            <i class="bi bi-pencil-square"></i>
+          </button>
           <form method="post" action="/requests/commitments/{{ c.id }}/close" style="margin:0;"
                 onsubmit="return confirm('Bu PO kapatılsın mı? Kalan tutar (varsa) fazla/iskonto sayılır ve nakit akışından çıkar.')">
             <button class="btn btn-sm btn-link text-success p-0" title="Kapat (tamamlandı işaretle)"><i class="bi bi-check2-circle"></i></button>
@@ -1552,6 +1560,89 @@ function openCommitModal(section, label, amount) {
 function toggleCommitPayType() {
   var d = document.getElementById('commitPayDate').value;
   document.getElementById('commitPayTypeWrap').style.display = d ? 'block' : 'none';
+}
+</script>
+
+{# ── PO Düzenle modalı ── #}
+<div class="modal fade" id="editCommitModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" id="editCommitForm" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>PO Düzenle</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2">
+          <label class="form-label fw-semibold">Kategori</label>
+          <input type="text" class="form-control" id="ecSectionLabel" disabled>
+        </div>
+        <div class="mb-2">
+          <label class="form-label fw-semibold">Tedarikçi</label>
+          <select name="vendor_id" id="ecVendor" class="form-select">
+            <option value="">— Tedarikçi seç —</option>
+            {% for v in commit_vendors %}<option value="{{ v.id }}">{{ v.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="mb-2">
+          <label class="form-label fw-semibold">Tutar (KDV dahil ₺) <span class="text-danger">*</span></label>
+          <input type="number" step="0.01" min="0" name="amount" id="ecAmount" class="form-control" required oninput="ecBumpHint()">
+          <div id="ecHint" style="font-size:11px;margin-top:4px;"></div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label fw-semibold">Ödeme Tarihi <span class="text-muted" style="font-weight:400;">(boş → cari + 30 gün)</span></label>
+          <input type="date" name="payment_date" id="ecPayDate" class="form-control" onchange="ecTogglePayType()">
+        </div>
+        <div class="mb-2" id="ecPayTypeWrap" style="display:none;">
+          <label class="form-label fw-semibold">Ödeme Türü</label>
+          <select name="payment_type" id="ecPayType" class="form-select">
+            {% for pt in commitment_payment_types %}<option value="{{ pt.value }}">{{ pt.label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="mb-2">
+          <label class="form-label fw-semibold">Not</label>
+          <input type="text" name="notes" id="ecNotes" class="form-control" placeholder="İsteğe bağlı">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Vazgeç</button>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Kaydet</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+var _ecBase = 0, _ecInvoiced = 0;
+function openEditCommit(el) {
+  var d = el.dataset;
+  document.getElementById('editCommitForm').action = '/requests/commitments/' + d.id + '/edit';
+  document.getElementById('ecSectionLabel').value = d.label || '';
+  document.getElementById('ecVendor').value = d.vendor || '';
+  document.getElementById('ecAmount').value = d.amount || 0;
+  document.getElementById('ecPayDate').value = d.paydate || '';
+  document.getElementById('ecPayType').value = d.paytype || 'cari';
+  document.getElementById('ecNotes').value = d.notes || '';
+  _ecBase = parseFloat(d.base) || parseFloat(d.amount) || 0;
+  _ecInvoiced = parseFloat(d.invoiced) || 0;
+  ecTogglePayType(); ecBumpHint();
+  new bootstrap.Modal(document.getElementById('editCommitModal')).show();
+}
+function ecTogglePayType() {
+  var d = document.getElementById('ecPayDate').value;
+  document.getElementById('ecPayTypeWrap').style.display = d ? 'block' : 'none';
+}
+function ecBumpHint() {
+  var v = parseFloat(document.getElementById('ecAmount').value) || 0;
+  var h = document.getElementById('ecHint');
+  if (_ecInvoiced > 0 && v < _ecInvoiced) {
+    h.style.color = '#dc2626';
+    h.innerHTML = '⚠ Faturalanan (₺' + _ecInvoiced.toLocaleString('tr-TR') + ') altına inilemez.';
+    return;
+  }
+  if (v <= _ecBase) { h.style.color = '#16a34a'; h.textContent = 'Düşürme/eşit — onay gerekmez.'; return; }
+  var pct = (v - _ecBase) / _ecBase * 100;
+  if (pct <= 10)      { h.style.color = '#16a34a'; h.textContent = '+%' + pct.toFixed(1) + ' — onay gerekmez (≤%10).'; }
+  else if (pct <= 20) { h.style.color = '#b45309'; h.textContent = '+%' + pct.toFixed(1) + ' — 1 üst yönetici onayına gider (>%10).'; }
+  else                { h.style.color = '#dc2626'; h.textContent = '+%' + pct.toFixed(1) + ' — GM onayına gider (>%20).'; }
 }
 </script>
 {% endif %}

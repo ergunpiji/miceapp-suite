@@ -18,7 +18,7 @@ os.environ["SKIP_INIT_DB"] = "1"
 
 import models  # noqa: E402
 from database import engine, SessionLocal  # noqa: E402
-from routers.requests import _recalc_commitment  # noqa: E402
+from routers.requests import _recalc_commitment, _po_bump_tier  # noqa: E402
 
 # Sadece ihtiyaç duyulan tabloları oluştur (SQLite FK zorlamaz)
 models.SupplierCommitment.__table__.create(bind=engine, checkfirst=True)
@@ -109,6 +109,16 @@ try:
     _recalc_commitment(db, c4)
     check("c4 open (başka PO faturası etkilemez)", c4.status == "open")
     check("c4 invoiced 0", c4.invoiced_amount == 0.0)
+
+    print("8) PO artış onay kademesi (_po_bump_tier, baz=10.000)")
+    check("9.000 → decrease (onay yok)",  _po_bump_tier(10000, 9000) == "decrease")
+    check("10.000 → decrease (eşit)",     _po_bump_tier(10000, 10000) == "decrease")
+    check("10.800 (+%8) → self",          _po_bump_tier(10000, 10800) == "self")
+    check("11.000 (+%10 tam) → self",     _po_bump_tier(10000, 11000) == "self")
+    check("11.001 (>%10) → manager",      _po_bump_tier(10000, 11001) == "manager")
+    check("12.000 (+%20 tam) → manager",  _po_bump_tier(10000, 12000) == "manager")
+    check("12.001 (>%20) → gm",           _po_bump_tier(10000, 12001) == "gm")
+    check("15.000 (+%50) → gm",           _po_bump_tier(10000, 15000) == "gm")
 
     db.rollback()
 finally:

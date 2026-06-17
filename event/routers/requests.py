@@ -1858,6 +1858,41 @@ def _po_can_approve(db, user, c) -> bool:
     return False
 
 
+def _direct_manager(db, user_id):
+    """Kullanıcının 1 üst yöneticisi (aktif)."""
+    u = db.query(User).filter(User.id == user_id).first()
+    if u and u.manager_id:
+        return db.query(User).filter(User.id == u.manager_id, User.active == True).first()  # noqa: E712
+    return None
+
+
+def _gm_user(db):
+    """Onay için GM/admin."""
+    return db.query(User).filter(
+        User.role.in_(["genel_mudur", "admin"]), User.active == True  # noqa: E712
+    ).first()
+
+
+# PO artış onay eşikleri (orijinal onaylı tutara göre kümülatif)
+PO_BUMP_SELF_PCT = 0.10   # ≤%10: oluşturan kendi yükseltir, onay yok
+PO_BUMP_MGR_PCT  = 0.20   # %10–%20: 1 üst yönetici; >%20: GM
+
+
+def _po_bump_tier(base: float, new_amount: float) -> str:
+    """Onaylı PO'da yeni tutarın gerektirdiği onay kademesi (orijinal onaylı tutara göre):
+    'decrease' (düşürme/eşit, onay yok) · 'self' (≤%10, onay yok) ·
+    'manager' (%10–%20, 1 üst yönetici) · 'gm' (>%20, GM)."""
+    base = base or 0.0
+    if new_amount <= base or base <= 0:
+        return "decrease"
+    pct = (new_amount - base) / base
+    if pct <= PO_BUMP_SELF_PCT:
+        return "self"
+    if pct <= PO_BUMP_MGR_PCT:
+        return "manager"
+    return "gm"
+
+
 @router.post("/{req_id}/commit", name="requests_commit")
 async def requests_commit(
     req_id: str,
@@ -1910,6 +1945,7 @@ async def requests_commit(
         vendor_id=(vendor.id if vendor else None),
         vendor_name=(vendor.name if vendor else ""),
         amount=_amt, currency="TRY",
+        base_amount=(_amt if _appr_status == "approved" else None),  # onaylıysa artış bazı sabitlenir
         payment_date=(pdate or None), payment_type=ptype,
         expected_payment_date=exp, status="open", notes=notes.strip(),
         approval_status=_appr_status,
@@ -1968,6 +2004,8 @@ async def requests_commit_approve(
     c.approved_by = current_user.id
     c.approved_at = _now()
     c.current_approver_id = None
+    if c.base_amount is None:        # ilk onay → artış %'sinin bazı sabitlenir (kümülatif)
+        c.base_amount = c.amount
     c.updated_at = _now()
     if c.created_by and c.created_by != current_user.id:
         db.add(Notification(
@@ -2008,6 +2046,100 @@ async def requests_commit_reject(
     log_activity(db, c.request_id, "po_rejected", f"PO reddedildi: {c.po_no}", user_id=current_user.id)
     db.commit()
     return RedirectResponse(url=f"/requests/{c.request_id}?po_rejected=1#tab-summary", status_code=status.HTTP_302_FOUND)
+
+
+@router.post("/commitments/{commit_id}/edit", name="requests_commit_edit")
+async def requests_commit_edit(
+    commit_id: str,
+    amount: float = Form(0.0),
+    vendor_id: str = Form(""),
+    vendor_name: str = Form(""),
+    payment_date: str = Form(""),
+    payment_type: str = Form("cari"),
+    notes: str = Form(""),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Açık/kısmi PO düzenle. Tutar artış kuralı (orijinal onaylı tutara göre kümülatif):
+    ≤%10 oluşturan kendisi (onay korunur) · %10–%20 → 1 üst yönetici onayı ·
+    >%20 → GM onayı. Düşürme serbest (faturalanan toplamın altına inemez)."""
+    if not _can_manage_commitment(current_user):
+        raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz yok.")
+    c = scope(db.query(SupplierCommitment), SupplierCommitment, current_user).filter(
+        SupplierCommitment.id == commit_id).first()
+    if not c:
+        return RedirectResponse(url="/requests", status_code=status.HTTP_302_FOUND)
+    if c.status in ("closed", "cancelled"):
+        raise HTTPException(status_code=400, detail="Kapanmış veya iptal edilmiş PO düzenlenemez.")
+
+    new_amt = round(float(amount or 0), 2)
+    if new_amt <= 0:
+        return RedirectResponse(url=f"/requests/{c.request_id}?err=commit_amount#tab-summary", status_code=status.HTTP_302_FOUND)
+    if new_amt < round(c.invoiced_amount or 0.0, 2):
+        return RedirectResponse(url=f"/requests/{c.request_id}?err=below_invoiced#tab-summary", status_code=status.HTTP_302_FOUND)
+
+    req = db.query(ReqModel).filter(ReqModel.id == c.request_id).first()
+    vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first() if vendor_id else None
+
+    # Diğer alanlar serbest güncellenir
+    if vendor:
+        c.vendor_id, c.vendor_name = vendor.id, vendor.name
+    elif vendor_name.strip():
+        c.vendor_id, c.vendor_name = None, vendor_name.strip()
+    pdate = (payment_date or "").strip()
+    c.payment_date = pdate or None
+    c.payment_type = payment_type if payment_type in ("cari", "banka", "kredi_karti", "cek") else "cari"
+    c.expected_payment_date = _commitment_expected_date(pdate, (req.check_out or req.check_in) if req else "")
+    c.notes = notes.strip()
+
+    old_amt = round(c.amount or 0.0, 2)
+    base = round(c.base_amount if c.base_amount else old_amt, 2)
+    c.amount = new_amt
+
+    # Onay yönlendirmesi
+    redirect_flag = "commit_edited=1"
+    if c.approval_status == "approved" and new_amt > base:
+        pct = (new_amt - base) / base if base > 0 else 1.0
+        tier_kind = _po_bump_tier(base, new_amt)
+        if tier_kind == "gm":
+            approver, tier = _gm_user(db), "GM"
+        elif tier_kind == "manager":
+            approver, tier = (_direct_manager(db, c.created_by) or _gm_user(db)), "1 üst yönetici"
+        else:
+            approver, tier = None, None   # ≤%10 → self, onay korunur
+        if approver:
+            c.approval_status = "pending"
+            c.current_approver_id = approver.id
+            c.approved_by = None
+            c.approved_at = None
+            redirect_flag = "commit_edit_pending=1"
+            if approver.id != current_user.id:
+                db.add(Notification(
+                    id=_uuid(), user_id=approver.id, notif_type="po_approval",
+                    title="PO artışı onay bekliyor",
+                    message=f"{c.po_no} · {c.vendor_name or '—'} %{pct*100:.0f} artışla "
+                            f"{new_amt:,.0f} ₺ — {tier} onayınızı bekliyor.",
+                    link=f"/requests/{c.request_id}#tab-summary", ref_id=c.id,
+                ))
+    elif c.approval_status != "approved":
+        # Henüz onaylanmamış PO: ilk onay zincirini yeni tutara göre yeniden seç (mutlak limit)
+        if _po_role_limit(db, current_user) >= new_amt:
+            c.approval_status, c.current_approver_id = "approved", None
+            c.approved_by, c.approved_at = current_user.id, _now()
+            if c.base_amount is None:
+                c.base_amount = new_amt
+        else:
+            _ap = _find_po_approver(db, c.created_by, new_amt)
+            c.approval_status, c.current_approver_id = "pending", (_ap.id if _ap else None)
+
+    _recalc_commitment(db, c)
+    c.updated_at = _now()
+    log_activity(db, c.request_id, "po_edited",
+                 f"PO düzenlendi: {c.po_no} · {old_amt:,.0f} → {new_amt:,.0f} ₺"
+                 + ("" if c.approval_status == "approved" else " (yeniden onaya gönderildi)"),
+                 user_id=current_user.id)
+    db.commit()
+    return RedirectResponse(url=f"/requests/{c.request_id}?{redirect_flag}#tab-summary", status_code=status.HTTP_302_FOUND)
 
 
 @router.post("/commitments/{commit_id}/close", name="requests_commit_close")
