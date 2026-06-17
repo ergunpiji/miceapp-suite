@@ -14,6 +14,10 @@ from models import (
     ExpenseReport, ExpenseItem, UndocumentedEntry, FinancialVendor,
     VendorPrepayment, InvoiceLog, PrepaymentRequest, PrepaymentRequestLog,
     _EMAIL_TEMPLATE_DEFAULTS, _uuid, _now,
+    # Aşağıdakiler migrate/seed/backfill içinde kullanılır — MODULE-LOAD'da (operasyon
+    # mount'undan önce) import edilir ki arka plan init thread'i, operasyon'un geçici
+    # sys.modules['models'] swap'ına yakalanıp yanlış modülü çözümlemesin.
+    Vendor, SupplierCommitment, DEFAULT_ROLE_PERMISSIONS, PERMISSIONS,
 )
 
 # ---------------------------------------------------------------------------
@@ -496,7 +500,6 @@ def generate_vendor_code(db, name: str, company_id=None, exclude_id=None) -> str
     """Tedarikçi adından kısa benzersiz kod üretir (PO no için). 'Marriott Otel' → 'MAR'.
     Aynı şirket içinde benzersiz; çakışırsa sonuna sayı (MAR2, MAR3)."""
     import re as _re
-    from models import Vendor
     base = (_re.sub(r"[^A-Za-z0-9]", "", (name or "").upper())[:3]) or "TED"
     q = db.query(Vendor).filter(Vendor.code.isnot(None), Vendor.code != "")
     if company_id:
@@ -513,7 +516,6 @@ def generate_vendor_code(db, name: str, company_id=None, exclude_id=None) -> str
 
 def generate_po_no(db, request_no: str, vendor_code: str) -> str:
     """Benzersiz PO no: {request_no}-{vendor_code}, çakışırsa -2/-3 eki."""
-    from models import SupplierCommitment
     base = f"{request_no}-{(vendor_code or 'TED')}"
     used = {
         c.po_no for c in db.query(SupplierCommitment)
@@ -531,7 +533,7 @@ def backfill_vendor_codes_and_po_nos():
     """Eksik vendor.code ve commitment.po_no değerlerini doldurur (idempotent, sadece boşlar).
     O(N): kullanılan kodlar/po_no'lar bir kez bellekte toplanır (per-satır DB sorgusu yok)."""
     import re as _re
-    from models import Vendor, SupplierCommitment, Request as _Req
+    _Req = Request   # module-level (operasyon sys.modules swap'ına bağışık)
     db = SessionLocal()
     try:
         # ── Vendor kodları (şirket içi benzersiz, bellekte) ──
@@ -758,8 +760,8 @@ def migrate_db():
             """))
         conn.commit()
 
-        # Varsayılan izinleri seed et (yoksa ekle)
-        from models import DEFAULT_ROLE_PERMISSIONS, PERMISSIONS, _uuid as _u
+        # Varsayılan izinleri seed et (yoksa ekle) — module-level (swap'a bağışık)
+        _u = _uuid
         all_keys = {p["key"] for p in PERMISSIONS}
         for role, perms in DEFAULT_ROLE_PERMISSIONS.items():
             for pkey in all_keys:
