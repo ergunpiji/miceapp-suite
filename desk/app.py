@@ -57,24 +57,17 @@ if _db_url.startswith("postgres"):
 elif not _db_url or _db_url.startswith("sqlite"):
     print("[DB] SQLite kullanılıyor", flush=True)
 
-def _run_db_init():
-    """init_db'yi ARKA PLAN thread'inde çalıştır → web process portu ANINDA bind eder
-    (healthcheck hemen geçer), migration'lar arka planda ilerler. Eş-zamanlı event+desk
-    deploy'unda kilit çekişmesi olsa bile uygulama 502 vermez; SKIP_INIT_DB toggle'ına
-    gerek kalmaz — migration'lar her deploy'da otomatik uygulanır."""
-    try:
-        init_db()
-        print("[DB] init/migration tamamlandı (arka plan).", flush=True)
-    except Exception as _e:
-        print(f"[DB] init_db atlandı: {_e}", flush=True)
-
-
-if os.environ.get("SKIP_INIT_DB") == "1":
-    print("[DB] SKIP_INIT_DB=1 — init/migration atlandı (şema zaten kurulu)", flush=True)
+# Migration artık Railway PRE-DEPLOY adımında (migrate.py) çalışır — web process'inden ayrı.
+# Web process init YAPMAZ → anında ayağa kalkar, crash-loop olmaz. Railway'de OTOMATİK
+# atlanır (RAILWAY_* env); yerelde inline init çalışır.
+_on_railway = bool(
+    os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_SERVICE_ID")
+    or os.environ.get("RAILWAY_PROJECT_ID")
+)
+if os.environ.get("SKIP_INIT_DB") == "1" or _on_railway:
+    print("[DB] init/migration web process'inde ATLANDI (pre-deploy migrate.py hallediyor)", flush=True)
 else:
-    import threading as _threading
-    _threading.Thread(target=_run_db_init, name="db-init", daemon=True).start()
-    print("[DB] init/migration ARKA PLANDA başlatıldı — web hemen ayağa kalkıyor.", flush=True)
+    init_db()
 
 # ---------------------------------------------------------------------------
 # FastAPI uygulaması
