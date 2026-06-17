@@ -1214,26 +1214,37 @@ def migrate_db():
         _safe_add_column(conn, "closure_requests", "gm_approver_id", "TEXT")
         _safe_add_column(conn, "closure_requests", "gm_approved_at", "TIMESTAMP")
         _safe_add_column(conn, "closure_requests", "gm_note",        "TEXT", "''")
-        # OrgTitle grade'e göre varsayılan pm_permission_level ata (zaten atanmamışsa)
-        conn.execute(text(
-            "UPDATE org_titles SET pm_permission_level='mudur' "
-            "WHERE pm_permission_level IS NULL AND grade <= 2"
-        ))
-        conn.execute(text(
-            "UPDATE org_titles SET pm_permission_level='yonetici' "
-            "WHERE pm_permission_level IS NULL AND grade BETWEEN 3 AND 5"
-        ))
-        conn.execute(text(
-            "UPDATE org_titles SET pm_permission_level='asistan' "
-            "WHERE pm_permission_level IS NULL AND grade >= 6"
-        ))
-        conn.commit()
+        # OrgTitle grade'e göre varsayılan pm_permission_level ata (zaten atanmamışsa).
+        # Bu bulk UPDATE'ler eş-zamanlı deploy'da satır kilidi çekişir; lock_timeout'a
+        # düşerlerse migrate_db TÜMDEN iptal olmasın → kendi try/except + rollback'leri
+        # (idempotent; sonraki deploy'da yeniden denenir).
+        try:
+            conn.execute(text(
+                "UPDATE org_titles SET pm_permission_level='mudur' "
+                "WHERE pm_permission_level IS NULL AND grade <= 2"
+            ))
+            conn.execute(text(
+                "UPDATE org_titles SET pm_permission_level='yonetici' "
+                "WHERE pm_permission_level IS NULL AND grade BETWEEN 3 AND 5"
+            ))
+            conn.execute(text(
+                "UPDATE org_titles SET pm_permission_level='asistan' "
+                "WHERE pm_permission_level IS NULL AND grade >= 6"
+            ))
+            conn.commit()
+        except Exception as _e:
+            conn.rollback()
+            print(f"[migrate] org_titles pm_permission_level backfill atlandı: {_e}", flush=True)
 
         # project_manager rolünü yonetici'ye rename et (geriye uyumluluk)
-        conn.execute(text(
-            "UPDATE users SET role='yonetici' WHERE role='project_manager'"
-        ))
-        conn.commit()
+        try:
+            conn.execute(text(
+                "UPDATE users SET role='yonetici' WHERE role='project_manager'"
+            ))
+            conn.commit()
+        except Exception as _e:
+            conn.rollback()
+            print(f"[migrate] users role rename atlandı: {_e}", flush=True)
 
         # ── Takım tablosu ve yeni kullanıcı kolonları ──
         try:
