@@ -330,6 +330,28 @@
                 </select>
                 <div style="font-size:11px;color:#64748b;margin-top:3px;">Komisyon bir gelen faturaya atıfta bulunmalıdır.</div>
               </div>
+
+              {# Faz 3 — Gelen fatura ↔ tedarikçi taahhüdü (PO) eşleştirme #}
+              {% if open_commitments %}
+              <div id="commitmentSection" style="display:none; margin-top:12px;">
+                <label class="form-label fw-semibold">Tedarikçi Taahhüdü (PO) <span class="text-muted fw-normal">— opsiyonel</span></label>
+                <select name="commitment_id" id="fCommitment" class="form-select">
+                  <option value="">— Otomatik eşleştir / PO bağlama —</option>
+                  {% for c in open_commitments %}
+                  <option value="{{ c.id }}"
+                          data-vendor="{{ c.vendor_id or '' }}"
+                          {% if invoice and invoice.commitment_id == c.id %}selected{% endif %}>
+                    {{ c.po_no }} · {{ c.section_label }} · {{ c.vendor_name }}
+                    — kalan {{ '{:,.0f}'.format(c.remaining) }} ₺{% if c.status == 'partial' %} (kısmi){% endif %}
+                  </option>
+                  {% endfor %}
+                </select>
+                <div style="font-size:11px;color:#64748b;margin-top:3px;">
+                  Bu gelen faturayı bir PO'ya bağlayın; PO faturalandıkça kalanı azalır, tam faturalanınca kapanır.
+                  Boş bırakırsanız aynı tedarikçi için tek açık PO varsa otomatik bağlanır.
+                </div>
+              </div>
+              {% endif %}
             </div>
           </div>
 
@@ -1145,6 +1167,10 @@ function onInvoiceTypeChange(val) {
 
   if (komSec) komSec.style.display = isKomisyon ? '' : 'none';
   if (isKomisyon) fillKomisyonSelect();
+
+  // Faz 3: PO (taahhüt) eşleştirme sadece GELEN faturada görünür
+  const comSec = document.getElementById('commitmentSection');
+  if (comSec) comSec.style.display = (val === 'gelen') ? '' : 'none';
 
   if (isKomisyon) {
     // Komisyon: tedarikçi/müşteri yerine ana fatura seçicisi

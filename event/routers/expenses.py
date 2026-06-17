@@ -4,7 +4,7 @@ Satın Alma — HBF (Harcama Bildirim Formu) & Belgesiz Gelir/Gider
 import os
 import shutil
 
-from storage import save_upload, serve_upload as _serve_upload
+from storage import save_upload, serve_upload as _serve_upload, serve_upload_secure as _serve_secure
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -698,7 +698,7 @@ async def expenses_upload_doc(
 
     safe_name = f"{item_id}{ext}"
     try:
-        key = save_upload(content, "expenses", safe_name)
+        key = save_upload(content, "expenses", safe_name, company_id=current_user.company_id)
     except Exception as exc:
         print(f"[UPLOAD ERROR] expenses/{safe_name}: {exc}", flush=True)
         return JSONResponse({"ok": False, "error": f"Dosya yüklenemedi: {exc}"}, status_code=500)
@@ -718,7 +718,7 @@ async def expenses_doc_download(
     item = db.query(ExpenseItem).filter(ExpenseItem.id == item_id).first()
     if not item or not item.document_path:
         raise HTTPException(404)
-    return _serve_upload(item.document_path, item.document_name or "belge")
+    return _serve_secure(item.document_path, item.document_name or "belge", current_user)
 
 
 # ---------------------------------------------------------------------------

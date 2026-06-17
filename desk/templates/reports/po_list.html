@@ -71,6 +71,8 @@
               <span class="badge bg-secondary">İptal</span>
               {% elif r.cls == 'closed' %}
               <span class="badge bg-success">Kapandı</span>
+              {% elif r.cls == 'open' and r.status == 'partial' %}
+              <span class="badge" style="background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe;">Kısmi Faturalı</span>
               {% elif r.cls == 'open' %}
               <span class="badge" style="background:#fffbeb;color:#b45309;border:1px solid #fde68a;">Açık</span>
               {% elif r.approval_status == 'rejected' %}

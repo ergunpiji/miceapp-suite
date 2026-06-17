@@ -13,7 +13,7 @@ from datetime import datetime, date as _date, timedelta
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
-from storage import save_upload, delete_upload, serve_upload as _serve_upload
+from storage import save_upload, delete_upload, serve_upload as _serve_upload, serve_upload_secure as _serve_secure
 from sqlalchemy.orm import Session
 
 from auth import get_current_user, get_company_id
@@ -191,7 +191,7 @@ def _get_invoice_or_404(db: Session, invoice_id: str) -> Invoice:
     return inv
 
 
-def _save_document(file: UploadFile, invoice_id: str) -> tuple[str, str]:
+def _save_document(file: UploadFile, invoice_id: str, company_id: str | None = None) -> tuple[str, str]:
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in ALLOWED_EXTS:
         _log.warning("_save_document: desteklenmeyen uzantı '%s' (dosya: %s)", ext, file.filename)
@@ -201,7 +201,7 @@ def _save_document(file: UploadFile, invoice_id: str) -> tuple[str, str]:
         _log.warning("_save_document: dosya çok büyük %d bytes (dosya: %s)", len(data), file.filename)
         raise HTTPException(status_code=400, detail="Dosya boyutu 10 MB'ı aşamaz.")
     dest_filename = f"{invoice_id}{ext}"
-    key = save_upload(data, "invoices", dest_filename)
+    key = save_upload(data, "invoices", dest_filename, company_id=company_id)
     return key, file.filename or dest_filename
 
 
@@ -210,6 +210,33 @@ def _compute_totals(lines: list) -> tuple[float, float, float]:
     total_excl = sum(float(l.get("amount", 0) or 0) for l in lines)
     total_vat  = sum(float(l.get("vat_amount", 0) or 0) for l in lines)
     return round(total_excl, 2), round(total_vat, 2), round(total_excl + total_vat, 2)
+
+
+def _open_commitments_for_request(db: Session, request_id: str) -> list:
+    """Faz 3 — bir referansın açık/kısmi tedarikçi taahhütleri (gelen fatura eşleştirme için).
+    Onaylı PO'lar önce; her satırda kalan tutar gösterilebilsin diye objeler döner."""
+    if not request_id:
+        return []
+    from models import SupplierCommitment as _SC, SERVICE_CATEGORIES as _SECTS
+    _labels = {c["id"]: c["label"] for c in _SECTS} if isinstance(_SECTS, list) else {}
+    cms = (
+        db.query(_SC)
+        .filter(_SC.request_id == request_id, _SC.status.in_(["open", "partial"]))
+        .order_by(_SC.created_at.asc())
+        .all()
+    )
+    return [{
+        "id":            c.id,
+        "po_no":         c.po_no or "",
+        "section":       c.section,
+        "section_label": _labels.get(c.section, c.section),
+        "vendor_name":   c.vendor_name or "—",
+        "vendor_id":     c.vendor_id,
+        "amount":        c.amount or 0.0,
+        "invoiced":      c.invoiced_amount or 0.0,
+        "remaining":     c.remaining,
+        "status":        c.status,
+    } for c in cms]
 
 
 # ---------------------------------------------------------------------------
@@ -543,6 +570,9 @@ async def invoices_new_form(
                 "description": f"{_sno} numaralı faturaya istinaden komisyon bedelidir.",
             }
 
+    # Faz 3: seçili referansın açık/kısmi tedarikçi taahhütleri (gelen fatura eşleştirme)
+    open_commitments = _open_commitments_for_request(db, req.id) if req else []
+
     return templates.TemplateResponse("invoices/form.html", {
         "request":           request,
         "current_user":      current_user,
@@ -557,6 +587,7 @@ async def invoices_new_form(
         "from_statement":    statement_id,
         "gelen_invoices_json": gelen_invoices_json,
         "komisyon_prefill":  komisyon_prefill,
+        "open_commitments":  open_commitments,
     })
 
 
@@ -587,6 +618,7 @@ async def invoices_create(
     belgesiz_date:       str = Form(""),
     from_statement:      str = Form(""),   # statement ID — PM'den gelenler
     source_invoice_id:   str = Form(""),   # komisyon → atıfta bulunulan ana tedarikçi faturası
+    commitment_id:       str = Form(""),   # Faz 3: gelen fatura → tedarikçi taahhüdü (PO) linki
     document:            UploadFile = File(None),
 ):
     _log.info(
@@ -710,6 +742,7 @@ async def invoices_create(
         total_amount        = incl,
         status              = "pending",
         current_approver_id = _initial_approver_id,
+        commitment_id       = (commitment_id.strip() or None) if invoice_type == "gelen" else None,
         source_invoice_id   = (source_invoice_id.strip() or None) if invoice_type == "komisyon" else None,
         company_id          = current_user.company_id or EVENT_COMPANY_ID,
         created_by          = current_user.id,
@@ -718,7 +751,7 @@ async def invoices_create(
     )
 
     if document and document.filename:
-        doc_path, doc_name = _save_document(document, inv.id)
+        doc_path, doc_name = _save_document(document, inv.id, current_user.company_id)
         inv.document_path = doc_path
         inv.document_name = doc_name
 
@@ -798,6 +831,34 @@ async def invoices_create(
             if cust_obj:
                 inv.vendor_name = cust_obj.name
 
+    # ── Faz 3: gelen fatura ↔ tedarikçi taahhüdü (PO) eşleştirme ─────────────
+    if invoice_type == "gelen":
+        from models import SupplierCommitment as _SC
+        from routers.requests import _recalc_commitment
+        _eff_vendor = inv.vendor_id or _resolved_vendor_id
+        _cm = None
+        if commitment_id.strip():
+            _cm = db.query(_SC).filter(
+                _SC.id == commitment_id.strip(),
+                _SC.status != "cancelled",
+                _SC.company_id == inv.company_id,   # tenant izolasyonu
+            ).first()
+            # güvenlik: taahhüt faturanın projesine ait olmalı
+            if _cm and req_id and _cm.request_id != req_id:
+                _cm = None
+        elif req_id and _eff_vendor:
+            # otomatik öneri: aynı proje+tedarikçi için TEK açık taahhüt varsa bağla
+            _open = db.query(_SC).filter(
+                _SC.request_id == req_id, _SC.vendor_id == _eff_vendor,
+                _SC.status.in_(["open", "partial"]),
+            ).all()
+            if len(_open) == 1:
+                _cm = _open[0]
+        # inv.commitment_id'yi doğrulanmış sonuca göre kesinleştir (geçersiz id'yi temizle)
+        inv.commitment_id = _cm.id if _cm else None
+        if _cm:
+            _recalc_commitment(db, _cm)
+
     # Kütüphane: fatura girişi logu
     from models import INVOICE_TYPE_LABELS as _ITL
     if req_id:
@@ -866,6 +927,20 @@ async def invoices_edit_form(
         ReqModel.status.notin_(["cancelled", "closing", "closed"])
     ).order_by(ReqModel.created_at.desc()).all()
     undoc_entries = inv.request.undocumented_entries if inv.request else []
+    # Faz 3: açık taahhütler + mevcut bağlı taahhüt (kapalı olsa bile seçilebilsin)
+    open_commitments = _open_commitments_for_request(db, inv.request_id) if inv.request_id else []
+    if inv.commitment_id and not any(c["id"] == inv.commitment_id for c in open_commitments):
+        from models import SupplierCommitment as _SC, SERVICE_CATEGORIES as _SECTS
+        _cm = db.query(_SC).filter(_SC.id == inv.commitment_id).first()
+        if _cm:
+            _lbl = {c["id"]: c["label"] for c in _SECTS}
+            open_commitments.insert(0, {
+                "id": _cm.id, "po_no": _cm.po_no or "", "section": _cm.section,
+                "section_label": _lbl.get(_cm.section, _cm.section),
+                "vendor_name": _cm.vendor_name or "—", "vendor_id": _cm.vendor_id,
+                "amount": _cm.amount or 0.0, "invoiced": _cm.invoiced_amount or 0.0,
+                "remaining": _cm.remaining, "status": _cm.status,
+            })
     return templates.TemplateResponse("invoices/form.html", {
         "request":       request,
         "current_user":  current_user,
@@ -876,6 +951,7 @@ async def invoices_edit_form(
         "undoc_entries": undoc_entries,
         "invoice_types": INVOICE_TYPES,
         "edit_mode":     True,
+        "open_commitments": open_commitments,
     })
 
 
@@ -897,10 +973,12 @@ async def invoices_update(
     vendor_name:  str = Form(""),
     description:  str = Form(""),
     lines_json:   str = Form("[]"),
+    commitment_id: str = Form("__keep__"),  # Faz 3: PO linki ("" = kaldır, __keep__ = değiştirme)
     document:     UploadFile = File(None),
 ):
     _require_finance(current_user)
     inv = _get_invoice_or_404(db, invoice_id)
+    _old_commitment_id = inv.commitment_id
 
     try:
         lines = json.loads(lines_json or "[]")
@@ -932,9 +1010,23 @@ async def invoices_update(
     if document and document.filename:
         if inv.document_path:
             delete_upload(inv.document_path)
-        doc_path, doc_name = _save_document(document, inv.id)
+        doc_path, doc_name = _save_document(document, inv.id, current_user.company_id)
         inv.document_path = doc_path
         inv.document_name = doc_name
+
+    # ── Faz 3: PO link güncelle + etkilenen taahhütleri yeniden hesapla ──────
+    if commitment_id != "__keep__" and inv.invoice_type == "gelen":
+        inv.commitment_id = commitment_id.strip() or None
+    elif inv.invoice_type != "gelen":
+        inv.commitment_id = None
+    db.flush()
+    from models import SupplierCommitment as _SC
+    from routers.requests import _recalc_commitment
+    for _cid in {_old_commitment_id, inv.commitment_id}:
+        if _cid:
+            _cm = db.query(_SC).filter(_SC.id == _cid).first()
+            if _cm:
+                _recalc_commitment(db, _cm)
 
     db.commit()
     if inv.request_id:
@@ -1004,7 +1096,7 @@ async def invoices_cut(
         inv.due_date = due_date
 
     if document and document.filename:
-        doc_path, doc_name = _save_document(document, inv.id)
+        doc_path, doc_name = _save_document(document, inv.id, current_user.company_id)
         inv.document_path = doc_path
         inv.document_name = doc_name
 
@@ -1452,8 +1544,17 @@ async def invoices_delete(
     _require_finance(current_user)
     inv = _get_invoice_or_404(db, invoice_id)
     req_id = inv.request_id
+    _cm_id = inv.commitment_id
     inv.status     = "cancelled"
     inv.updated_at = _now()
+    db.flush()
+    # Faz 3: bağlı taahhüdün faturalanan tutarını güncelle (iptal → düşer)
+    if _cm_id:
+        from models import SupplierCommitment as _SC
+        from routers.requests import _recalc_commitment
+        _cm = db.query(_SC).filter(_SC.id == _cm_id).first()
+        if _cm:
+            _recalc_commitment(db, _cm)
     db.commit()
     if req_id:
         return RedirectResponse(url=f"/requests/{req_id}#tab-financial", status_code=303)
@@ -1473,4 +1574,4 @@ async def invoices_document(
     inv = _get_invoice_or_404(db, invoice_id)
     if not inv.document_path:
         raise HTTPException(status_code=404, detail="Belge bulunamadı.")
-    return _serve_upload(inv.document_path, inv.document_name or "belge")
+    return _serve_secure(inv.document_path, inv.document_name or "belge", current_user)

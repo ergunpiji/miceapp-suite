@@ -594,11 +594,11 @@ class Invoice(Base):
     ref_id = Column(String(36), ForeignKey("references.id"), nullable=True)   # muhasebe bağı (references)
     request_id = Column(String(36), nullable=True, index=True)                # satış bağı (event requests) — FK yok (paylaşımlı DB)
     source_invoice_id = Column(String(36), nullable=True, index=True)         # komisyon: refere ettiği ana tedarikçi (gelen) faturası
+    commitment_id = Column(String(36), nullable=True, index=True)             # Faz 3: gelen fatura → tedarikçi taahhüdü (event yazar)
     vendor_id = Column(String(36), ForeignKey("vendors.id"), nullable=True)
-    invoice_type = Column(
-        Enum("gelen", "kesilen", "komisyon", "iade_gelen", "iade_kesilen", name="invoice_type_enum"),
-        nullable=False
-    )
+    # miceapp suite — invoice_type ENUM→VARCHAR: event writer-of-record String(32) kullanıyor,
+    # Postgres Enum constraint çakışmasını önlemek için desk de String. Değerler: gelen|kesilen|komisyon|iade_gelen|iade_kesilen
+    invoice_type = Column(String(32), nullable=False)
     invoice_no = Column(String(100))
     invoice_date = Column(Date, nullable=False)
     amount = Column(Float, nullable=False)
@@ -1509,8 +1509,13 @@ class DeskSupplierCommitment(Base):
     payment_date = Column(String(10))
     payment_type = Column(String(20))
     expected_payment_date = Column(String(10))
-    status       = Column(String(20))
+    status       = Column(String(20))    # open/partial/closed/cancelled
     approval_status = Column(String(20))
+    invoiced_amount = Column(Float)      # Faz 3: faturalanan (KDV dahil) — event yazar
+
+    @property
+    def remaining(self) -> float:
+        return round(max(0.0, (self.amount or 0.0) - (self.invoiced_amount or 0.0)), 2)
 
 
 class EventPrepaymentRequest(Base):

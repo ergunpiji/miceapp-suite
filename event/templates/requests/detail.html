@@ -1395,7 +1395,8 @@ document.addEventListener('DOMContentLoaded', function() {
     <div style="font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px;">Açık Taahhütler</div>
     {% set PT = {'cari':'Cari (vade)','banka':'Banka','kredi_karti':'Kredi Kartı','cek':'Çek'} %}
     {% for c in commitments %}
-    <div class="d-flex justify-content-between align-items-center py-1" style="border-bottom:1px solid #f1f5f9; font-size:13px;">
+    <div class="py-1" style="border-bottom:1px solid #f1f5f9; font-size:13px;">
+     <div class="d-flex justify-content-between align-items-center">
       <div>
         <span class="fw-semibold">{{ c.vendor_name or '—' }}</span>
         <span class="text-muted ms-1 font-monospace" style="font-size:10px;">{{ c.po_no }}</span>
@@ -1407,11 +1408,27 @@ document.addEventListener('DOMContentLoaded', function() {
         {% else %}
         <span class="badge bg-warning text-dark ms-1" style="font-size:10px;">Onay bekliyor → {{ commit_approvers.get(c.id, '—') }}</span>
         {% endif %}
+        {# Faz 3: faturalanma durumu #}
+        {% if c.status == 'closed' %}
+        <span class="badge ms-1" style="background:#e2e8f0;color:#475569;font-size:10px;">{% if c.closed_by %}Manuel Kapatıldı{% else %}Kapandı{% endif %}</span>
+        {% elif c.status == 'partial' %}
+        <span class="badge ms-1" style="background:#dbeafe;color:#1e40af;font-size:10px;">Kısmi Faturalı</span>
+        {% else %}
+        <span class="badge ms-1" style="background:#fef9c3;color:#854d0e;font-size:10px;">Açık</span>
+        {% endif %}
         <span class="badge ms-1" style="background:#fef3c7;color:#92400e;font-size:10px;">{{ PT.get(c.payment_type, c.payment_type) }}</span>
         <span class="text-muted ms-1" style="font-size:11px;"><i class="bi bi-calendar-event" style="font-size:10px;"></i> Beklenen: {{ c.expected_payment_date }}</span>
       </div>
       <div class="d-flex align-items-center gap-2">
-        <span class="fw-semibold" style="color:#dc2626;">₺{{ '{:,.0f}'.format(c.amount) }}</span>
+        <div class="text-end" style="line-height:1.15;">
+          <span class="fw-semibold" style="color:#dc2626;">₺{{ '{:,.0f}'.format(c.amount) }}</span>
+          {% if c.invoiced_amount and c.invoiced_amount > 0 %}
+          <div style="font-size:10px;color:#64748b;">
+            Faturalanan ₺{{ '{:,.0f}'.format(c.invoiced_amount) }} · Kalan
+            <span style="color:{% if c.remaining > 0 %}#b45309{% else %}#16a34a{% endif %};">₺{{ '{:,.0f}'.format(c.remaining) }}</span>
+          </div>
+          {% endif %}
+        </div>
         {% if c.approval_status == 'pending' and commit_can_approve.get(c.id) %}
         <form method="post" action="/requests/commitments/{{ c.id }}/approve" style="margin:0;">
           <button class="btn btn-sm btn-success py-0 px-2" title="PO'yu onayla"><i class="bi bi-check-lg"></i></button>
@@ -1431,12 +1448,34 @@ document.addEventListener('DOMContentLoaded', function() {
         </a>
         {% endif %}
         {% if can_manage_commitment %}
-        <form method="post" action="/requests/commitments/{{ c.id }}/cancel" style="margin:0;"
-              onsubmit="return confirm('Bu taahhüt iptal edilsin mi?')">
-          <button class="btn btn-sm btn-link text-muted p-0" title="İptal et"><i class="bi bi-x-circle"></i></button>
-        </form>
+          {% if c.status == 'closed' and c.closed_by %}
+          <form method="post" action="/requests/commitments/{{ c.id }}/reopen" style="margin:0;"
+                onsubmit="return confirm('Bu PO yeniden açılsın mı? (faturalardan durum yeniden hesaplanır)')">
+            <button class="btn btn-sm btn-link text-primary p-0" title="Yeniden aç"><i class="bi bi-arrow-counterclockwise"></i></button>
+          </form>
+          {% elif c.status != 'closed' %}
+          <form method="post" action="/requests/commitments/{{ c.id }}/close" style="margin:0;"
+                onsubmit="return confirm('Bu PO kapatılsın mı? Kalan tutar (varsa) fazla/iskonto sayılır ve nakit akışından çıkar.')">
+            <button class="btn btn-sm btn-link text-success p-0" title="Kapat (tamamlandı işaretle)"><i class="bi bi-check2-circle"></i></button>
+          </form>
+          <form method="post" action="/requests/commitments/{{ c.id }}/cancel" style="margin:0;"
+                onsubmit="return confirm('Bu taahhüt iptal edilsin mi?')">
+            <button class="btn btn-sm btn-link text-muted p-0" title="İptal et"><i class="bi bi-x-circle"></i></button>
+          </form>
+          {% endif %}
         {% endif %}
       </div>
+     </div>
+     {# Faz 3: bağlı gelen faturalar #}
+     {% if commit_invoices.get(c.id) %}
+     <div style="font-size:11px;color:#64748b;padding:2px 0 4px 4px;">
+       {% for iv in commit_invoices.get(c.id) %}
+       <span class="me-2"><i class="bi bi-receipt" style="font-size:10px;"></i>
+         <a href="/invoices/{{ iv.id }}/detail" class="text-decoration-none text-secondary">{{ iv.no }}</a>
+         — ₺{{ '{:,.0f}'.format(iv.total) }} <span class="text-muted">({{ iv.date }})</span></span>
+       {% endfor %}
+     </div>
+     {% endif %}
     </div>
     {% endfor %}
     <script>

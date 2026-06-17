@@ -254,7 +254,7 @@ async def customers_upload_template(
         delete_upload(customer.excel_template_path)
 
     contents = await template_file.read()
-    key = save_upload(contents, "customer_templates", f"{customer_id}{ext}")
+    key = save_upload(contents, "customer_templates", f"{customer_id}{ext}", company_id=current_user.company_id)
 
     import base64
     customer.excel_template_path = key
@@ -402,7 +402,7 @@ async def customers_upload_doc(
         return RedirectResponse(url="/customers", status_code=status.HTTP_302_FOUND)
 
     filename = os.path.basename(doc_file.filename or "dosya")
-    key = save_upload(doc_file.file.read(), f"customer_docs/{customer_id}", filename)
+    key = save_upload(doc_file.file.read(), f"customer_docs/{customer_id}", filename, company_id=current_user.company_id)
 
     try:
         doc_list = json.loads(customer.docs_json or "[]")

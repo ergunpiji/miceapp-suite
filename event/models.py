@@ -1053,7 +1053,11 @@ class SupplierCommitment(Base):
     payment_date = Column(String(10), nullable=True)     # spesifik ödeme tarihi (boş → cari)
     payment_type = Column(String(20), default="cari")    # cari/banka/kredi_karti/cek
     expected_payment_date = Column(String(10))           # hesaplanan (tarih veya etkinlik+30)
-    status       = Column(String(20), default="open")    # open/cancelled
+    status       = Column(String(20), default="open")    # open/partial/closed/cancelled
+    # Faz 3: gelen fatura mutabakatı — bağlı faturaların KDV dahil toplamı (cache)
+    invoiced_amount = Column(Float, default=0.0)
+    closed_at       = Column(DateTime, nullable=True)     # tam/manuel kapanış zamanı
+    closed_by       = Column(String(36), nullable=True)   # manuel kapatan kullanıcı
     # Onay silsilesi (fatura gibi limit-bazlı zincir) — PO ancak onaylanınca yazdırılır
     approval_status     = Column(String(20), default="pending")  # pending/approved/rejected
     current_approver_id = Column(String(36), ForeignKey("users.id"), nullable=True)  # şu an onaylaması gereken
@@ -1064,6 +1068,11 @@ class SupplierCommitment(Base):
     created_by   = Column(String(36))
     created_at   = Column(DateTime, default=_now)
     updated_at   = Column(DateTime, default=_now, onupdate=_now)
+
+    @property
+    def remaining(self) -> float:
+        """Faturalanmamış kalan taahhüt tutarı (KDV dahil)."""
+        return round(max(0.0, (self.amount or 0.0) - (self.invoiced_amount or 0.0)), 2)
 
 
 COMMITMENT_PAYMENT_TYPES = [
@@ -1347,6 +1356,8 @@ class Invoice(Base):
     created_by           = Column(String(36), ForeignKey("users.id"), nullable=False)
     created_at           = Column(DateTime, default=_now, nullable=False)
     updated_at           = Column(DateTime, default=_now, onupdate=_now, nullable=False)
+    # Faz 3: gelen fatura ↔ tedarikçi taahhüdü (PO) explicit linki
+    commitment_id        = Column(String(36), ForeignKey("supplier_commitments.id"), nullable=True, index=True)
     # micedesk köprü alanları (micedesk'in yazdığı faturalar için)
     ref_id               = Column(String(36), nullable=True)   # micedesk references.id
     source_invoice_id    = Column(String(36), nullable=True)   # komisyon: ana tedarikçi faturası

@@ -779,7 +779,6 @@ async def po_report(
     """Event PO raporu — rol bazlı (PM kendi, müdür ekip, GM tüm şirket). Açık/Kapanmış/Tüm."""
     if current_user.role not in ("satinalma", "admin", "mudur", "yonetici", "genel_mudur") and not current_user.is_gm:
         raise HTTPException(status_code=403)
-    from collections import defaultdict as _dd
     q = scope(db.query(SupplierCommitment), SupplierCommitment, current_user)
     allowed = _po_report_request_ids(db, current_user)
     if allowed is None:
@@ -789,41 +788,58 @@ async def po_report(
     else:
         commits = []
 
-    groups = _dd(list)
-    for c in commits:
-        groups[(c.request_id, c.vendor_id)].append(c)
     req_ids = {c.request_id for c in commits if c.request_id}
     reqmap = {r.id: r for r in db.query(ReqModel).filter(ReqModel.id.in_(req_ids)).all()} if req_ids else {}
 
+    # Faz 3: link'li taahhütler invoiced_amount cache'inden; legacy için (request,vendor) heuristik
+    _linked_ids = {
+        row[0] for row in db.query(Invoice.commitment_id).filter(
+            Invoice.commitment_id.isnot(None), Invoice.invoice_type == "gelen",
+            Invoice.status != "cancelled",
+        ).distinct().all() if row[0]
+    }
+    _legacy_pool: dict = {}
+
+    def _pool(rid, vid):
+        key = (rid, vid)
+        if key not in _legacy_pool:
+            iq = db.query(Invoice).filter(
+                Invoice.request_id == rid, Invoice.invoice_type == "gelen",
+                Invoice.commitment_id.is_(None), Invoice.status != "cancelled",
+            )
+            if vid:
+                iq = iq.filter(Invoice.vendor_id == vid)
+            _legacy_pool[key] = sum((inv.total_amount or 0.0) for inv in iq.all())
+        return key
+
     rows = []
-    for (rid, vid), cms in groups.items():
-        iq = db.query(Invoice).filter(Invoice.request_id == rid, Invoice.invoice_type == "gelen")
-        if vid:
-            iq = iq.filter(Invoice.vendor_id == vid)
-        invoiced = sum((inv.total_amount or 0.0) for inv in iq.all())
-        for c in sorted(cms, key=lambda x: x.expected_payment_date or "9999"):
-            amt = c.amount or 0.0
-            alloc = min(amt, invoiced)
-            invoiced -= alloc
-            remaining = round(amt - alloc, 2)
-            cancelled = (c.status == "cancelled")
-            approved = (c.approval_status == "approved")
-            if cancelled or (approved and remaining <= 0):
-                cls = "closed"
-            elif approved and remaining > 0:
-                cls = "open"
-            else:
-                cls = "pending"
-            r = reqmap.get(rid)
-            rows.append({
-                "id": c.id, "po_no": c.po_no or "—", "vendor": c.vendor_name or "—",
-                "section": _POR_SECTION_LABELS.get(c.section, c.section),
-                "request_no": (r.request_no if r else ""), "event_name": (r.event_name if r else ""),
-                "amount": amt, "invoiced": round(alloc, 2), "remaining": remaining,
-                "expected_date": c.expected_payment_date,
-                "payment_type": _POR_PT.get(c.payment_type, c.payment_type),
-                "approval_status": c.approval_status, "status": c.status, "cls": cls,
-            })
+    for c in sorted(commits, key=lambda x: (x.request_id or "", x.expected_payment_date or "9999")):
+        amt = c.amount or 0.0
+        if c.id in _linked_ids or (c.invoiced_amount or 0.0) > 0:
+            alloc = round(min(amt, c.invoiced_amount or 0.0), 2)
+        else:
+            key = _pool(c.request_id, c.vendor_id)
+            alloc = round(min(amt, _legacy_pool[key]), 2)
+            _legacy_pool[key] -= alloc
+        remaining = round(amt - alloc, 2)
+        cancelled = (c.status == "cancelled")
+        approved = (c.approval_status == "approved")
+        if cancelled or c.status == "closed" or (approved and remaining <= 0):
+            cls = "closed"
+        elif approved and remaining > 0:
+            cls = "open"
+        else:
+            cls = "pending"
+        r = reqmap.get(c.request_id)
+        rows.append({
+            "id": c.id, "po_no": c.po_no or "—", "vendor": c.vendor_name or "—",
+            "section": _POR_SECTION_LABELS.get(c.section, c.section),
+            "request_no": (r.request_no if r else ""), "event_name": (r.event_name if r else ""),
+            "amount": amt, "invoiced": alloc, "remaining": remaining,
+            "expected_date": c.expected_payment_date,
+            "payment_type": _POR_PT.get(c.payment_type, c.payment_type),
+            "approval_status": c.approval_status, "status": c.status, "cls": cls,
+        })
 
     if filter == "open":
         shown = [r for r in rows if r["cls"] == "open"]
@@ -1227,15 +1243,28 @@ async def requests_detail(
     commit_section_costs = _section_costs(confirmed_budget)   # {section: KDV dahil maliyet}
     commitments = (
         db.query(SupplierCommitment)
-        .filter(SupplierCommitment.request_id == req.id, SupplierCommitment.status == "open")
+        .filter(SupplierCommitment.request_id == req.id,
+                SupplierCommitment.status.in_(["open", "partial", "closed"]))
         .order_by(SupplierCommitment.created_at.asc())
         .all()
     )
     committed_by_section: dict = {}
     commit_approvers: dict = {}      # commit_id → onaylaması gereken kişi adı
     commit_can_approve: dict = {}    # commit_id → current_user onaylayabilir mi
+    commit_invoices: dict = {}       # Faz 3: commit_id → bağlı gelen faturalar [{no, total, date}]
+    _linked = (
+        db.query(Invoice)
+        .filter(Invoice.request_id == req.id, Invoice.invoice_type == "gelen",
+                Invoice.commitment_id.isnot(None), Invoice.status != "cancelled")
+        .all()
+    )
+    for _inv in _linked:
+        commit_invoices.setdefault(_inv.commitment_id, []).append({
+            "id": _inv.id, "no": _inv.invoice_no or _inv.id[:8],
+            "total": _inv.total_amount or 0.0, "date": _inv.invoice_date,
+        })
     for _c in commitments:
-        if _c.approval_status != "rejected":
+        if _c.approval_status != "rejected" and _c.status != "closed":
             committed_by_section[_c.section] = round(committed_by_section.get(_c.section, 0.0) + (_c.amount or 0.0), 2)
         if _c.approval_status == "pending":
             _ap = db.query(User).filter(User.id == _c.current_approver_id).first() if _c.current_approver_id else None
@@ -1413,6 +1442,7 @@ async def requests_detail(
             "committed_by_section":   committed_by_section,
             "commit_approvers":       commit_approvers,
             "commit_can_approve":     commit_can_approve,
+            "commit_invoices":        commit_invoices,
             "commit_vendors":         commit_vendors,
             "can_manage_commitment":  can_manage_commitment,
             "service_categories":     SERVICE_CATEGORIES,
@@ -1744,6 +1774,38 @@ def _can_manage_commitment(user) -> bool:
     return user.role in ("satinalma", "admin", "mudur", "yonetici", "genel_mudur") or getattr(user, "is_gm", False)
 
 
+def _recalc_commitment(db, commitment) -> None:
+    """Faz 3 — taahhüdün faturalanan tutarını bağlı 'gelen' faturalardan yeniden hesaplar ve
+    durumunu türetir. Tek kaynak: her link/unlink/fatura iptalinde çağrılır.
+    Durum: invoiced=0 → open, 0<invoiced<amount → partial, invoiced>=amount → closed.
+    İptal (cancelled) ve manuel kapanış (closed_by dolu) bu fonksiyonla değişmez."""
+    if not commitment:
+        return
+    if commitment.status == "cancelled":
+        return
+    linked = db.query(Invoice).filter(
+        Invoice.commitment_id == commitment.id,
+        Invoice.invoice_type == "gelen",
+        Invoice.status != "cancelled",
+    ).all()
+    inv_total = round(sum((i.total_amount or 0.0) for i in linked), 2)
+    commitment.invoiced_amount = inv_total
+    amt = commitment.amount or 0.0
+    # Manuel kapatılmışsa (closed_by) durumu 'closed' bırak — yeniden açma sadece manuel link ile
+    if commitment.closed_by and inv_total < amt:
+        # manuel kapama + sonradan fatura silindi → tekrar otomatik akışa al
+        commitment.closed_by = None
+        commitment.closed_at = None
+    if inv_total <= 0:
+        commitment.status = "open"
+    elif inv_total < amt:
+        commitment.status = "partial"
+    else:
+        commitment.status = "closed"
+        if not commitment.closed_at:
+            commitment.closed_at = _now()
+
+
 def _po_role_limit(db, user) -> float:
     """PO onay limiti — fatura ile AYNI (rol bazlı system_settings). GM/admin sınırsız."""
     if user.role in ("admin", "super_admin", "genel_mudur") or getattr(user, "is_gm", False):
@@ -1946,6 +2008,55 @@ async def requests_commit_reject(
     log_activity(db, c.request_id, "po_rejected", f"PO reddedildi: {c.po_no}", user_id=current_user.id)
     db.commit()
     return RedirectResponse(url=f"/requests/{c.request_id}?po_rejected=1#tab-summary", status_code=status.HTTP_302_FOUND)
+
+
+@router.post("/commitments/{commit_id}/close", name="requests_commit_close")
+async def requests_commit_close(
+    commit_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Faz 3 — taahhüdü manuel kapat (kalanı 'fazla/iskontolu' say). Faturadan az
+    faturalanmış olsa bile nakit akışından çıkar. Yeniden hesaplanmaz (closed_by sabitler)."""
+    if not _can_manage_commitment(current_user):
+        raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz yok.")
+    c = scope(db.query(SupplierCommitment), SupplierCommitment, current_user).filter(
+        SupplierCommitment.id == commit_id).first()
+    if not c:
+        return RedirectResponse(url="/requests", status_code=status.HTTP_302_FOUND)
+    if c.status == "cancelled":
+        raise HTTPException(status_code=400, detail="İptal edilmiş taahhüt kapatılamaz.")
+    c.status = "closed"
+    c.closed_by = current_user.id
+    c.closed_at = _now()
+    c.updated_at = _now()
+    log_activity(db, c.request_id, "po_closed",
+                 f"PO manuel kapatıldı: {c.po_no} (faturalanan {c.invoiced_amount or 0:,.0f}/{c.amount or 0:,.0f} ₺)",
+                 user_id=current_user.id)
+    db.commit()
+    return RedirectResponse(url=f"/requests/{c.request_id}?po_closed=1#tab-summary", status_code=status.HTTP_302_FOUND)
+
+
+@router.post("/commitments/{commit_id}/reopen", name="requests_commit_reopen")
+async def requests_commit_reopen(
+    commit_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Manuel kapatılan taahhüdü tekrar aç — bağlı faturalardan durumu yeniden türet."""
+    if not _can_manage_commitment(current_user):
+        raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz yok.")
+    c = scope(db.query(SupplierCommitment), SupplierCommitment, current_user).filter(
+        SupplierCommitment.id == commit_id).first()
+    if not c:
+        return RedirectResponse(url="/requests", status_code=status.HTTP_302_FOUND)
+    c.closed_by = None
+    c.closed_at = None
+    _recalc_commitment(db, c)
+    c.updated_at = _now()
+    log_activity(db, c.request_id, "po_reopened", f"PO yeniden açıldı: {c.po_no}", user_id=current_user.id)
+    db.commit()
+    return RedirectResponse(url=f"/requests/{c.request_id}?po_reopened=1#tab-summary", status_code=status.HTTP_302_FOUND)
 
 
 _SECTION_ABBR = {

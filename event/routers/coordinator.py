@@ -87,7 +87,8 @@ async def coordinator_approve(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_pm),
 ):
-    inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    from tenant import scope
+    inv = scope(db.query(Invoice), Invoice, current_user).filter(Invoice.id == invoice_id).first()
     if not inv or inv.coordinator_status != "beklemede":
         raise HTTPException(404)
     inv.coordinator_status = "onaylandi"
@@ -110,7 +111,8 @@ async def coordinator_reject(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_pm),
 ):
-    inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    from tenant import scope
+    inv = scope(db.query(Invoice), Invoice, current_user).filter(Invoice.id == invoice_id).first()
     if not inv or inv.coordinator_status != "beklemede":
         raise HTTPException(404)
     inv.coordinator_status = "reddedildi"

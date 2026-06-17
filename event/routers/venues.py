@@ -232,7 +232,7 @@ async def venues_upload_doc(
         return RedirectResponse(url="/venues", status_code=status.HTTP_302_FOUND)
 
     filename = os.path.basename(doc_file.filename or "dosya")
-    key = save_upload(doc_file.file.read(), f"venue_docs/{venue_id}", filename)
+    key = save_upload(doc_file.file.read(), f"venue_docs/{venue_id}", filename, company_id=current_user.company_id)
 
     try:
         doc_list = json.loads(venue.docs_json or "[]")

@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from auth import get_current_user
 from database import get_db
-from storage import save_upload, serve_upload as _serve_upload
+from storage import save_upload, serve_upload as _serve_upload, serve_upload_secure as _serve_secure
 from models import (
     Vendor,
     PrepaymentRequest,
@@ -189,7 +189,7 @@ async def prepayment_requests_create(
             content = await file.read()
             if content and len(content) <= 10 * 1024 * 1024:
                 try:
-                    key = save_upload(content, "prepayments", f"{pr.id}{ext}")
+                    key = save_upload(content, "prepayments", f"{pr.id}{ext}", company_id=current_user.company_id)
                     pr.document_path = key
                     pr.document_name = file.filename
                 except Exception as exc:
@@ -225,7 +225,7 @@ async def prepayment_requests_doc(
     _assert_tenant(pr, current_user)
     if not pr or not pr.document_path:
         raise HTTPException(404)
-    return _serve_upload(pr.document_path, pr.document_name or "belge")
+    return _serve_secure(pr.document_path, pr.document_name or "belge", current_user)
 
 
 # ---------------------------------------------------------------------------

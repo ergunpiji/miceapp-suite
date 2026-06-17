@@ -254,6 +254,12 @@ def _migrate(engine) -> None:
         # --- miceapp suite: PO (supplier_commitments) — desk PO raporları için okunan kolonlar ---
         "ALTER TABLE supplier_commitments ADD COLUMN IF NOT EXISTS po_no VARCHAR(60) DEFAULT ''",
         "ALTER TABLE supplier_commitments ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) DEFAULT 'approved'",
+        # --- miceapp suite: Faz 3 PO ↔ fatura mutabakatı (event yazar; desk okur) ---
+        "ALTER TABLE supplier_commitments ADD COLUMN IF NOT EXISTS invoiced_amount DOUBLE PRECISION DEFAULT 0",
+        "ALTER TABLE supplier_commitments ADD COLUMN IF NOT EXISTS closed_at TIMESTAMP",
+        "ALTER TABLE supplier_commitments ADD COLUMN IF NOT EXISTS closed_by VARCHAR(36)",
+        "ALTER TABLE invoices ADD COLUMN IF NOT EXISTS commitment_id VARCHAR(36)",
+        "CREATE INDEX IF NOT EXISTS ix_invoices_commitment_id ON invoices (commitment_id)",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS slug VARCHAR(100)",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS plan VARCHAR(20) DEFAULT 'starter'",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMP",
@@ -267,6 +273,15 @@ def _migrate(engine) -> None:
                        WHERE table_name='invoices' AND column_name='status'
                        AND data_type='USER-DEFINED') THEN
                 ALTER TABLE invoices ALTER COLUMN status TYPE VARCHAR(20) USING status::text;
+            END IF;
+        END $$""",
+        # invoice_type ENUM→VARCHAR(32) — event writer-of-record String kullanıyor; paylaşımlı
+        # tabloda Enum constraint çakışmasını önler. Aynı koşullu/idempotent desen (status gibi).
+        """DO $$ BEGIN
+            IF EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name='invoices' AND column_name='invoice_type'
+                       AND data_type='USER-DEFINED') THEN
+                ALTER TABLE invoices ALTER COLUMN invoice_type TYPE VARCHAR(32) USING invoice_type::text;
             END IF;
         END $$""",
         # satış bağı: event requests.id (FK yok — paylaşımlı DB)

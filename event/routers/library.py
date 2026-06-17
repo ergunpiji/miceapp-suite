@@ -12,7 +12,7 @@ import os
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
-from storage import save_upload, serve_upload as _serve_upload
+from storage import save_upload, serve_upload as _serve_upload, serve_upload_secure as _serve_secure
 from sqlalchemy.orm import Session
 
 from auth import get_current_user
@@ -86,7 +86,10 @@ def save_document(
     content = buf.read()
     buf.seek(0)   # caller hâlâ stream edebilir
 
-    key = save_upload(content, f"library/{request_id}", safe_name)
+    # Çok-kiracılı izolasyon: referansın şirketine göre prefix'le
+    _req = db.query(ReqModel).filter(ReqModel.id == request_id).first()
+    _cid = (_req.company_id if _req else None)
+    key = save_upload(content, f"library/{request_id}", safe_name, company_id=_cid)
 
     type_label = REQUEST_DOCUMENT_TYPE_LABELS.get(doc_type, doc_type)
     doc_name   = f"{type_label} v{version}" if version > 1 else type_label
@@ -123,4 +126,4 @@ async def download_document(
     if not doc:
         raise HTTPException(404)
 
-    return _serve_upload(doc.file_path, doc.file_name or "belge")
+    return _serve_secure(doc.file_path, doc.file_name or "belge", current_user)

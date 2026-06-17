@@ -801,26 +801,65 @@ async def cash_flow(
             })
 
     # ── Tahmini gider (outflow) — tedarikçi ödeme taahhütlerinden (Faz 2) ──
-    # Taahhüt − bağlı gelen faturalar = beklenen ödeme; tarih = taahhüdün beklenen
-    # ödeme tarihi. Gelen fatura (request+vendor) geldikçe otomatik kapanır.
+    # Faz 3: Taahhüdün KALAN'ı (amount − invoiced_amount) = beklenen ödeme; tarih = taahhüdün
+    # beklenen ödeme tarihi. Bağlı gelen fatura geldikçe invoiced_amount artar → tahmin küçülür,
+    # tam faturalanınca status=closed olur ve düşer. Legacy (link'siz, invoiced_amount=0) taahhütler
+    # için (request,vendor) bazlı orantısal heuristik fallback korunur.
     forecast_out_items = []
     if forecast:
         from models import SupplierCommitment, Request as _Req
         from collections import defaultdict as _dd
         commits = (
             scope(db.query(SupplierCommitment), SupplierCommitment, current_user)
-            .filter(SupplierCommitment.status == "open")
+            .filter(SupplierCommitment.status.in_(["open", "partial"]))
             .all()
         )
-        _groups = _dd(list)
+        # Link'li (Faz 3) ve legacy (link'siz) taahhütleri ayır
+        _legacy_groups = _dd(list)
+        _req_cache = {}
+
+        def _req_no(rid):
+            if rid not in _req_cache:
+                _r = db.query(_Req).filter(_Req.id == rid).first()
+                _req_cache[rid] = (_r.request_no if _r else "")
+            return _req_cache[rid]
+
+        # Bir taahhüde bağlı (commitment_id) en az bir gelen fatura var mı? → link'li say
+        _linked_ids = {
+            row[0] for row in db.query(Invoice.commitment_id)
+            .filter(Invoice.commitment_id.isnot(None), Invoice.invoice_type == "gelen",
+                    Invoice.status != "cancelled")
+            .distinct().all() if row[0]
+        }
         for cm in commits:
-            _groups[(cm.request_id, cm.vendor_id)].append(cm)
-        for (rid, vid), cms in _groups.items():
-            q = db.query(Invoice).filter(Invoice.request_id == rid, Invoice.invoice_type == "gelen")
+            if cm.id in _linked_ids or (cm.invoiced_amount or 0.0) > 0:
+                # Faz 3: gerçek kalan
+                remaining = cm.remaining
+                if remaining <= 0:
+                    continue
+                eff = cm.expected_payment_date
+                if not eff or not (today_str <= eff <= end_str):
+                    continue
+                forecast_out_items.append({
+                    "amount":       remaining,
+                    "eff_date":     eff,
+                    "vendor_name":  cm.vendor_name or "—",
+                    "section":      cm.section,
+                    "payment_type": cm.payment_type,
+                    "request_no":   _req_no(cm.request_id),
+                })
+            else:
+                _legacy_groups[(cm.request_id, cm.vendor_id)].append(cm)
+
+        # Legacy fallback: link'siz taahhütler için (request,vendor) orantısal dağıtım
+        for (rid, vid), cms in _legacy_groups.items():
+            q = db.query(Invoice).filter(
+                Invoice.request_id == rid, Invoice.invoice_type == "gelen",
+                Invoice.commitment_id.is_(None), Invoice.status != "cancelled",
+            )
             if vid:
                 q = q.filter(Invoice.vendor_id == vid)
             invoiced = sum((inv.total_amount or 0.0) for inv in q.all())
-            _req = db.query(_Req).filter(_Req.id == rid).first()
             for cm in sorted(cms, key=lambda c: c.expected_payment_date or "9999"):
                 amt = cm.amount or 0.0
                 alloc = min(amt, invoiced)
@@ -837,7 +876,7 @@ async def cash_flow(
                     "vendor_name":  cm.vendor_name or "—",
                     "section":      cm.section,
                     "payment_type": cm.payment_type,
-                    "request_no":   (_req.request_no if _req else ""),
+                    "request_no":   _req_no(rid),
                 })
 
     # Haftalık gruplama

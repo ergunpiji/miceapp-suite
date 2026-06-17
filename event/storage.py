@@ -38,9 +38,16 @@ else:
     print("[STORAGE] ⚠️  R2 env var yok — local disk kullanılıyor", flush=True)
 
 
-def save_upload(data: bytes, folder: str, filename: str) -> str:
-    """Dosyayı saklar; göreli key döner (DB'de saklanır)."""
-    key = f"{folder}/{filename}"
+def save_upload(data: bytes, folder: str, filename: str, company_id: str | None = None) -> str:
+    """Dosyayı saklar; göreli key döner (DB'de saklanır).
+
+    company_id verilirse çok-kiracılı izolasyon için anahtar
+    `companies/{company_id}/{folder}/{filename}` olur; verilmezse eski düz
+    anahtar (`{folder}/{filename}`) — geriye uyum (mevcut DB kayıtları okunmaya
+    devam eder). serve_upload tam anahtarı kullandığı için her ikisi de çalışır.
+    """
+    cid = (str(company_id).strip() if company_id else "")
+    key = f"companies/{cid}/{folder}/{filename}" if cid else f"{folder}/{filename}"
     if _USE_R2:
         _s3.put_object(Bucket=_BUCKET, Key=key, Body=data)
     else:
@@ -76,3 +83,19 @@ def serve_upload(key: str, filename: str) -> FileResponse | RedirectResponse | S
         )
     local = Path("static/uploads") / key
     return FileResponse(path=str(local), filename=filename, media_type="application/octet-stream")
+
+
+def serve_upload_secure(key: str, filename: str, user):
+    """İndirme response'u — `companies/{cid}/...` prefix'li anahtarda kiracı sahipliğini
+    doğrular (desk get_file_url_secure deseni). Uymazsa 403; super_admin bypass.
+    Düz (legacy, prefix'siz) anahtarlar serbest kalır — geriye uyum."""
+    if key and key.startswith("companies/"):
+        parts = key.split("/", 2)   # ["companies", "{cid}", "rest..."]
+        file_cid = (parts[1] or "").strip() if len(parts) >= 2 else ""
+        if file_cid and user is not None:
+            is_super = getattr(user, "is_super_admin", False) or getattr(user, "role", "") == "super_admin"
+            user_cid = getattr(user, "company_id", None)
+            if not is_super and str(file_cid) != str(user_cid or ""):
+                from fastapi import HTTPException
+                raise HTTPException(status_code=403, detail="Bu dosyaya erişim yetkiniz yok.")
+    return serve_upload(key, filename)

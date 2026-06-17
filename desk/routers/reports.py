@@ -312,22 +312,52 @@ async def report_cash_flow(
         from collections import defaultdict as _dd2
         commits = db.query(DeskSupplierCommitment).filter(
             DeskSupplierCommitment.company_id == cid,
-            DeskSupplierCommitment.status == "open",
+            DeskSupplierCommitment.status.in_(["open", "partial"]),
         ).all()
-        _groups = _dd2(list)
+        _req_no_cache = {}
+
+        def _drno(rid):
+            if rid not in _req_no_cache:
+                _r = db.query(DeskRequest).filter(DeskRequest.id == rid).first()
+                _req_no_cache[rid] = (_r.request_no if _r else "")
+            return _req_no_cache[rid]
+
+        # Faz 3: link'li taahhütler invoiced_amount cache'inden kalan; legacy için fallback
+        _linked_ids = {
+            row[0] for row in db.query(Invoice.commitment_id).filter(
+                Invoice.company_id == cid, Invoice.commitment_id.isnot(None),
+                Invoice.invoice_type == "gelen", Invoice.deleted_at == None,  # noqa: E711
+            ).distinct().all() if row[0]
+        }
+        _legacy = _dd2(list)
         for cm in commits:
-            _groups[(cm.request_id, cm.vendor_id)].append(cm)
-        for (rid, vid), cms in _groups.items():
+            if cm.id in _linked_ids or (cm.invoiced_amount or 0.0) > 0:
+                remaining = round(max(0.0, (cm.amount or 0.0) - (cm.invoiced_amount or 0.0)), 2)
+                if remaining <= 0:
+                    continue
+                try:
+                    eff = date.fromisoformat(cm.expected_payment_date)
+                except Exception:
+                    continue
+                forecast_out_all.append({
+                    "date": eff, "amount": remaining, "vendor_name": cm.vendor_name or "—",
+                    "section": cm.section, "payment_type": cm.payment_type,
+                    "request_no": _drno(cm.request_id),
+                })
+            else:
+                _legacy[(cm.request_id, cm.vendor_id)].append(cm)
+
+        for (rid, vid), cms in _legacy.items():
             q = db.query(Invoice).filter(
                 Invoice.company_id == cid,
                 Invoice.request_id == rid,
                 Invoice.invoice_type == "gelen",
+                Invoice.commitment_id == None,  # noqa: E711
                 Invoice.deleted_at == None,  # noqa: E711
             )
             if vid:
                 q = q.filter(Invoice.vendor_id == vid)
             invoiced = sum((inv.total_with_vat or inv.amount or 0.0) for inv in q.all())
-            _req = db.query(DeskRequest).filter(DeskRequest.id == rid).first()
             for cm in sorted(cms, key=lambda c: c.expected_payment_date or "9999"):
                 amt = cm.amount or 0.0
                 alloc = min(amt, invoiced)
@@ -345,7 +375,7 @@ async def report_cash_flow(
                     "vendor_name":  cm.vendor_name or "—",
                     "section":      cm.section,
                     "payment_type": cm.payment_type,
-                    "request_no":   (_req.request_no if _req else ""),
+                    "request_no":   _drno(rid),
                 })
 
     weeks_data = []
@@ -1264,46 +1294,61 @@ async def report_po(
     commits = db.query(DeskSupplierCommitment).filter(
         DeskSupplierCommitment.company_id == cid
     ).all()
-    groups = _dd(list)
-    for c in commits:
-        groups[(c.request_id, c.vendor_id)].append(c)
     req_ids = {c.request_id for c in commits if c.request_id}
     reqmap = {}
     if req_ids:
         reqmap = {r.id: r for r in db.query(DeskRequest).filter(DeskRequest.id.in_(req_ids)).all()}
 
-    rows = []
-    for (rid, vid), cms in groups.items():
-        q = db.query(Invoice).filter(
-            Invoice.company_id == cid, Invoice.request_id == rid,
+    # Faz 3: link'li taahhütler invoiced_amount cache'inden; legacy için (request,vendor) heuristik
+    _linked_ids = {
+        row[0] for row in db.query(Invoice.commitment_id).filter(
+            Invoice.company_id == cid, Invoice.commitment_id.isnot(None),
             Invoice.invoice_type == "gelen", Invoice.deleted_at == None,  # noqa: E711
-        )
-        if vid:
-            q = q.filter(Invoice.vendor_id == vid)
-        invoiced = sum((i.total_with_vat or i.amount or 0.0) for i in q.all())
-        for c in sorted(cms, key=lambda x: x.expected_payment_date or "9999"):
-            amt = c.amount or 0.0
-            alloc = min(amt, invoiced)
-            invoiced -= alloc
-            remaining = round(amt - alloc, 2)
-            cancelled = (c.status == "cancelled")
-            approved = (c.approval_status == "approved")
-            if cancelled or (approved and remaining <= 0):
-                cls = "closed"
-            elif approved and remaining > 0:
-                cls = "open"
-            else:
-                cls = "pending"
-            r = reqmap.get(rid)
-            rows.append({
-                "id": c.id,
-                "po_no": c.po_no or "—", "vendor": c.vendor_name or "—",
-                "section": _PO_SECTION_LABELS.get(c.section, c.section),
-                "request_no": (r.request_no if r else ""), "event_name": (r.event_name if r else ""),
-                "amount": amt, "invoiced": round(alloc, 2), "remaining": remaining,
-                "expected_date": c.expected_payment_date, "payment_type": _PO_PT_LABELS.get(c.payment_type, c.payment_type),
-                "approval_status": c.approval_status, "status": c.status, "cls": cls,
-            })
+        ).distinct().all() if row[0]
+    }
+    _legacy_invoiced = {}  # (rid,vid) -> kalan dağıtılacak fatura havuzu
+
+    def _legacy_pool(rid, vid):
+        key = (rid, vid)
+        if key not in _legacy_invoiced:
+            q = db.query(Invoice).filter(
+                Invoice.company_id == cid, Invoice.request_id == rid,
+                Invoice.invoice_type == "gelen", Invoice.commitment_id == None,  # noqa: E711
+                Invoice.deleted_at == None,  # noqa: E711
+            )
+            if vid:
+                q = q.filter(Invoice.vendor_id == vid)
+            _legacy_invoiced[key] = sum((i.total_with_vat or i.amount or 0.0) for i in q.all())
+        return key
+
+    rows = []
+    for c in sorted(commits, key=lambda x: (x.request_id or "", x.expected_payment_date or "9999")):
+        amt = c.amount or 0.0
+        if c.id in _linked_ids or (c.invoiced_amount or 0.0) > 0:
+            alloc = round(min(amt, c.invoiced_amount or 0.0), 2)
+        else:
+            key = _legacy_pool(c.request_id, c.vendor_id)
+            alloc = round(min(amt, _legacy_invoiced[key]), 2)
+            _legacy_invoiced[key] -= alloc
+        remaining = round(amt - alloc, 2)
+        cancelled = (c.status == "cancelled")
+        approved = (c.approval_status == "approved")
+        if cancelled or c.status == "closed" or (approved and remaining <= 0):
+            cls = "closed"
+        elif approved and remaining > 0:
+            cls = "open"
+        else:
+            cls = "pending"
+        r = reqmap.get(c.request_id)
+        rows.append({
+            "id": c.id,
+            "po_no": c.po_no or "—", "vendor": c.vendor_name or "—",
+            "section": _PO_SECTION_LABELS.get(c.section, c.section),
+            "request_no": (r.request_no if r else ""), "event_name": (r.event_name if r else ""),
+            "amount": amt, "invoiced": alloc, "remaining": remaining,
+            "expected_date": c.expected_payment_date, "payment_type": _PO_PT_LABELS.get(c.payment_type, c.payment_type),
+            "approval_status": c.approval_status, "status": c.status, "cls": cls,
+        })
 
     if filter == "open":
         shown = [r for r in rows if r["cls"] == "open"]
