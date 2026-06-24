@@ -613,6 +613,18 @@ async def vendors_prepayment_cancel(
 # ---------------------------------------------------------------------------
 # GET /cash-flow  — Nakit Akışı tahmini
 # ---------------------------------------------------------------------------
+def _iso(x) -> str:
+    """date/datetime/str/None → 'YYYY-MM-DD' string (string karşılaştırmaları için).
+    Paylaşımlı invoices tablosunda due_date Postgres'te DATE; event modeli String(10)
+    deklare etse de psycopg2 date objesi döndürebiliyor → 'str <= date' TypeError'ını
+    önlemek için normalize edilir."""
+    if not x:
+        return ""
+    if hasattr(x, "isoformat"):
+        return x.isoformat()[:10]
+    return str(x)[:10]
+
+
 def _parse_payment_term_days(s, default: int = 30) -> int:
     """Customer.payment_term serbest metin → gün sayısı.
     'peşin'→0, '30 gün'→30, parse edilemez/boş → default (30)."""
@@ -652,7 +664,7 @@ async def cash_flow(
             paid   = inv.paid_amount   or 0.0
             cc_pnd = inv.cc_pending_amount or 0.0
             remaining_cash = round(max(0.0, total - paid), 2)   # vadede ödenecek
-            due = inv.due_date
+            due = _iso(inv.due_date)
 
             # 1) Kalan bakiye (banka/çek ile ödenecek) → orijinal vade tarihinde
             if remaining_cash > 0 and due:
@@ -665,13 +677,14 @@ async def cash_flow(
                 })
 
             # 2) Kredi kartı ile taahhüt edilen tutar → cc_due_date'te ayrı giriş
-            if cc_pnd > 0 and inv.cc_due_date:
+            _cc_due = _iso(inv.cc_due_date)
+            if cc_pnd > 0 and _cc_due:
                 items.append({
                     "invoice":  inv,
                     "amount":   round(cc_pnd, 2),
-                    "eff_date": inv.cc_due_date,
+                    "eff_date": _cc_due,
                     "is_cc":    True,
-                    "cc_label": inv.cc_due_date,
+                    "cc_label": _cc_due,
                 })
 
         return items
@@ -707,7 +720,7 @@ async def cash_flow(
     # Dönem aralığına filtrele
     all_outgoing_items = [
         it for it in all_outgoing_items
-        if today_str <= (it["eff_date"] or "") <= end_str
+        if today_str <= _iso(it["eff_date"]) <= end_str
     ]
 
     # Ödenmemiş müşteri alacakları (gelir) — approved, kesilen tip
@@ -896,10 +909,10 @@ async def cash_flow(
         ws_str = week_start.isoformat()
         we_str = week_end.isoformat()
 
-        w_items = [it for it in all_outgoing_items if ws_str <= (it["eff_date"] or "") <= we_str]
-        w_in    = [i  for i  in incoming           if ws_str <= (i.due_date or "")    <= we_str]
-        w_fc    = [f  for f  in forecast_items     if ws_str <= (f["eff_date"] or "")  <= we_str]
-        w_fc_out = [f for f in forecast_out_items  if ws_str <= (f["eff_date"] or "")  <= we_str]
+        w_items = [it for it in all_outgoing_items if ws_str <= _iso(it["eff_date"]) <= we_str]
+        w_in    = [i  for i  in incoming           if ws_str <= _iso(i.due_date)     <= we_str]
+        w_fc    = [f  for f  in forecast_items     if ws_str <= _iso(f["eff_date"])  <= we_str]
+        w_fc_out = [f for f in forecast_out_items  if ws_str <= _iso(f["eff_date"])  <= we_str]
 
         weeks_data.append({
             "label":         f"Hafta {w+1}",
