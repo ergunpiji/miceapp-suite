@@ -761,44 +761,49 @@ async def cash_flow(
             .all()
         )
         for req in fc_reqs:
-            bgt = db.query(Budget).filter(Budget.id == req.confirmed_budget_id).first()
-            if not bgt:
-                continue
-            expected = bgt.grand_sale or 0.0          # KDV dahil satış toplamı
-            if expected <= 0:
-                continue
-            invoiced = sum(
-                (inv.total_amount or 0.0)
-                for inv in db.query(Invoice).filter(
-                    Invoice.request_id == req.id,
-                    Invoice.invoice_type == "kesilen",
-                ).all()
-            )
-            draft = round(expected - invoiced, 2)     # faturalanmamış beklenen tahsilat
-            if draft <= 0:
-                continue
-            base = req.check_out or req.check_in
-            if not base:
-                continue
-            cust = (
-                db.query(Customer).filter(Customer.id == req.customer_id).first()
-                if req.customer_id else None
-            )
-            term = _parse_payment_term_days(cust.payment_term if cust else None)
+            # Tek bir bozuk bütçe/kayıt tüm sayfayı 500'e düşürmesin — izole et, atla, logla
             try:
-                eff = (date.fromisoformat(base) + timedelta(days=term)).isoformat()
-            except Exception:
+                bgt = db.query(Budget).filter(Budget.id == req.confirmed_budget_id).first()
+                if not bgt:
+                    continue
+                expected = bgt.grand_sale or 0.0          # KDV dahil satış toplamı
+                if expected <= 0:
+                    continue
+                invoiced = sum(
+                    (inv.total_amount or 0.0)
+                    for inv in db.query(Invoice).filter(
+                        Invoice.request_id == req.id,
+                        Invoice.invoice_type == "kesilen",
+                    ).all()
+                )
+                draft = round(expected - invoiced, 2)     # faturalanmamış beklenen tahsilat
+                if draft <= 0:
+                    continue
+                base = req.check_out or req.check_in
+                if not base:
+                    continue
+                cust = (
+                    db.query(Customer).filter(Customer.id == req.customer_id).first()
+                    if req.customer_id else None
+                )
+                term = _parse_payment_term_days(cust.payment_term if cust else None)
+                try:
+                    eff = (date.fromisoformat(base) + timedelta(days=term)).isoformat()
+                except Exception:
+                    continue
+                if not (today_str <= eff <= end_str):
+                    continue
+                forecast_items.append({
+                    "request":       req,
+                    "amount":        draft,
+                    "eff_date":      eff,
+                    "customer_name": (cust.name if cust else (req.client_name or "—")),
+                    "event_name":    req.event_name or "",
+                    "request_no":    req.request_no or "",
+                })
+            except Exception as _e:
+                print(f"[cash_flow] inflow tahmini atlandı (req={getattr(req, 'id', '?')}): {_e}", flush=True)
                 continue
-            if not (today_str <= eff <= end_str):
-                continue
-            forecast_items.append({
-                "request":       req,
-                "amount":        draft,
-                "eff_date":      eff,
-                "customer_name": (cust.name if cust else (req.client_name or "—")),
-                "event_name":    req.event_name or "",
-                "request_no":    req.request_no or "",
-            })
 
     # ── Tahmini gider (outflow) — tedarikçi ödeme taahhütlerinden (Faz 2) ──
     # Faz 3: Taahhüdün KALAN'ı (amount − invoiced_amount) = beklenen ödeme; tarih = taahhüdün
@@ -832,24 +837,28 @@ async def cash_flow(
             .distinct().all() if row[0]
         }
         for cm in commits:
-            if cm.id in _linked_ids or (cm.invoiced_amount or 0.0) > 0:
-                # Faz 3: gerçek kalan
-                remaining = cm.remaining
-                if remaining <= 0:
-                    continue
-                eff = cm.expected_payment_date
-                if not eff or not (today_str <= eff <= end_str):
-                    continue
-                forecast_out_items.append({
-                    "amount":       remaining,
-                    "eff_date":     eff,
-                    "vendor_name":  cm.vendor_name or "—",
-                    "section":      cm.section,
-                    "payment_type": cm.payment_type,
-                    "request_no":   _req_no(cm.request_id),
-                })
-            else:
-                _legacy_groups[(cm.request_id, cm.vendor_id)].append(cm)
+            try:
+                if cm.id in _linked_ids or (cm.invoiced_amount or 0.0) > 0:
+                    # Faz 3: gerçek kalan
+                    remaining = cm.remaining
+                    if remaining <= 0:
+                        continue
+                    eff = cm.expected_payment_date
+                    if not eff or not (today_str <= eff <= end_str):
+                        continue
+                    forecast_out_items.append({
+                        "amount":       remaining,
+                        "eff_date":     eff,
+                        "vendor_name":  cm.vendor_name or "—",
+                        "section":      cm.section,
+                        "payment_type": cm.payment_type,
+                        "request_no":   _req_no(cm.request_id),
+                    })
+                else:
+                    _legacy_groups[(cm.request_id, cm.vendor_id)].append(cm)
+            except Exception as _e:
+                print(f"[cash_flow] outflow taahhüt atlandı (cm={getattr(cm, 'id', '?')}): {_e}", flush=True)
+                continue
 
         # Legacy fallback: link'siz taahhütler için (request,vendor) orantısal dağıtım
         for (rid, vid), cms in _legacy_groups.items():
